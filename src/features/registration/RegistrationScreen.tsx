@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StationBadge } from '../../components/StationBadge'
 import { stationFor } from '../../config/event'
 import type { RegistrationRecord } from '../../types'
+import { PrintableSticker } from './PrintableSticker'
 import { RegistrationForm } from './RegistrationForm'
 import { Sticker } from './Sticker'
 import { useRegistrationTerminal } from './useRegistrationTerminal'
@@ -129,7 +130,14 @@ export function RegistrationScreen() {
 
           {phase.sticker.status === 'ready' && (
             <>
+              {/* On-screen proof, at true physical size. */}
               <Sticker
+                qrSvg={phase.sticker.qrSvg}
+                publicCode={phase.record.publicCode}
+              />
+              {/* The copy the printer receives, portalled outside #root so
+                  print can switch the application off entirely. */}
+              <PrintableSticker
                 qrSvg={phase.sticker.qrSvg}
                 publicCode={phase.record.publicCode}
               />

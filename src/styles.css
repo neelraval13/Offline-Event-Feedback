@@ -355,9 +355,29 @@ a {
   text-align: center;
 }
 
+/* The print copy lives outside #root and is invisible on screen. */
+#print-root {
+  display: none;
+}
+
 @media print {
-  /* Exactly one label per page, at its true size. Printer drivers may still
-   * impose a hardware margin; that is why the sticker has its own padding. */
+  /*
+   * Exactly one label, on exactly one page.
+   *
+   * The Phase 2 QA defect produced six identical pages. Two causes, both
+   * fixed here:
+   *
+   *   1. The application was hidden with `visibility: hidden`, which keeps
+   *      elements in layout. The document stayed as tall as the registration
+   *      screen, and at a 40mm page height that paginated into six pages.
+   *   2. The sticker was anchored with `position: fixed`, and fixed-position
+   *      elements repeat on every page of paged media — so each of those six
+   *      pages got its own copy.
+   *
+   * Now the app is removed from layout outright and the label is a portalled
+   * sibling of #root in normal flow. The document is one 50mm x 40mm box tall,
+   * which is one page, containing one sticker. Nothing is positioned fixed.
+   */
   @page {
     size: 50mm 40mm;
     margin: 0;
@@ -365,31 +385,37 @@ a {
 
   html,
   body {
+    /* Pin the page box so no stray overflow can spill onto a second sheet. */
+    width: 50mm;
+    height: 40mm;
     margin: 0;
     padding: 0;
+    overflow: hidden;
     background: #fff;
   }
 
-  /* Hide the application without unmounting it: the sticker is nested deep in
-   * the app tree, so visibility is toggled rather than display, and the
-   * sticker is then anchored to the page origin. */
-  body * {
-    visibility: hidden !important;
+  /* Remove the application from layout entirely — not merely from view. */
+  #root {
+    display: none !important;
   }
 
-  .sticker,
-  .sticker * {
-    visibility: visible !important;
+  #print-root {
+    display: block;
+    width: 50mm;
+    height: 40mm;
+    margin: 0;
+    padding: 0;
   }
 
-  .sticker {
-    position: fixed;
-    left: 0;
-    top: 0;
+  #print-root .sticker {
     margin: 0;
     border: none;
-    /* Ensure the QR prints as true black regardless of browser colour
-     * economy settings. */
+    /* Never let the label itself be split or trailed by an empty page. */
+    break-inside: avoid;
+    break-after: avoid;
+    page-break-inside: avoid;
+    page-break-after: avoid;
+    /* Print the QR as true black regardless of colour-economy settings. */
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }

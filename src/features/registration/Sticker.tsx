@@ -8,6 +8,8 @@ interface StickerProps {
   /** Rendered QR markup. A sticker without one is not a sticker. */
   readonly qrSvg: string
   readonly publicCode: PublicParticipantCode
+  /** Distinguishes the on-screen preview from the portalled print copy. */
+  readonly testId?: string
 }
 
 /**
@@ -26,9 +28,13 @@ interface StickerProps {
  * same element is what the browser prints, at 1:1 — see the `@media print`
  * rules in styles.css.
  */
-export function Sticker({ qrSvg, publicCode }: StickerProps) {
+export function Sticker({
+  qrSvg,
+  publicCode,
+  testId = 'sticker',
+}: StickerProps) {
   return (
-    <div className="sticker" data-testid="sticker">
+    <div className="sticker" data-testid={testId}>
       <div
         className="sticker__qr"
         // The SVG comes from the local QR library, given a payload this app

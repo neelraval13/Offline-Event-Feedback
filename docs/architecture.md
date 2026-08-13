@@ -449,21 +449,64 @@ artefact at 1:1 rather than an approximation of it.
 
 ## QR rendering
 
-The `qrcode` package, bundled with the application. No network call is involved
-at any point — a QR fetched from a service would put participant identifiers on
-someone else's infrastructure and would fail at an event with no connectivity.
+The `qrcode` package does the **encoding** — matrix generation, versioning, mask
+selection. This codebase turns the resulting matrix into SVG itself
+(`src/lib/qr/qrCode.ts`), and does not use `QRCode.toString(..., {type:'svg'})`.
 
-**SVG, not raster.** Vector modules land on exact device pixels at whatever DPI
-the label printer runs, with no resampling blur along module edges — which is
-the failure that makes small QR codes unscannable.
+### Why we build the SVG ourselves
 
-**Error correction level M** (~15%). Measured against the real 109-byte payload
-at 26 mm:
+Physical QA found a symbol that printed as thin horizontal lines. The package's
+SVG draws every dark module as part of one **stroked** path:
+
+```svg
+<path stroke="#000000" d="M4 4.5h7m5 0h1m1 0h6..."/>
+```
+
+Horizontal segments on half-module y-coordinates, with **no `stroke-width`
+attribute at all** — each module's thickness is the SVG default of one user
+unit, centred on the line. The symbol carries a viewBox and no intrinsic size,
+so one user unit maps to a different number of device pixels depending on the
+matrix size. Chrome's print pipeline rasterised that hairline differently for a
+45x45 symbol than for a 41x41 one and rounded it to near-nothing. The result
+stayed technically scannable, which is worse than failing outright.
+
+That the two sizes both occur is not an edge case. The participant ID is a
+random UUIDv7, and the encoder packs digit-heavy UUIDs into numeric segments
+while letter-heavy ones fall back to byte mode. Measured over 3,000 real
+payloads: **~14% land on 41x41 and ~86% on 45x45**. Consecutive participants get
+different matrix sizes at random, which is exactly why one sticker printed
+correctly and the next did not.
+
+### What it emits now
+
+No strokes anywhere. Dark modules are **filled rectangles**, with consecutive
+dark modules in a row merged into a single rectangle:
+
+```svg
+<svg viewBox="0 0 53 53" shape-rendering="crispEdges" role="img">
+  <rect x="0" y="0" width="53" height="53" fill="#ffffff"/>
+  <rect x="4" y="4" width="7" height="1" fill="#000000"/>
+  ...
+</svg>
+```
+
+- every coordinate is an integer module index — nothing lands on a half pixel
+- a filled rectangle covers the area it declares at any scale, in any
+  rasteriser, on screen or through a PDF; there is no implicit width to lose
+- the viewBox is a fixed square derived from matrix size plus quiet zone, so the
+  aspect ratio cannot drift
+- no `width`/`height` attributes, so CSS still sizes the symbol to 26 mm
+- output stays vector, and is deterministic: the same payload gives byte-identical
+  markup, which is what makes a reprint the same sticker
+
+The QR payload contract is untouched.
+
+**Error correction level M** (~15%). Measured against the real payload at 26 mm:
 
 | Level | Version | Modules | Module size |
 | --- | --- | --- | --- |
 | L | 5 | 37 | 0.58 mm |
-| **M** | **6** | **41** | **0.53 mm** |
+| **M** | **6-7** | **41-45** | **0.53-0.48 mm** |
 | Q | 8 | 49 | 0.46 mm |
 | H | 10 | 57 | 0.40 mm |
 
@@ -472,17 +515,55 @@ smaller and the symbol gets *harder* to scan — at 203 dpi, H would give barely
 printer dots per module against M's 4.2. The usual reason to accept that trade
 is damage tolerance, but this system already has a designed answer for an
 unreadable QR: the public code printed underneath, which staff types instead.
-Spending module size on redundancy we have a better fallback for would be the
-wrong way round.
 
 The standard four-module quiet zone is kept. No logo, no tint.
 
 ## Printing
 
-Generic browser printing — `window.print()` behind a one-function module, with
-`@page { size: 50mm 40mm; margin: 0 }` and `@media print` rules that hide the
-application and anchor the sticker to the page origin. No vendor SDK, because
-the printer model is not chosen yet and nothing here needs one.
+Generic browser printing — `window.print()` behind a one-function module. No
+vendor SDK, because the printer model is not chosen yet and nothing here needs
+one.
+
+### One invocation, one page, one sticker
+
+Physical QA produced **six identical pages** per print. Two causes, both real,
+both needed fixing:
+
+1. The application was hidden with `visibility: hidden`. That keeps elements in
+   layout — the document stayed as tall as the registration screen, and at a
+   40 mm page height it paginated into six pages.
+2. The sticker was anchored with `position: fixed`. Fixed-position elements
+   **repeat on every page** of paged media, so each of those six pages got its
+   own copy of the label.
+
+Hiding the extra pages would not have fixed anything; the print layout itself
+had to become one page. The structure now is:
+
+```html
+<body>
+  <div id="root">…the whole application…</div>
+  <div id="print-root">…the sticker, portalled here…</div>
+</body>
+```
+
+The printable sticker is rendered through a React portal into `#print-root`, a
+**sibling** of the application root rather than a node buried inside it. Print
+then switches the application off wholesale:
+
+```css
+@page { size: 50mm 40mm; margin: 0; }
+html, body { width: 50mm; height: 40mm; overflow: hidden; margin: 0; }
+#root       { display: none !important; }
+#print-root { display: block; }
+```
+
+`display: none` removes the app from layout entirely, so the document collapses
+to a single 50 mm x 40 mm box in normal flow: one page, one sticker, nothing
+positioned fixed. `break-after: avoid` and `overflow: hidden` stop a stray
+overflow from generating a trailing blank page.
+
+The on-screen preview is a second instance of the same `Sticker` component with
+the same props, so preview and printed copy cannot disagree.
 
 Printing is **not** invoked automatically after a save. The QR must be rendered
 and in the DOM before the dialog opens, and a dialog that appears by itself is a

@@ -7,6 +7,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      The printable sticker is portalled here, outside the application root, so
+      that printing can remove the whole app from layout with `display: none`.
+      Hiding it any other way leaves the app's full height paginating behind the
+      label and produces one duplicate page per screenful.
+    -->
+    <div id="print-root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

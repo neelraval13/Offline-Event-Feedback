@@ -72,7 +72,21 @@ Press Enter (or click **Print sticker**). In the print dialog:
 
 Print one label.
 
-### 6. Measure the label
+### 6. Count the pages
+
+**Before measuring anything, count the pages.** Print to PDF and check the page
+count, or read it off the print dialog's preview.
+
+There must be **exactly one page**. One Print or Reprint invocation produces one
+50 mm × 40 mm page containing one sticker.
+
+Earlier QA found six identical pages here — the application was being hidden in
+a way that left it occupying layout, and the label was positioned fixed, so it
+repeated on every page the app's height generated. If more than one page appears
+again, that is a regression in the print CSS or DOM structure, not a driver
+quirk.
+
+### 7. Measure the label
 
 With the ruler, check against the design:
 
@@ -86,20 +100,28 @@ With the ruler, check against the design:
 If everything is proportionally small, scaling was left on in step 5. Reprint
 before concluding anything.
 
-### 7. Inspect QR quality
+### 8. Inspect QR quality
 
 Look closely, ideally with a loupe or a phone macro shot:
 
 - module edges crisp, not grey or feathered
+- **solid filled squares, not thin horizontal lines** — earlier QA found a
+  symbol printing as hairlines because dark modules were stroked rather than
+  filled. They are filled rectangles now, and this is the check that catches a
+  regression
 - no white gaps inside dark areas from missing print head dots
 - the three corner finder patterns solid and square
 - true black, not dark grey
 
-At 41 modules across 26 mm each module is about 0.53 mm — roughly 4 dots on a
-203 dpi printer. Blurred or bleeding modules mean the printer is the limit, and
-the density setting or a higher-resolution printer is the fix.
+Matrix size varies per participant: the payload encodes to 41×41 for about 14%
+of participants and 45×45 for the other 86%, depending on the random participant
+UUID. At 26 mm that is roughly 0.53 mm and 0.48 mm per module — about 4 printer
+dots at 203 dpi. **Register at least four or five participants and print
+several**, so both sizes are exercised; a defect that only affects one of the
+two is exactly what earlier QA hit. Blurred or bleeding modules mean the printer
+is the limit, and density or a higher-resolution printer is the fix.
 
-### 8. Refresh the browser
+### 9. Refresh the browser
 
 Reload the tab. (Reconnect the network first if needed — again, this is a
 Phase 2 limitation, not a data problem.)
@@ -107,14 +129,14 @@ Phase 2 limitation, not a data problem.)
 Confirm **Recent registrations on this device** lists the participant's public
 code. The record survived; the screen state did not need to.
 
-### 9. Reprint the same sticker
+### 10. Reprint the same sticker
 
 Click **Reprint** next to that code. Confirm:
 
 - the sticker preview returns with the same public code
 - printing again produces a label indistinguishable from the first
 
-### 10. Compare the two labels
+### 11. Compare the two labels
 
 Put both stickers side by side. The public codes must be **character for
 character identical**, and the QR symbols must look identical module for module.
@@ -122,7 +144,7 @@ character identical**, and the QR symbols must look identical module for module.
 A different code means a second registration was created — a serious bug. Check
 `registrations` in DevTools: there must still be exactly one row.
 
-### 11. Scan with a phone
+### 12. Scan with a phone
 
 Open the ordinary camera app and point it at the QR. It should recognise it
 within a second or two at a comfortable reading distance.
@@ -133,7 +155,7 @@ or bottle — that is where it will actually live.
 This is a sanity check that the symbol is well formed. It is **not** a test of
 Point B, which does not exist yet.
 
-### 12. Confirm the QR carries no PII
+### 13. Confirm the QR carries no PII
 
 Read the decoded text the camera shows. It must be exactly this shape:
 
@@ -158,6 +180,10 @@ different profile, not a second tab — profiles have separate IndexedDB) and
 register someone there. The two devices' codes must differ in the issuer
 segment: `A1-B8EFD9-00001-X` versus `A1-6091A1-00001-C`. Same station, same
 sequence number, different sticker.
+
+**Several stickers in a row.** Register five participants and print each. Every
+print must be one page, and every QR must be solidly filled regardless of
+whether it came out 41×41 or 45×45.
 
 **Printer removed mid-run.** Turn the printer off, register someone, press
 Print, cancel the dialog. Confirm the registration is still saved and Reprint
