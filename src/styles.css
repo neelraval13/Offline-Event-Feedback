@@ -1,0 +1,145 @@
+:root {
+  --surface: #ffffff;
+  --surface-muted: #f4f5f7;
+  --border: #d8dbe0;
+  --text: #14171a;
+  --text-muted: #5b6470;
+  --accent: #1a56b8;
+
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /* Staff use these screens standing up, often on a tablet. */
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-shell__meta {
+  margin-left: 0.75rem;
+  color: var(--text-muted);
+}
+
+.app-shell__nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.app-shell__nav-link[aria-current='page'] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-shell__main {
+  flex: 1;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.screen {
+  max-width: 44rem;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.screen h1 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+
+.screen__lede {
+  color: var(--text-muted);
+}
+
+.screen__note {
+  margin-bottom: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.station-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--surface-muted);
+  border-radius: 6px;
+}
+
+.station-badge dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.station-badge dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.pending__title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.pending__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+}
+
+.surface-list {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.surface-list__link {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.surface-list__description {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
