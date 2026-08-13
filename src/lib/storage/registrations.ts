@@ -1,3 +1,4 @@
+import { deriveIssuerCode } from '../identity/issuerCode'
 import { newParticipantId } from '../identity/uuid'
 import type {
   ParticipantId,
@@ -43,6 +44,10 @@ export interface RegistrationPatch {
  * cannot leave a code issued to nobody or — worse — hand the same code to the
  * next participant.
  *
+ * The issuer code is derived from `deviceId`, which the caller already supplies
+ * as part of the record context. Nothing extra to pass, nothing extra to store,
+ * and no way to accidentally issue codes under another device's namespace.
+ *
  * @returns the committed record, including its participant ID and public code
  */
 export async function createRegistration(
@@ -58,6 +63,7 @@ export async function createRegistration(
         eventId: input.eventId,
         eventDay: input.eventDay,
         stationId: input.stationId,
+        issuerCode: deriveIssuerCode(input.deviceId),
       })
 
       const record: RegistrationRecord = {

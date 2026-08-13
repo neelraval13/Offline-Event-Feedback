@@ -9,7 +9,9 @@ what exists today versus what is deferred.
 Single Event → Single Day → Point A (station `A1`) → Point B (station `B1`).
 
 - one event, one day, approximately 10,000 participants
-- one registration station and one feedback station, one device each
+- one registration station and one feedback station
+- more than one device may work a station: public codes are namespaced per
+  device so parallel desks cannot collide
 - **no internet connectivity is required during event operations**
 
 Multi-event, multi-day and multi-station operation are foreseeable, and the
@@ -48,9 +50,10 @@ of is unrecoverable; a retried registration is not.
 Everything Point B requires to attribute feedback is physically present on the
 participant: the QR payload and the printed public code. Point B does not query
 Point A, does not hold a copy of the participant list, and does not need
-connectivity. This is why the public code must be self-validating (a checksum,
-designed in a later phase) — a typo in a manually entered code has to be
-detectable locally, without a lookup.
+connectivity. This is why the public code is self-validating — a typo in a
+manually entered code is caught by its check character locally, with no lookup.
+It is also why the code must be unique across every issuing device without
+coordination, which is what the issuer segment provides.
 
 ### 3. Synchronisation is idempotent and order-independent
 
@@ -223,23 +226,65 @@ sortable, and there is no reason to embed when a device was provisioned.
 ## Public participant code
 
 ```text
-A1-00001-O
-^^ ^^^^^ ^
-|  |     check character
-|  local registration sequence, zero-padded to at least 5 digits
+A1-B8EFD9-00001-X
+^^ ^^^^^^ ^^^^^ ^
+|  |      |     check character
+|  |      device-local registration sequence, zero-padded to at least 5 digits
+|  issuing device (see below)
 issuing station
 ```
 
 Case-insensitive on entry and normalised to one canonical stored form.
-Separator style is forgiven (`a1 00001 o`, `A1--00001--O` and `A1.00001.O` all
-parse), and so is under-padding: the check character is computed over the padded
-payload, so `A1-1-O` validates and normalises to `A1-00001-O`. The code contains
-an issuer and a counter and nothing else — no PII (invariant E).
+Separator style is forgiven (`a1 b8efd9 00001 x`, `A1--B8EFD9--00001--X` and
+`A1.B8EFD9.00001.X` all parse), and so is under-padding: the check character is
+computed over the padded payload, so `A1-B8EFD9-1-X` validates and normalises to
+`A1-B8EFD9-00001-X`. The code contains a station, a device namespace and a
+counter — no PII (invariant E).
+
+### The issuer segment, and why it exists
+
+IndexedDB is device-local and there is no coordination between devices during
+the event. Without the issuer segment, two installations working station A1
+would each start their counter at 1 and print `A1-00001-O` for two different
+participants. Because the public code is the *manual fallback identity*, that
+collision is silent and unrecoverable: Point B cannot tell the two apart, and
+neither can the server afterwards.
+
+The issuer is six uppercase hex characters derived deterministically from the
+installation's persisted `deviceId` (`src/lib/identity/issuerCode.ts`):
+
+- **Deterministic**, so it is a pure function of identity the device already
+  has. Nothing new to persist, nothing to keep in sync, and a device that
+  reloads keeps its issuer forever.
+- **Hexadecimal**, not base36. `0-9A-F` contains neither `O` nor `I`, so adding
+  six characters to a hand-typed code introduces no new glyph ambiguity — which
+  matters given `O`/`0` and `I`/`1` are already a known concern for the check
+  character.
+- **24 bits** (~16.7 million values). For the ~10 devices an event of this size
+  runs, the probability that any two share an issuer is about 3 in a million;
+  at 100 devices it is still under 1 in 3,000. Measured dispersion over 200,000
+  random device IDs matched the uniform birthday expectation almost exactly
+  (1,194 collisions against 1,192 predicted).
+- **No PII**: the input is a random UUIDv4 that encodes nothing about a person,
+  and the output is a truncated hash of it.
+
+The hash is FNV-1a (32-bit) followed by MurmurHash3's `fmix32` finalizer, both
+standard published algorithms, both synchronous. A cryptographic digest would be
+the reflex choice, but `crypto.subtle` is restricted to secure contexts — the
+same trap that rules out `crypto.randomUUID()` here — and this needs dispersion,
+not preimage resistance. Nothing about the issuer code is a security control; it
+is a namespace.
+
+The issuer is **inside the checksum payload**, so a mistyped issuer segment
+fails the check character rather than silently pointing at another device's
+namespace. Parsing deliberately offers no `expectedIssuer` option: Point B
+receives stickers from every registration device, so constraining the issuer
+would reject legitimate codes.
 
 ### Check character: ISO 7064 MOD 37-2
 
-Computed over the alphabet `0-9A-Z`, on the payload `prefix + padded sequence`
-(e.g. `A100001`):
+Computed over the alphabet `0-9A-Z`, on the payload
+`station + issuer + padded sequence` (e.g. `A1B8EFD900001`):
 
 ```text
 P = 0
@@ -255,7 +300,8 @@ Detection properties, all pinned by exhaustive tests rather than taken on trust:
 Why this and not the alternatives:
 
 - Damm and Verhoeff are defined for decimal input; our payload contains the
-  station letters, so they do not apply without mangling the format.
+  station and issuer characters, so they do not apply without mangling the
+  format.
 - ISO 7064 MOD 37,36 (the hybrid system) needs no skipping, but measurement
   showed it misses a small class of adjacent transpositions — those where the
   two characters differ by exactly 1 in value. In a zero-padded numeric sequence
@@ -272,8 +318,16 @@ authenticates nothing, and anyone can compute one.
 ### Local sequence and transaction semantics
 
 Counters live in the `sequences` store, keyed per issuing scope
-(`publicCode:<eventId>:<eventDay>:<stationId>`), so a second day or a second
-desk later starts its own run rather than colliding with this one.
+(`publicCode:<eventId>:<eventDay>:<stationId>:<issuerCode>`), so a second day, a
+second desk, or a second device at the same desk each start their own run rather
+than colliding with this one. The counter is device-local and always was —
+IndexedDB has no other kind. Including the issuer in both the key and the
+printed code is what makes parallel device-local counters safe.
+
+Two devices working the same station therefore issue very nearly the same
+*sequence numbers* and entirely disjoint *codes*. The test suite asserts exactly
+that: over 2,000 allocations each, more than 90% of sequence numbers are shared
+while not one code is.
 
 A read-modify-write on a counter is the textbook way to hand out duplicates, so
 the increment never happens outside a readwrite transaction:
@@ -302,7 +356,7 @@ Point B share one versioned identity contract instead of two implicit ones.
   "v": 1,
   "event": "evt-dev-001",
   "participant": "0199f5c2-...-7a1b",
-  "code": "A1-00001-O"
+  "code": "A1-B8EFD9-00001-X"
 }
 ```
 
@@ -342,7 +396,8 @@ synchronisation.
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
 - typed V1 event/station configuration, with device identity resolved at runtime
 - IndexedDB persistence for registrations, feedback and device configuration
-- participant ID generation, public code issuing and validation
+- participant ID generation, per-device issuer codes, public code issuing and
+  validation
 - the QR payload contract: serialiser, parser and validation
 - minimal placeholder screens for Point A and Point B, and device diagnostics on
   Admin
@@ -371,12 +426,14 @@ output* has no server-side dependency.
 ## Known concerns carried into later phases
 
 - **Ambiguous glyphs in printed codes.** The check character is drawn from the
-  full `0-9A-Z` alphabet, so a code can end in `O` or `I` — `A1-00001-O` is the
-  very first code issued. Normalisation deliberately does not fold `O`/`0` or
-  `I`/`1`, because folding would corrupt legitimate codes. The failure mode is
-  benign — a misread character fails its checksum and staff retries, rather than
-  attributing feedback to the wrong participant — but sticker typography should
-  use a font that disambiguates. This is a Phase 2 concern.
+  full `0-9A-Z` alphabet, so a code can still end in `O` or `I`. Normalisation
+  deliberately does not fold `O`/`0` or `I`/`1`, because folding would corrupt
+  legitimate codes. The issuer segment is hexadecimal specifically so that it
+  cannot add to this problem, which leaves exactly one exposed character per
+  code. The failure mode is benign — a misread character fails its checksum and
+  staff retries, rather than attributing feedback to the wrong participant — but
+  sticker typography should use a font that disambiguates. This is a Phase 2
+  concern.
 - **Device clock drift.** `createdAt` comes from the device clock, and offline
   devices are never corrected. Timestamps order events within one device
   reliably and across devices only approximately. Sync and reconciliation must

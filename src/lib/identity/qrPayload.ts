@@ -94,8 +94,8 @@ export type QrPayloadParseResult =
 export interface ParseQrPayloadOptions {
   /** When given, the payload must belong to this event. */
   readonly expectedEventId?: EventId
-  /** When given, the embedded public code must come from this issuer. */
-  readonly expectedPrefix?: string
+  /** When given, the embedded public code must come from this station. */
+  readonly expectedStation?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -163,9 +163,9 @@ export function parseQrPayload(
 
   const parsedCode = parsePublicCode(
     code,
-    options.expectedPrefix === undefined
+    options.expectedStation === undefined
       ? {}
-      : { expectedPrefix: options.expectedPrefix },
+      : { expectedStation: options.expectedStation },
   )
   if (!parsedCode.ok) {
     return { ok: false, reason: 'invalid-public-code' }

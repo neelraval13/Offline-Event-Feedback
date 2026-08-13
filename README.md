@@ -34,7 +34,9 @@ What works now, beneath the UI:
 - **Device identity** — a stable `deviceId` generated on first use and
   persisted, surviving refresh and browser restart.
 - **Participant identity** — offline UUIDv7 participant IDs, and issued public
-  codes of the form `A1-00001-O` with an ISO 7064 MOD 37-2 check character.
+  codes of the form `A1-B8EFD9-00001-X` with an ISO 7064 MOD 37-2 check
+  character. The `B8EFD9` segment namespaces codes per device, so two
+  installations at one station can issue in parallel without ever colliding.
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
@@ -48,7 +50,8 @@ list in [docs/architecture.md](docs/architecture.md).
 | Concept | Value | Purpose |
 | --- | --- | --- |
 | `participantId` | UUIDv7 | canonical machine identity, encoded in the QR |
-| `publicCode` | `A1-00001-O` | human fallback, typed when a scan fails |
+| `publicCode` | `A1-B8EFD9-00001-X` | human fallback, typed when a scan fails |
+| `issuerCode` | `B8EFD9` | which device issued a code, derived from its `deviceId` |
 | `deviceId` | UUIDv4 | which browser installation wrote a record |
 | `stationId` | `A1` / `B1` | which operational post it was written at |
 

@@ -1,12 +1,26 @@
 import {
   formatPublicCode,
   nextIssuableSequence,
+  type CodeIssuer,
 } from '../identity/publicCode'
-import type { EventDay, EventId, PublicParticipantCode, StationId } from '../../types'
+import type {
+  EventDay,
+  EventId,
+  IssuerCode,
+  PublicParticipantCode,
+  StationId,
+} from '../../types'
 import type { OfflineEventDb } from './db'
 
 /*
  * The local registration sequence behind the printed public code.
+ *
+ * The counter is device-local and always was — IndexedDB has no other kind.
+ * What changed in Phase 1.1 is that the code it feeds is namespaced by the
+ * issuing device, so two installations at the same station counting 1, 2, 3
+ * in parallel produce disjoint codes instead of identical ones. The scope key
+ * carries the issuer for the same reason: one counter per device, not one per
+ * station shared by devices that cannot see each other.
  *
  * Transaction semantics matter here more than anywhere else in the codebase. A
  * read-modify-write on a counter is the textbook way to hand out duplicates, so
@@ -24,9 +38,7 @@ import type { OfflineEventDb } from './db'
  *   `createRegistration`), so a failure after allocation rolls the counter back
  *   rather than burning a code.
  *
- * Sequence numbers are per issuing scope — event, day and station — so a second
- * day or a second desk later starts its own run rather than colliding with this
- * one. Gaps are expected and harmless: the counter is a ticket dispenser, not a
+ * Gaps are expected and harmless: the counter is a ticket dispenser, not a
  * census, and ~1 in 37 values is skipped because it has no printable check
  * character.
  */
@@ -35,11 +47,16 @@ export interface SequenceScope {
   readonly eventId: EventId
   readonly eventDay: EventDay
   readonly stationId: StationId
+  readonly issuerCode: IssuerCode
 }
 
 /** The `sequences` row key for an issuing scope. */
 export function sequenceKeyFor(scope: SequenceScope): string {
-  return `publicCode:${scope.eventId}:${scope.eventDay}:${scope.stationId}`
+  return `publicCode:${scope.eventId}:${scope.eventDay}:${scope.stationId}:${scope.issuerCode}`
+}
+
+function issuerFor(scope: SequenceScope): CodeIssuer {
+  return { stationId: scope.stationId, issuerCode: scope.issuerCode }
 }
 
 /**
@@ -55,7 +72,7 @@ async function reserveNextSequence(
   const key = sequenceKeyFor(scope)
   const row = await database.sequences.get(key)
   const lastIssued = row?.value ?? 0
-  const next = nextIssuableSequence(scope.stationId, lastIssued + 1)
+  const next = nextIssuableSequence(issuerFor(scope), lastIssued + 1)
 
   await database.sequences.put({ key, value: next })
   return next
@@ -90,7 +107,7 @@ export async function allocatePublicCode(
     const sequence = await reserveNextSequence(database, scope)
     return {
       sequence,
-      publicCode: formatPublicCode(scope.stationId, sequence),
+      publicCode: formatPublicCode(issuerFor(scope), sequence),
     }
   })
 }

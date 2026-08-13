@@ -9,11 +9,23 @@ import {
   listFeedbackBySyncStatus,
 } from './feedback'
 import { formatPublicCode } from '../identity/publicCode'
+import { deriveIssuerCode } from '../identity/issuerCode'
 import { newParticipantId } from '../identity/uuid'
-import { stationId, type FeedbackAnswers, type RecordContext } from '../../types'
+import {
+  deviceId,
+  stationId,
+  type FeedbackAnswers,
+  type RecordContext,
+} from '../../types'
 
 const CONTEXT: RecordContext = testContext({ stationId: stationId('B1') })
-const CODE = formatPublicCode('A1', 1)
+const CODE = formatPublicCode(
+  {
+    stationId: stationId('A1'),
+    issuerCode: deriveIssuerCode(deviceId('11111111-2222-4333-8444-555555555555')),
+  },
+  1,
+)
 const ANSWERS: FeedbackAnswers = {
   overall: 5,
   wouldReturn: true,

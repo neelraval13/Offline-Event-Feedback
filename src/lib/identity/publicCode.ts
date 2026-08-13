@@ -1,21 +1,31 @@
-import { publicParticipantCode, type PublicParticipantCode } from '../../types'
+import {
+  publicParticipantCode,
+  type IssuerCode,
+  type PublicParticipantCode,
+  type StationId,
+} from '../../types'
+import { ISSUER_CODE_PATTERN } from './issuerCode'
 
 /*
  * The human-readable fallback identity printed under the QR sticker.
  *
- *   A1-00001-X
- *   ^^ ^^^^^ ^
- *   |  |     check character
- *   |  local registration sequence, zero-padded to at least 5 digits
+ *   A1-7F3C2A-00001-K
+ *   ^^ ^^^^^^ ^^^^^ ^
+ *   |  |      |     check character
+ *   |  |      device-local registration sequence, zero-padded to 5+ digits
+ *   |  issuing device (see issuerCode.ts)
  *   issuing station
  *
  * Properties this format is required to have:
  *
+ * - unique across every device at the event, without any coordination between
+ *   them — the issuer segment is what makes device-local counters safe
  * - readable and dictatable by staff under event conditions
  * - case-insensitive on entry, with one canonical stored form
  * - a check character that catches ordinary transcription slips
  * - validated deterministically and entirely offline (invariant 2)
- * - free of PII (invariant E) — it carries an issuer and a counter, nothing else
+ * - free of PII (invariant E) — it carries a station, a device namespace and a
+ *   counter, nothing else
  *
  * The check character is emphatically NOT a signature. It detects typing
  * mistakes. It does not authenticate anything, and anyone can compute one.
@@ -40,8 +50,14 @@ export const MIN_SEQUENCE = 1
 /** Twelve digits — far beyond V1's ~10,000, and still comfortably readable. */
 export const MAX_SEQUENCE = 999_999_999_999
 
-const PREFIX_PATTERN = /^[0-9A-Z]{1,8}$/
-const CODE_PATTERN = /^([0-9A-Z]{1,8})-([0-9]{1,12})-([0-9A-Z])$/
+const STATION_PATTERN = /^[0-9A-Z]{1,8}$/
+const CODE_PATTERN = /^([0-9A-Z]{1,8})-([0-9A-F]{6})-([0-9]{1,12})-([0-9A-Z])$/
+
+/** The device and station a code is issued by. */
+export interface CodeIssuer {
+  readonly stationId: StationId
+  readonly issuerCode: IssuerCode
+}
 
 /**
  * ISO 7064 MOD 37-2 — the pure check-character system with prime modulus 37,
@@ -55,12 +71,14 @@ const CODE_PATTERN = /^([0-9A-Z]{1,8})-([0-9]{1,12})-([0-9A-Z])$/
  * Why this and not something else:
  *
  * - Damm and Verhoeff are defined for decimal input; our payload contains the
- *   station letters, so they do not apply without mangling the format.
+ *   station and issuer characters, so they do not apply without mangling the
+ *   format.
  * - The obvious alternative, ISO 7064 MOD 37,36 (hybrid), needs no skipping —
- *   but it misses a small class of adjacent transpositions where the two
- *   characters differ by exactly 1 in value. In a zero-padded numeric sequence
- *   that class is dominated by `0`<->`1` swaps, which is precisely the typo we
- *   most expect from manual entry, so the trade was not worth taking.
+ *   but measurement showed it misses a small class of adjacent transpositions,
+ *   those where the two characters differ by exactly 1 in value. In a
+ *   zero-padded numeric sequence that class is dominated by `0`<->`1` swaps,
+ *   which is precisely the typo we most expect from manual entry, so the trade
+ *   was not worth taking.
  * - A prime modulus buys total detection instead: every single-character
  *   substitution, every adjacent transposition and every jump transposition is
  *   caught. The price is that 1 in 37 payloads yields check value 36, which has
@@ -71,8 +89,7 @@ const CODE_PATTERN = /^([0-9A-Z]{1,8})-([0-9]{1,12})-([0-9A-Z])$/
  * These properties are pinned by exhaustive tests in `publicCode.test.ts`
  * rather than taken on trust.
  *
- * @param payload canonical prefix + padded sequence, e.g. `A100001`
- * @returns a character from the alphabet, or `null` for the unprintable value
+ * @param payload canonical station + issuer + padded sequence, e.g. `A17F3C2A00001`
  */
 export function computeCheckCharacter(payload: string): string | null {
   let p = 0
@@ -93,17 +110,32 @@ export function computeCheckCharacter(payload: string): string | null {
     : (ALPHABET[checkValue] as string)
 }
 
-/** The string the check character is computed over: prefix + padded sequence. */
-function checkPayload(prefix: string, sequence: number): string {
-  return `${prefix}${String(sequence).padStart(SEQUENCE_PAD_WIDTH, '0')}`
+/**
+ * The string the check character is computed over.
+ *
+ * The issuer is inside the payload, so a mistyped issuer segment fails the
+ * checksum exactly like a mistyped sequence would. A code is validated as one
+ * unit, not as segments that happen to sit next to each other.
+ */
+function checkPayload(issuer: CodeIssuer, sequence: number): string {
+  return `${issuer.stationId}${issuer.issuerCode}${String(sequence).padStart(
+    SEQUENCE_PAD_WIDTH,
+    '0',
+  )}`
 }
 
-function assertValidPrefix(prefix: string): string {
-  const normalized = prefix.toUpperCase()
-  if (!PREFIX_PATTERN.test(normalized)) {
-    throw new Error(`Invalid public code prefix: ${prefix}`)
+function assertValidIssuer(issuer: CodeIssuer): CodeIssuer {
+  const stationId = issuer.stationId.toUpperCase() as StationId
+  const issuerCode = issuer.issuerCode.toUpperCase() as IssuerCode
+
+  if (!STATION_PATTERN.test(stationId)) {
+    throw new Error(`Invalid public code station: ${issuer.stationId}`)
   }
-  return normalized
+  if (!ISSUER_CODE_PATTERN.test(issuerCode)) {
+    throw new Error(`Invalid public code issuer: ${issuer.issuerCode}`)
+  }
+
+  return { stationId, issuerCode }
 }
 
 function isSequenceInRange(sequence: number): boolean {
@@ -120,62 +152,71 @@ function isSequenceInRange(sequence: number): boolean {
  * Roughly 1 in 37 does not. Callers allocating codes should use
  * {@link nextIssuableSequence} rather than testing this themselves.
  */
-export function isIssuableSequence(prefix: string, sequence: number): boolean {
+export function isIssuableSequence(
+  issuer: CodeIssuer,
+  sequence: number,
+): boolean {
   if (!isSequenceInRange(sequence)) {
     return false
   }
-  return computeCheckCharacter(checkPayload(assertValidPrefix(prefix), sequence)) !== null
+  return (
+    computeCheckCharacter(checkPayload(assertValidIssuer(issuer), sequence)) !==
+    null
+  )
 }
 
 /**
  * The first issuable sequence at or after `candidate`.
  *
- * Deterministic and pure, so the storage-backed allocator stays a plain
- * counter and the skipping rule lives here with the format it belongs to.
+ * Deterministic and pure, so the storage-backed allocator stays a plain counter
+ * and the skipping rule lives here with the format it belongs to.
  */
-export function nextIssuableSequence(prefix: string, candidate: number): number {
-  const normalizedPrefix = assertValidPrefix(prefix)
+export function nextIssuableSequence(
+  issuer: CodeIssuer,
+  candidate: number,
+): number {
+  const validated = assertValidIssuer(issuer)
   let sequence = Math.max(candidate, MIN_SEQUENCE)
 
   while (sequence <= MAX_SEQUENCE) {
-    if (computeCheckCharacter(checkPayload(normalizedPrefix, sequence)) !== null) {
+    if (computeCheckCharacter(checkPayload(validated, sequence)) !== null) {
       return sequence
     }
     sequence += 1
   }
 
-  throw new Error(`Public code sequence space exhausted for prefix ${prefix}`)
+  throw new Error(
+    `Public code sequence space exhausted for ${issuer.stationId}-${issuer.issuerCode}`,
+  )
 }
 
 /**
  * Builds the canonical code for an issuer and a sequence number.
  *
- * Throws on invalid input: a bad prefix, an out-of-range sequence, or a
- * sequence that is not issuable is a programming error rather than a
+ * Throws on invalid input: a bad station or issuer, an out-of-range sequence,
+ * or a sequence that is not issuable is a programming error rather than a
  * user-entry error. Allocate through {@link nextIssuableSequence} first.
  */
 export function formatPublicCode(
-  prefix: string,
+  issuer: CodeIssuer,
   sequence: number,
 ): PublicParticipantCode {
-  const normalizedPrefix = assertValidPrefix(prefix)
+  const validated = assertValidIssuer(issuer)
 
   if (!isSequenceInRange(sequence)) {
     throw new Error(`Public code sequence out of range: ${sequence}`)
   }
 
-  const checkCharacter = computeCheckCharacter(
-    checkPayload(normalizedPrefix, sequence),
-  )
+  const checkCharacter = computeCheckCharacter(checkPayload(validated, sequence))
   if (checkCharacter === null) {
     throw new Error(
-      `Sequence ${sequence} is not issuable for prefix ${normalizedPrefix}`,
+      `Sequence ${sequence} is not issuable for ${validated.stationId}-${validated.issuerCode}`,
     )
   }
 
   const padded = String(sequence).padStart(SEQUENCE_PAD_WIDTH, '0')
   return publicParticipantCode(
-    `${normalizedPrefix}-${padded}-${checkCharacter}`,
+    `${validated.stationId}-${validated.issuerCode}-${padded}-${checkCharacter}`,
   )
 }
 
@@ -186,7 +227,8 @@ export function formatPublicCode(
  *
  * Deliberately does NOT fold visually similar characters (O/0, I/1): the check
  * character is drawn from the full 0-9A-Z alphabet, so folding would corrupt
- * legitimate codes. Disambiguating them is a sticker typography concern.
+ * legitimate codes. The issuer segment is hexadecimal precisely so that it
+ * cannot contribute to this problem.
  */
 export function normalizePublicCode(raw: string): string {
   return raw
@@ -198,7 +240,7 @@ export function normalizePublicCode(raw: string): string {
 export type PublicCodeRejection =
   | 'malformed'
   | 'sequence-out-of-range'
-  | 'unexpected-prefix'
+  | 'unexpected-station'
   | 'invalid-check-character'
 
 export type PublicCodeParseResult =
@@ -206,23 +248,31 @@ export type PublicCodeParseResult =
       readonly ok: true
       /** The canonical form, regardless of how it was typed. */
       readonly code: PublicParticipantCode
-      readonly prefix: string
+      readonly stationId: StationId
+      readonly issuerCode: IssuerCode
       readonly sequence: number
       readonly checkCharacter: string
     }
   | { readonly ok: false; readonly reason: PublicCodeRejection }
 
 export interface ParsePublicCodeOptions {
-  /** When given, the code must have been issued by this station. */
-  readonly expectedPrefix?: string
+  /**
+   * When given, the code must have been issued at this station.
+   *
+   * There is deliberately no matching `expectedIssuer`. Point B receives
+   * stickers from every device that registered participants, so constraining
+   * the issuer would reject legitimate codes. The issuer is a namespace, not
+   * an access check.
+   */
+  readonly expectedStation?: string
 }
 
 /**
  * Parses and validates a code as typed by staff.
  *
- * Tolerates casing, separator style and short-form sequences (`A1-1-X` is
- * accepted as `A1-00001-X`, because the check character is computed over the
- * canonical padded payload rather than over the typed characters).
+ * Tolerates casing, separator style and short-form sequences (`A1-7F3C2A-1-K`
+ * is accepted as `A1-7F3C2A-00001-K`, because the check character is computed
+ * over the canonical padded payload rather than over the typed characters).
  */
 export function parsePublicCode(
   raw: string,
@@ -233,7 +283,7 @@ export function parsePublicCode(
     return { ok: false, reason: 'malformed' }
   }
 
-  const [, prefix = '', digits = '', checkCharacter = ''] = match
+  const [, station = '', issuer = '', digits = '', checkCharacter = ''] = match
   const sequence = Number.parseInt(digits, 10)
 
   if (!isSequenceInRange(sequence)) {
@@ -241,22 +291,31 @@ export function parsePublicCode(
   }
 
   if (
-    options.expectedPrefix !== undefined &&
-    prefix !== options.expectedPrefix.toUpperCase()
+    options.expectedStation !== undefined &&
+    station !== options.expectedStation.toUpperCase()
   ) {
-    return { ok: false, reason: 'unexpected-prefix' }
+    return { ok: false, reason: 'unexpected-station' }
   }
 
-  if (computeCheckCharacter(checkPayload(prefix, sequence)) !== checkCharacter) {
+  const issued: CodeIssuer = {
+    stationId: station as StationId,
+    issuerCode: issuer as IssuerCode,
+  }
+
+  if (computeCheckCharacter(checkPayload(issued, sequence)) !== checkCharacter) {
     return { ok: false, reason: 'invalid-check-character' }
   }
 
   return {
     ok: true,
     code: publicParticipantCode(
-      `${prefix}-${String(sequence).padStart(SEQUENCE_PAD_WIDTH, '0')}-${checkCharacter}`,
+      `${station}-${issuer}-${String(sequence).padStart(
+        SEQUENCE_PAD_WIDTH,
+        '0',
+      )}-${checkCharacter}`,
     ),
-    prefix,
+    stationId: issued.stationId,
+    issuerCode: issued.issuerCode,
     sequence,
     checkCharacter,
   }

@@ -6,7 +6,8 @@ import {
   qrPayloadForRegistration,
   serializeQrPayload,
 } from './qrPayload'
-import { formatPublicCode } from './publicCode'
+import { formatPublicCode, type CodeIssuer } from './publicCode'
+import { deriveIssuerCode } from './issuerCode'
 import { newParticipantId, newRecordId } from './uuid'
 import {
   deviceId,
@@ -18,6 +19,12 @@ import {
   type RegistrationRecord,
 } from '../../types'
 
+const A1: CodeIssuer = {
+  stationId: stationId('A1'),
+  issuerCode: deriveIssuerCode(deviceId('11111111-2222-4333-8444-555555555555')),
+}
+const B1: CodeIssuer = { ...A1, stationId: stationId('B1') }
+
 const EVENT = eventId('evt-dev-001')
 const OTHER_EVENT = eventId('evt-other-002')
 
@@ -25,7 +32,7 @@ function samplePayload() {
   return buildQrPayload({
     eventId: EVENT,
     participantId: newParticipantId(),
-    publicCode: formatPublicCode('A1', 1),
+    publicCode: formatPublicCode(A1, 1),
   })
 }
 
@@ -42,7 +49,7 @@ function sampleRegistration(): RegistrationRecord {
     revision: 1,
     syncStatus: 'pending',
     participantId: newParticipantId(),
-    publicCode: formatPublicCode('A1', 1),
+    publicCode: formatPublicCode(A1, 1),
     name: 'Ada Lovelace',
     phone: '+44 20 7946 0958',
     email: 'ada@example.com',
@@ -60,7 +67,7 @@ describe('serialize -> parse round trip', () => {
     const payload = samplePayload()
     const result = parseQrPayload(serializeQrPayload(payload), {
       expectedEventId: EVENT,
-      expectedPrefix: 'A1',
+      expectedStation: 'A1',
     })
     expect(result.ok).toBe(true)
   })
@@ -144,7 +151,7 @@ describe('parseQrPayload rejections', () => {
     const payload = buildQrPayload({
       eventId: OTHER_EVENT,
       participantId: newParticipantId(),
-      publicCode: formatPublicCode('A1', 1),
+      publicCode: formatPublicCode(A1, 1),
     })
     expect(parseQrPayload(serializeQrPayload(payload)).ok).toBe(true)
   })
@@ -152,7 +159,7 @@ describe('parseQrPayload rejections', () => {
   it('rejects a public code that fails its own check character', () => {
     const payload = {
       ...samplePayload(),
-      code: publicParticipantCode('A1-00001-P'),
+      code: publicParticipantCode('A1-B8EFD9-00001-Y'),
     }
     expect(parseQrPayload(JSON.stringify(payload))).toEqual({
       ok: false,
@@ -164,10 +171,10 @@ describe('parseQrPayload rejections', () => {
     const payload = buildQrPayload({
       eventId: EVENT,
       participantId: newParticipantId(),
-      publicCode: formatPublicCode('B1', 1),
+      publicCode: formatPublicCode(B1, 1),
     })
     expect(
-      parseQrPayload(serializeQrPayload(payload), { expectedPrefix: 'A1' }),
+      parseQrPayload(serializeQrPayload(payload), { expectedStation: 'A1' }),
     ).toEqual({ ok: false, reason: 'invalid-public-code' })
   })
 
@@ -176,7 +183,7 @@ describe('parseQrPayload rejections', () => {
       v: QR_PAYLOAD_VERSION,
       event: EVENT,
       participant: newParticipantId(),
-      code: 'A1-00001-O',
+      code: 'A1-B8EFD9-00001-X',
       name: 'injected',
       admin: true,
     })

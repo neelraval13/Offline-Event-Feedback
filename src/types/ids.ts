@@ -22,8 +22,18 @@ export type DeviceId = Brand<string, 'DeviceId'>
 export type ParticipantId = Brand<string, 'ParticipantId'>
 
 /**
+ * Short, stable, printable identifier for the device that issued a public
+ * code, derived deterministically from its `DeviceId`.
+ *
+ * It exists because IndexedDB is device-local: without it, two installations
+ * working the same station would each start their counter at 1 and print the
+ * same visible code for different people.
+ */
+export type IssuerCode = Brand<string, 'IssuerCode'>
+
+/**
  * Short human-readable code printed under the QR, used when scanning fails.
- * Its alphabet and checksum are deliberately not decided in Phase 0.
+ * Format: `<station>-<issuer>-<sequence>-<check>`, e.g. `A1-7F3C2A-00001-K`.
  */
 export type PublicParticipantCode = Brand<string, 'PublicParticipantCode'>
 
@@ -52,6 +62,7 @@ export const stationId = (value: string): StationId => value as StationId
 export const deviceId = (value: string): DeviceId => value as DeviceId
 export const participantId = (value: string): ParticipantId =>
   value as ParticipantId
+export const issuerCode = (value: string): IssuerCode => value as IssuerCode
 export const publicParticipantCode = (value: string): PublicParticipantCode =>
   value as PublicParticipantCode
 export const recordId = (value: string): RecordId => value as RecordId

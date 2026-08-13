@@ -12,11 +12,19 @@ import {
   type NewRegistrationInput,
 } from './registrations'
 import { readSequence } from './sequences'
-import { isValidPublicCode } from '../identity/publicCode'
-import { isUuid } from '../identity/uuid'
-import { recordId as toRecordId, type RecordContext } from '../../types'
+import { isValidPublicCode, parsePublicCode } from '../identity/publicCode'
+import { deriveIssuerCode } from '../identity/issuerCode'
+import { isUuid, newDeviceId } from '../identity/uuid'
+import {
+  deviceId,
+  recordId as toRecordId,
+  type RecordContext,
+} from '../../types'
 
-const CONTEXT: RecordContext = testContext()
+/** Fixed, so the public codes this suite asserts on are stable. */
+const DEVICE_A = deviceId('11111111-2222-4333-8444-555555555555')
+
+const CONTEXT: RecordContext = testContext({ deviceId: DEVICE_A })
 
 function input(overrides: Partial<NewRegistrationInput> = {}): NewRegistrationInput {
   return {
@@ -45,7 +53,7 @@ describe('createRegistration', () => {
     expect(record.kind).toBe('registration')
     expect(isUuid(record.recordId)).toBe(true)
     expect(isUuid(record.participantId)).toBe(true)
-    expect(isValidPublicCode(record.publicCode, { expectedPrefix: 'A1' })).toBe(
+    expect(isValidPublicCode(record.publicCode, { expectedStation: 'A1' })).toBe(
       true,
     )
     expect(record.eventId).toBe(CONTEXT.eventId)
@@ -81,8 +89,28 @@ describe('createRegistration', () => {
     const first = await createRegistration(database, input())
     const second = await createRegistration(database, input({ name: 'Grace' }))
 
-    expect(first.publicCode).toBe('A1-00001-O')
-    expect(second.publicCode).toBe('A1-00002-M')
+    expect(first.publicCode).toBe('A1-B8EFD9-00001-X')
+    expect(second.publicCode).toBe('A1-B8EFD9-00002-V')
+  })
+
+  it('namespaces the code with the issuer derived from this device', async () => {
+    const record = await createRegistration(database, input())
+    const parsed = parsePublicCode(record.publicCode)
+
+    expect(parsed.ok && parsed.issuerCode).toBe(deriveIssuerCode(record.deviceId))
+    expect(parsed.ok && parsed.stationId).toBe(record.stationId)
+  })
+
+  it('needs no issuer passed in — it follows from the device context', async () => {
+    // The caller supplies deviceId as part of record provenance and nothing
+    // else, so codes cannot be issued under another device's namespace.
+    const other = newDeviceId()
+    const record = await createRegistration(
+      database,
+      input({ deviceId: other }),
+    )
+
+    expect(record.publicCode).toContain(deriveIssuerCode(other))
   })
 
   it('gives every record a distinct identity, even under concurrency', async () => {
@@ -117,6 +145,7 @@ describe('createRegistration', () => {
         eventId: CONTEXT.eventId,
         eventDay: CONTEXT.eventDay,
         stationId: CONTEXT.stationId,
+        issuerCode: deriveIssuerCode(CONTEXT.deviceId),
       }),
     ).toBe(0)
   })

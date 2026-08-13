@@ -5,6 +5,12 @@ export {
   newRecordId,
 } from './uuid'
 export {
+  deriveIssuerCode,
+  isIssuerCode,
+  ISSUER_CODE_LENGTH,
+  ISSUER_CODE_PATTERN,
+} from './issuerCode'
+export {
   computeCheckCharacter,
   formatPublicCode,
   isIssuableSequence,
@@ -15,6 +21,7 @@ export {
   normalizePublicCode,
   parsePublicCode,
   SEQUENCE_PAD_WIDTH,
+  type CodeIssuer,
   type ParsePublicCodeOptions,
   type PublicCodeParseResult,
   type PublicCodeRejection,
