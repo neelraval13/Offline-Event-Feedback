@@ -10,5 +10,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    setupFiles: ['./src/test/setup.ts'],
+    // The public code and participant ID suites generate 10,000+ values each.
+    testTimeout: 30_000,
   },
 })

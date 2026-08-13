@@ -7,12 +7,6 @@ describe('event configuration', () => {
     expect(EVENT_CONFIG.feedbackStation.stationId).toBe('B1')
   })
 
-  it('gives each station a distinct device identity', () => {
-    expect(EVENT_CONFIG.registrationStation.deviceId).not.toBe(
-      EVENT_CONFIG.feedbackStation.deviceId,
-    )
-  })
-
   it('uses an ISO calendar date for the event day', () => {
     expect(EVENT_CONFIG.eventDay).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
@@ -20,5 +14,11 @@ describe('event configuration', () => {
   it('resolves a station per role', () => {
     expect(stationFor('registration')).toBe(EVENT_CONFIG.registrationStation)
     expect(stationFor('feedback')).toBe(EVENT_CONFIG.feedbackStation)
+  })
+
+  it('does not carry a hardcoded device identity', () => {
+    // Device identity belongs to the browser installation, not to config.
+    expect(EVENT_CONFIG.registrationStation).not.toHaveProperty('deviceId')
+    expect(EVENT_CONFIG.feedbackStation).not.toHaveProperty('deviceId')
   })
 })

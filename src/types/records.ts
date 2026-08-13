@@ -11,10 +11,11 @@ import type {
 
 /**
  * Lifecycle of a locally-captured record with respect to the central server.
- * Every record is born `pending`; nothing in the field ever waits on a
- * transition away from it.
+ *
+ * Every record is born `pending`. Nothing in the field ever waits on a
+ * transition away from it — no sync engine exists yet.
  */
-export type SyncStatus = 'pending' | 'synced' | 'failed'
+export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'error'
 
 /**
  * Metadata every offline-captured record carries, regardless of kind.
@@ -23,6 +24,10 @@ export type SyncStatus = 'pending' | 'synced' | 'failed'
  * are stored per record anyway: that is what makes multi-event, multi-day and
  * multi-station operation an additive change later rather than a migration of
  * participant identity.
+ *
+ * `revision` starts at 1 and increments on every local mutation. It is not a
+ * conflict resolution mechanism on its own — it is the raw material one needs
+ * to build one when synchronisation lands.
  */
 export interface OfflineRecordMetadata {
   readonly recordId: RecordId
@@ -31,15 +36,19 @@ export interface OfflineRecordMetadata {
   readonly stationId: StationId
   readonly deviceId: DeviceId
   readonly createdAt: IsoTimestamp
+  readonly updatedAt: IsoTimestamp
+  readonly revision: number
   readonly syncStatus: SyncStatus
 }
 
-/** Personally identifying details collected at Point A, and only at Point A. */
-export interface ParticipantContactDetails {
-  readonly fullName: string
-  readonly phone: string
-  readonly email: string
-}
+/**
+ * The provenance stamped onto every record a device writes: which event, which
+ * day, which post, which physical browser installation.
+ */
+export type RecordContext = Pick<
+  OfflineRecordMetadata,
+  'eventId' | 'eventDay' | 'stationId' | 'deviceId'
+>
 
 /**
  * A registration captured at Point A. This is the only record kind that holds
@@ -49,34 +58,64 @@ export interface RegistrationRecord extends OfflineRecordMetadata {
   readonly kind: 'registration'
   readonly participantId: ParticipantId
   readonly publicCode: PublicParticipantCode
-  readonly contact: ParticipantContactDetails
+  readonly name: string
+  readonly phone: string
+  readonly email: string
 }
 
 /** How Point B obtained the participant's identity from the sticker. */
 export type IdentityCaptureMethod = 'qr-scan' | 'manual-code'
 
 /**
- * Identity as read at Point B. Every field here originates from the sticker
+ * Identity as read at Point B. Every field originates from the sticker
  * physically present on the participant, never from a lookup against Point A
- * (invariant 2).
+ * (invariant 2 / invariants A–D).
+ *
+ * A QR scan yields both identifiers; a manually typed fallback code yields
+ * only the public code, and `participantId` is then absent. Re-joining the two
+ * is a central-server concern, performed after synchronisation.
  */
-export interface CapturedParticipantIdentity {
-  readonly captureMethod: IdentityCaptureMethod
-  readonly publicCode: PublicParticipantCode
-  /** Present when the QR decoded; absent when staff typed the fallback code. */
-  readonly participantId?: ParticipantId
-}
+export type CapturedParticipantIdentity =
+  | {
+      readonly captureMethod: 'qr-scan'
+      readonly publicCode: PublicParticipantCode
+      readonly participantId: ParticipantId
+    }
+  | {
+      readonly captureMethod: 'manual-code'
+      readonly publicCode: PublicParticipantCode
+    }
+
+/**
+ * A single questionnaire answer.
+ *
+ * The questionnaire itself is not designed yet. This union is the type
+ * boundary: it is concrete enough to persist and to reject nonsense, and
+ * narrow enough that naming the real questions later is a refinement rather
+ * than a rewrite. It is deliberately not `any` and not `unknown`.
+ */
+export type FeedbackAnswerValue =
+  | string
+  | number
+  | boolean
+  | readonly string[]
+
+/** Keyed by question ID once the questionnaire exists. */
+export type FeedbackAnswers = Readonly<Record<string, FeedbackAnswerValue>>
 
 /**
  * A feedback submission captured at Point B.
  *
- * The questionnaire payload is deliberately absent in Phase 0: the questions
- * are not defined yet, and guessing their shape now would be the wrong kind of
- * commitment. It attaches to this record when the questionnaire is designed.
+ * Identity fields are stored flat rather than nested so IndexedDB can index
+ * them directly. `participantId` is absent — not null — when staff typed the
+ * fallback code, which keeps it out of the sparse IndexedDB index.
  */
 export interface FeedbackRecord extends OfflineRecordMetadata {
   readonly kind: 'feedback'
-  readonly participant: CapturedParticipantIdentity
+  readonly captureMethod: IdentityCaptureMethod
+  readonly publicCode: PublicParticipantCode
+  readonly participantId?: ParticipantId
+  readonly answers: FeedbackAnswers
 }
 
 /** Any record produced in the field and awaiting synchronisation. */

@@ -24,11 +24,36 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 0 — project foundation and architecture scaffolding.**
+**Phase 1 — local persistence and participant identity.**
 
-The three surfaces exist as minimal placeholder screens. Registration,
-persistence, QR generation, scanning, feedback capture and synchronisation are
-**not implemented yet** — see the deferred list in the architecture document.
+What works now, beneath the UI:
+
+- **Local storage** — IndexedDB (Dexie) holding registrations, feedback and
+  device configuration, with unique-index protection against duplicate
+  identities and transactional writes.
+- **Device identity** — a stable `deviceId` generated on first use and
+  persisted, surviving refresh and browser restart.
+- **Participant identity** — offline UUIDv7 participant IDs, and issued public
+  codes of the form `A1-00001-O` with an ISO 7064 MOD 37-2 check character.
+- **QR payload contract** — a versioned serialiser, parser and validator, so
+  Point A and Point B agree on identity before either is built.
+
+The three surfaces are still placeholder screens, apart from device diagnostics
+on Admin. QR rendering, scanning, printing, the registration form, the feedback
+questionnaire and synchronisation are **not implemented yet** — see the deferred
+list in [docs/architecture.md](docs/architecture.md).
+
+### Participant identity at a glance
+
+| Concept | Value | Purpose |
+| --- | --- | --- |
+| `participantId` | UUIDv7 | canonical machine identity, encoded in the QR |
+| `publicCode` | `A1-00001-O` | human fallback, typed when a scan fails |
+| `deviceId` | UUIDv4 | which browser installation wrote a record |
+| `stationId` | `A1` / `B1` | which operational post it was written at |
+
+`deviceId` and `stationId` are separate concepts and are never conflated: one
+browser can visit both routes during development and remains one device.
 
 ## Routes
 
@@ -70,9 +95,10 @@ src/
     home/          Development navigation screen
   lib/
     routing/    Hash router
-    identity/   (seam) participant ID, public code, QR payload
-    storage/    (seam) IndexedDB persistence
-    sync/       (seam) upload to the central server
+    identity/   Participant/record/device IDs, public codes, QR payload
+    storage/    IndexedDB schema, repositories, device identity, sequences
+    sync/       (seam) upload to the central server — not implemented
+  test/         Test database helpers and the fake-indexeddb setup
   types/        Domain types: IDs, records, sync status
 docs/
   architecture.md
@@ -82,8 +108,8 @@ docs/
 
 | Phase | Content |
 | --- | --- |
-| 0 | Foundation, architecture, routing, types, config *(current)* |
-| 1 | Local persistence, participant identity and public-code generation |
+| 0 | Foundation, architecture, routing, types, config — done |
+| 1 | Local persistence, participant identity, public codes, QR contract *(current)* |
 | 2 | Registration flow, QR generation, sticker printing |
 | 3 | QR scanning, manual fallback entry, feedback questionnaire |
 | 4 | Admin: record counts, backup/export, diagnostics |
