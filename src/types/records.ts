@@ -1,3 +1,4 @@
+import type { FeedbackAnswers, FeedbackFormVersion } from './feedback'
 import type {
   DeviceId,
   EventDay,
@@ -64,7 +65,7 @@ export interface RegistrationRecord extends OfflineRecordMetadata {
 }
 
 /** How Point B obtained the participant's identity from the sticker. */
-export type IdentityCaptureMethod = 'qr-scan' | 'manual-code'
+export type IdentityCaptureMethod = 'qr' | 'manual'
 
 /**
  * Identity as read at Point B. Every field originates from the sticker
@@ -77,31 +78,14 @@ export type IdentityCaptureMethod = 'qr-scan' | 'manual-code'
  */
 export type CapturedParticipantIdentity =
   | {
-      readonly captureMethod: 'qr-scan'
+      readonly captureMethod: 'qr'
       readonly publicCode: PublicParticipantCode
       readonly participantId: ParticipantId
     }
   | {
-      readonly captureMethod: 'manual-code'
+      readonly captureMethod: 'manual'
       readonly publicCode: PublicParticipantCode
     }
-
-/**
- * A single questionnaire answer.
- *
- * The questionnaire itself is not designed yet. This union is the type
- * boundary: it is concrete enough to persist and to reject nonsense, and
- * narrow enough that naming the real questions later is a refinement rather
- * than a rewrite. It is deliberately not `any` and not `unknown`.
- */
-export type FeedbackAnswerValue =
-  | string
-  | number
-  | boolean
-  | readonly string[]
-
-/** Keyed by question ID once the questionnaire exists. */
-export type FeedbackAnswers = Readonly<Record<string, FeedbackAnswerValue>>
 
 /**
  * A feedback submission captured at Point B.
@@ -115,6 +99,12 @@ export interface FeedbackRecord extends OfflineRecordMetadata {
   readonly captureMethod: IdentityCaptureMethod
   readonly publicCode: PublicParticipantCode
   readonly participantId?: ParticipantId
+  /**
+   * Which questionnaire produced `answers`. Persisted so that changing the
+   * questions later leaves already-collected responses interpretable rather
+   * than ambiguous.
+   */
+  readonly formVersion: FeedbackFormVersion
   readonly answers: FeedbackAnswers
 }
 

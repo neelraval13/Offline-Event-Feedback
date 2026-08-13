@@ -24,11 +24,12 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 2 — Point A registration and QR sticker printing.**
+**Phase 3 — Point B feedback capture.**
 
-Point A is a working registration terminal and can be physically tested end to
-end. Staff enters a participant's details, the registration is durably saved to
-this device, and only then is a QR sticker produced for printing.
+Both stations now work end to end and can be physically tested.
+
+**Point A** — staff enters a participant's details, the registration is durably
+saved to this device, and only then is a QR sticker produced for printing.
 
 ```
 name / phone / email  ->  saved to IndexedDB  ->  QR sticker  ->  print / reprint
@@ -44,7 +45,41 @@ name / phone / email  ->  saved to IndexedDB  ->  QR sticker  ->  print / reprin
   identity or needing a new sticker.
 
 See [docs/point-a-physical-test.md](docs/point-a-physical-test.md) for the
-manual print/scan QA pass.
+manual print QA pass.
+
+**Point B** — staff scans that sticker, or types the code printed under it, and
+records the participant's feedback.
+
+```
+scan QR   -> validate against this event + the A1 desk -+
+                                                        +-> feedback-v1 -> IndexedDB
+type code -> validate the check character --------------+
+```
+
+- **No Point A lookup, ever.** Point B holds no registrations and needs none:
+  everything it validates comes from the sticker itself.
+- **Manual fallback always available**, including when the camera is denied,
+  missing or broken.
+- **Same-device duplicate refusal** — scanning a sticker this terminal has
+  already recorded shows *Already recorded* rather than quietly taking a second
+  response.
+- **No participant PII at Point B** — the screen shows the public code and
+  nothing else.
+
+See [docs/point-b-physical-test.md](docs/point-b-physical-test.md) for the
+manual scan/camera QA pass.
+
+### The `feedback-v1` questionnaire
+
+| Question | Stored as |
+| --- | --- |
+| Overall rating | `overall_rating`: 1–5, required |
+| How was your experience? | `experience`: `very_poor` … `excellent`, required |
+| Would you recommend this experience? | `recommend`: boolean, required |
+| Any comments? | `comments`: optional, ≤2000 characters |
+
+Every response carries `formVersion: 'feedback-v1'`, so changing the questions
+later leaves already-collected answers interpretable.
 
 Beneath the UI:
 
@@ -60,9 +95,8 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-Point B is still a placeholder screen. QR scanning, manual code entry, the
-feedback questionnaire, the offline app shell and synchronisation are **not
-implemented yet** — see the deferred list in
+The offline app shell, synchronisation, the central server and cross-device
+duplicate reconciliation are **not implemented yet** — see the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
 > Offline **data** operations work today. Offline **app startup** does not: there
@@ -78,6 +112,7 @@ implemented yet** — see the deferred list in
 | `issuerCode` | `B8EFD9` | which device issued a code, derived from its `deviceId` |
 | `deviceId` | UUIDv4 | which browser installation wrote a record |
 | `stationId` | `A1` / `B1` | which operational post it was written at |
+| `captureMethod` | `qr` / `manual` | how Point B read the identity; `manual` has no `participantId` |
 
 `deviceId` and `stationId` are separate concepts and are never conflated: one
 browser can visit both routes during development and remains one device.
@@ -117,11 +152,12 @@ src/
   config/       Typed V1 event / station / device configuration
   features/
     registration/  Point A — form, sticker, print/reprint, recovery
-    feedback/      Point B
+    feedback/      Point B — scanner, manual entry, questionnaire
     admin/         Device admin
     home/          Development navigation screen
   lib/
     print/      The browser print boundary
+    scanner/    QR camera boundary (ZXing, bundled locally)
     qr/         QR rendering (SVG, bundled locally)
     routing/    Hash router
     identity/   Participant/record/device IDs, public codes, QR payload
@@ -132,6 +168,7 @@ src/
 docs/
   architecture.md
   point-a-physical-test.md
+  point-b-physical-test.md
 ```
 
 ## Roadmap
@@ -140,8 +177,8 @@ docs/
 | --- | --- |
 | 0 | Foundation, architecture, routing, types, config — done |
 | 1 | Local persistence, participant identity, public codes, QR contract — done |
-| 2 | Point A registration, QR generation, sticker printing *(current)* |
-| 3 | QR scanning, manual fallback entry, feedback questionnaire |
+| 2 | Point A registration, QR generation, sticker printing — done |
+| 3 | Point B scanning, manual fallback entry, feedback questionnaire *(current)* |
 | 4 | Admin: record counts, backup/export, diagnostics |
 | 5 | Synchronisation API, central database, reconciliation |
 

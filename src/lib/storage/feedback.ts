@@ -1,6 +1,7 @@
 import type {
   CapturedParticipantIdentity,
   FeedbackAnswers,
+  FeedbackFormVersion,
   FeedbackRecord,
   PublicParticipantCode,
   RecordContext,
@@ -13,9 +14,8 @@ import { newRecordMetadata } from './metadata'
 /*
  * Feedback persistence.
  *
- * There is no feedback UI and no questionnaire in this phase. What matters here
- * is that the store can represent both identity origins without Point B ever
- * consulting Point A (invariants B, C, D):
+ * The store represents both identity origins without Point B ever consulting
+ * Point A (invariants B, C, D):
  *
  *   QR scan       -> publicCode + participantId
  *   manual entry  -> publicCode only
@@ -28,6 +28,7 @@ import { newRecordMetadata } from './metadata'
 
 export interface NewFeedbackInput extends RecordContext {
   readonly identity: CapturedParticipantIdentity
+  readonly formVersion: FeedbackFormVersion
   readonly answers: FeedbackAnswers
 }
 
@@ -46,9 +47,10 @@ export async function createFeedback(
     kind: 'feedback',
     captureMethod: input.identity.captureMethod,
     publicCode: input.identity.publicCode,
-    ...(input.identity.captureMethod === 'qr-scan'
+    ...(input.identity.captureMethod === 'qr'
       ? { participantId: input.identity.participantId }
       : {}),
+    formVersion: input.formVersion,
     answers: input.answers,
   }
 
@@ -79,6 +81,27 @@ export async function listFeedbackByPublicCode(
 
 export async function countFeedback(database: OfflineEventDb): Promise<number> {
   return database.feedback.count()
+}
+
+/**
+ * Whether this device has already recorded feedback for a public code.
+ *
+ * Scoped to this device on purpose. Point B terminals are independent offline
+ * clients with no way to see each other's records, so this catches the mistake
+ * that actually happens — the same operator scanning the same sticker twice —
+ * and makes no claim about the event as a whole. Reconciling duplicates across
+ * devices is the central server's job after synchronisation.
+ */
+export async function hasFeedbackForPublicCode(
+  database: OfflineEventDb,
+  code: PublicParticipantCode,
+): Promise<boolean> {
+  const existing = await database.feedback
+    .where('publicCode')
+    .equals(code)
+    .count()
+
+  return existing > 0
 }
 
 export async function listFeedbackBySyncStatus(

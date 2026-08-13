@@ -31,6 +31,7 @@ export {
   countFeedback,
   createFeedback,
   getFeedbackByRecordId,
+  hasFeedbackForPublicCode,
   listFeedbackByPublicCode,
   listFeedbackBySyncStatus,
   type NewFeedbackInput,

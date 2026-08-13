@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 2 — Point A registration and QR sticker printing.** This document
+Status: **Phase 3 — Point B feedback capture.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -628,6 +628,221 @@ The shape of these matters more than the wording: every state makes it obvious
 whether a retry would create a second participant, because that is the mistake a
 busy operator is most likely to make.
 
+## Point B: the feedback terminal
+
+`#/b` is the working feedback station. Two ways in, one way through:
+
+```
+   Start scanner                     Enter code manually
+        |                                    |
+        v                                    v
+   camera decodes QR                 staff types the printed code
+        |                                    |
+        v                                    v
+   parseQrPayload                     parsePublicCode
+   (event + station + checksum)       (station + checksum)
+        |                                    |
+        +----------------+-------------------+
+                         v
+              this device already has
+              feedback for this code?  --yes--> already-recorded
+                         | no
+                         v
+                  feedback-v1 form
+                         v
+                      saving
+                         v
+              IndexedDB commit --fails--> back to the form, answers intact
+                         v
+                     success --> next participant --> scanner resumes
+```
+
+Neither path touches Point A. There is no registration data on this device and
+the code never asks for any.
+
+### One explicit state machine
+
+`usePointBTerminal` holds a single discriminated union — `idle`,
+`starting-camera`, `scanning`, `camera-error`, `manual-entry`, `feedback`,
+`saving`, `already-recorded`, `success` — rather than a handful of booleans.
+With flags, "saving" and "already recorded" and "camera error" can all be true
+at once and the screen has to guess which to believe; here they cannot be.
+
+The in-progress answers live in the hook rather than inside the form, which is
+what makes "a save failed, keep every answer" true by construction instead of by
+careful component choreography.
+
+## Scanner boundary
+
+`src/lib/scanner` is the seam. React components talk to a `QrScanner`
+interface — `start` / `pause` / `resume` / `dispose` — and never to ZXing.
+
+**`@zxing/browser`**, bundled locally. `BrowserQRCodeReader` decodes QR only;
+the multi-format readers try every barcode symbology on every frame, which costs
+CPU on a tablet and can only produce results this app would reject. Decoding
+happens on frames in this process: no image ever leaves the device, and there is
+no remote decoding service anywhere in the path.
+
+The interface exists for two reasons. The lifecycle is genuinely awkward — a
+live `MediaStream` that must be released or the camera light stays on after
+navigation — and tests must drive decode callbacks without a camera. The suite
+uses a `FakeScanner` implementing the same interface.
+
+### Camera lifecycle
+
+- **Nothing starts on its own.** The camera is requested when staff press
+  *Start scanner*, never on page load.
+- **Rear camera preferred** via `facingMode: 'environment'`, as a hint rather
+  than an `exact` constraint, so a laptop with only a front camera still works.
+  There is no device-picker UI in V1.
+- **`pause` is not `dispose`.** Accepting an identity pauses decoding while the
+  camera stays authorised and running, so moving to the next participant does
+  not re-prompt for permission or pay the warm-up cost again. Only `dispose`
+  releases hardware.
+- **Unmount releases everything.** Leaving `#/b` stops the reader and every
+  media track. Without that the capture light stays on after navigating away.
+
+### Decoding once, not forty times
+
+A stationary sticker decodes on every video frame — dozens of callbacks for one
+participant. Acceptance is gated on a **ref that flips synchronously**, before
+any await:
+
+```ts
+if (!acceptingRef.current) return
+// ...validate...
+acceptingRef.current = false   // latch first
+scannerRef.current?.pause()    // then stop decoding
+```
+
+React state cannot do this job: it updates on the next render, by which time
+more frames have arrived. Frames already in flight when `pause()` is called
+still arrive, and the ref is what turns them away. The test suite fires forty
+raw decodes through the pause to prove it.
+
+Rejected payloads do not latch — scanning continues — but a repeated identical
+rejection is silent, so one wrong sticker held in view does not re-render
+forever.
+
+### Camera failures
+
+`permission-denied`, `no-camera`, `camera-busy`, `insecure-context`,
+`unsupported` and `failed` are classified from the browser's DOMException names
+and turned into plain wording. The raw message is never shown: *"NotReadableError:
+Could not start video source"* tells an operator nothing they can use.
+
+`insecure-context` deserves its own name. `navigator.mediaDevices` is undefined
+outside a secure context, so a venue laptop serving over plain HTTP on a LAN
+address can never start a camera — and without saying so, that is
+indistinguishable from a broken one. Manual entry works on any origin, which is
+the point of having it.
+
+**Every** camera failure leaves manual entry available. Point B is fully
+operational on a device with no working camera at all.
+
+## QR validation at Point B
+
+Every decoded string is untrusted. The camera will happily read a conference
+badge, a Wi-Fi QR, a poster URL, or a sticker from last year's event.
+
+`captureIdentityFromQr` requires, through the existing parser:
+
+- a supported payload version
+- `event` equal to this event
+- `code` issued by the registration station, `A1`
+- `participant` a valid UUID
+- the public code re-validated against its own check character, rather than
+  trusted for having arrived inside a payload
+
+A rejection shows one short sentence, opens no form, persists nothing, and
+leaves the scanner running.
+
+## Manual fallback
+
+Staff types the code printed under the QR. Normalisation and checksum validation
+belong to the identity layer and are **not** repeated in React — the tolerance
+already built in (case, separator style, under-padded sequences) applies exactly
+as it does everywhere else. Re-implementing any of it in a component is how two
+different notions of "the same code" start to exist.
+
+A manual capture deliberately has **no `participantId`**. The printed code does
+not contain one and Point B cannot look one up, so inferring one would be
+fabricating data. The field is absent, not null.
+
+| Capture | `captureMethod` | `participantId` | `publicCode` |
+| --- | --- | --- | --- |
+| QR scan | `qr` | from the payload | from the payload |
+| Manual entry | `manual` | **absent** | normalised from what was typed |
+
+Re-joining a manual record to a participant is central reconciliation's job
+after synchronisation.
+
+## The `feedback-v1` questionnaire
+
+Four questions, locked:
+
+| ID | Prompt | Stored |
+| --- | --- | --- |
+| `overall_rating` | Overall rating | `1`–`5`, required |
+| `experience` | How was your experience? | `very_poor` \| `poor` \| `okay` \| `good` \| `excellent`, required |
+| `recommend` | Would you recommend this experience? | boolean, required |
+| `comments` | Any comments? | string, optional, ≤2000 chars |
+
+Visible labels ("Very Poor") live with the form; stored values (`very_poor`)
+live in `src/types/feedback.ts`. Keeping them apart lets the wording change — or
+be translated — without touching a recorded answer's meaning.
+
+A blank or whitespace-only comment is stored as **absent**, not as an empty
+string, so "said nothing" and "typed three spaces" do not become different data.
+
+Every record carries `formVersion: 'feedback-v1'`. A second questionnaire adds a
+member to the answers union and a value to `FeedbackFormVersion`; `formVersion`
+is what tells a later reader which shape it is holding. Adding the field needed
+**no IndexedDB migration** — it is not indexed, and IndexedDB stores are
+schemaless apart from their indexes.
+
+The choices are large buttons rather than radio inputs, carrying selection state
+in `aria-pressed`. A native radio is a 13-pixel target, and this is the single
+interaction the entire station exists to collect.
+
+## Duplicate feedback on the same device
+
+Before opening a form, Point B checks its **own** feedback store for the same
+public code. If one exists it shows *Feedback already recorded on this device*,
+offers only *Scan next participant*, and neither overwrites nor deletes
+anything.
+
+Scoped to this device on purpose. Point B terminals are independent offline
+clients with no way to see each other's records, so this catches the mistake
+that actually happens — the same operator scanning the same sticker twice — and
+makes no claim about the event as a whole. The database still permits repeated
+public codes, because cross-device duplicates must stay representable for the
+server to reconcile. No supervisor override exists in V1.
+
+## Failure states at Point B
+
+| Situation | What is written | What staff sees |
+| --- | --- | --- |
+| Invalid or foreign QR | Nothing | One short sentence; scanning continues |
+| Invalid typed code | Nothing | Error beside the field; the code stays typed |
+| Camera denied/missing/busy | Nothing | *Camera unavailable*, retry, and manual entry |
+| Camera dies mid-shift | Nothing | *Camera unavailable*; manual entry still works |
+| Already recorded here | Nothing | *Already recorded*; the earlier record untouched |
+| IndexedDB write fails | Nothing | *Feedback was not saved*; every answer kept; no success; scanner stays paused |
+| Submit tapped twice | One record | One success |
+
+## Point B holds no registration PII
+
+Point B's database has `feedback` and `deviceConfig` rows and nothing else. It
+never imports the registration repository, never queries it, and has no name,
+phone or email in scope to display even accidentally. The screen shows the
+public code and nothing more, for staff confidence.
+
+The test suite proves the strong form: a Point A registration is planted in the
+test database, a scan is completed against it, and the rendered output is
+asserted to contain none of that participant's details. In the field the record
+would not be there at all.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -645,7 +860,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 2
+## What exists after Phase 3
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -656,7 +871,9 @@ synchronisation.
 - the QR payload contract: serialiser, parser and validation
 - **Point A**: the working registration terminal — validation, durable save, QR
   sticker rendering, printing, reprint, refresh recovery and PII correction
-- placeholder screens for Point B, and device diagnostics on Admin
+- **Point B**: the working feedback terminal — QR scanning, manual fallback,
+  the `feedback-v1` questionnaire, durable save, same-device duplicate refusal
+- device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
 
@@ -664,9 +881,7 @@ synchronisation.
 
 None of the following exists yet:
 
-- QR camera scanning
-- Point B manual code entry
-- the feedback questionnaire and its workflow
+- cross-device duplicate detection and reconciliation
 - printer-vendor SDKs and any automatic paper-out/jam detection
 - backup / export
 - synchronisation API

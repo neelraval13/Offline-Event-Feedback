@@ -13,6 +13,7 @@ import { deriveIssuerCode } from '../identity/issuerCode'
 import { newParticipantId } from '../identity/uuid'
 import {
   deviceId,
+  FEEDBACK_FORM_VERSION,
   stationId,
   type FeedbackAnswers,
   type RecordContext,
@@ -27,10 +28,10 @@ const CODE = formatPublicCode(
   1,
 )
 const ANSWERS: FeedbackAnswers = {
-  overall: 5,
-  wouldReturn: true,
-  comment: 'Well organised',
-  highlights: ['staff', 'timing'],
+  overall_rating: 5,
+  experience: 'excellent',
+  recommend: true,
+  comments: 'Well organised',
 }
 
 let database: OfflineEventDb
@@ -49,11 +50,12 @@ describe('feedback captured from a QR scan (invariant C)', () => {
 
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'qr-scan', publicCode: CODE, participantId },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'qr', publicCode: CODE, participantId },
       answers: ANSWERS,
     })
 
-    expect(record.captureMethod).toBe('qr-scan')
+    expect(record.captureMethod).toBe('qr')
     expect(record.publicCode).toBe(CODE)
     expect(record.participantId).toBe(participantId)
   })
@@ -62,7 +64,8 @@ describe('feedback captured from a QR scan (invariant C)', () => {
     const participantId = newParticipantId()
     await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'qr-scan', publicCode: CODE, participantId },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'qr', publicCode: CODE, participantId },
       answers: ANSWERS,
     })
 
@@ -79,11 +82,12 @@ describe('feedback captured by manual entry (invariant D)', () => {
   it('records the public code alone', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
-    expect(record.captureMethod).toBe('manual-code')
+    expect(record.captureMethod).toBe('manual')
     expect(record.publicCode).toBe(CODE)
     expect(record.participantId).toBeUndefined()
   })
@@ -91,7 +95,8 @@ describe('feedback captured by manual entry (invariant D)', () => {
   it('omits the participant ID rather than storing an empty one', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -103,7 +108,8 @@ describe('feedback captured by manual entry (invariant D)', () => {
   it('stays out of the participant ID index', async () => {
     await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -121,7 +127,8 @@ describe('feedback records generally', () => {
   it('is stamped with provenance and starts pending', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -136,7 +143,8 @@ describe('feedback records generally', () => {
   it('preserves the answer payload verbatim', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -147,7 +155,8 @@ describe('feedback records generally', () => {
   it('survives a restart', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
     const name = database.name
@@ -163,13 +172,15 @@ describe('feedback records generally', () => {
     // destroy evidence the server needs.
     await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'qr-scan', publicCode: CODE, participantId: newParticipantId() },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'qr', publicCode: CODE, participantId: newParticipantId() },
       answers: ANSWERS,
     })
     await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
-      answers: { overall: 3 },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
+      answers: { overall_rating: 3, experience: 'okay', recommend: false },
     })
 
     expect(await listFeedbackByPublicCode(database, CODE)).toHaveLength(2)
@@ -178,7 +189,8 @@ describe('feedback records generally', () => {
   it('lists records awaiting synchronisation', async () => {
     await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -189,7 +201,8 @@ describe('feedback records generally', () => {
   it('holds no participant PII', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
-      identity: { captureMethod: 'manual-code', publicCode: CODE },
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
@@ -201,6 +214,7 @@ describe('feedback records generally', () => {
       'deviceId',
       'eventDay',
       'eventId',
+      'formVersion',
       'kind',
       'publicCode',
       'recordId',
