@@ -21,6 +21,7 @@ export {
   getRegistrationByParticipantId,
   getRegistrationByPublicCode,
   getRegistrationByRecordId,
+  listRecentRegistrations,
   listRegistrationsBySyncStatus,
   updateRegistration,
   type NewRegistrationInput,

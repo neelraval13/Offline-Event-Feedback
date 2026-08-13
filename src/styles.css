@@ -143,3 +143,254 @@ a {
   margin: 0.25rem 0 0;
   color: var(--text-muted);
 }
+
+/* ---------------------------------------------------------------------------
+ * Point A — registration terminal
+ * ------------------------------------------------------------------------- */
+
+.section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 1.5rem 0 0.5rem;
+}
+
+.registration-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field__label {
+  font-weight: 600;
+}
+
+.field__input {
+  /* Large targets: staff are standing, often on a tablet. */
+  padding: 0.6rem 0.7rem;
+  font-size: 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field__input--invalid {
+  border-color: #b3261e;
+}
+
+.field__error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 0.9rem;
+}
+
+.button {
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.button--small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.25rem 0;
+}
+
+.notice {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.notice--error {
+  background: #fdecea;
+  border-color: #f2b8b5;
+  color: #7f1d1a;
+}
+
+.notice--success {
+  background: #e7f4ea;
+  border-color: #b5dfc0;
+  color: #14532d;
+}
+
+.public-code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-feature-settings: "zero" 1, "tnum" 1;
+  font-variant-numeric: slashed-zero tabular-nums;
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  margin: 0.5rem 0;
+  white-space: nowrap;
+}
+
+.correction {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.recent__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.recent__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface-muted);
+  border-radius: 6px;
+}
+
+.recent__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-feature-settings: "zero" 1, "tnum" 1;
+  font-variant-numeric: slashed-zero tabular-nums;
+  white-space: nowrap;
+}
+
+.recent__time {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * The printable sticker
+ *
+ * Sized in millimetres because the output is physical. What is shown on screen
+ * is the same element the printer receives, at 1:1, so the preview is a true
+ * proof rather than an approximation.
+ * ------------------------------------------------------------------------- */
+
+.sticker {
+  width: 50mm;
+  height: 40mm;
+  box-sizing: border-box;
+  padding: 2mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1mm;
+  background: #fff;
+  color: #000;
+  border: 1px dashed var(--border); /* screen guide only; removed for print */
+}
+
+.sticker__qr {
+  width: 26mm;
+  height: 26mm;
+  display: block;
+}
+
+.sticker__qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* Keep module edges on exact pixel boundaries rather than smoothed. */
+  shape-rendering: crispEdges;
+}
+
+.sticker__code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* Slashed zero and tabular figures: the check character can still be an O
+   * or an I, and this code gets read aloud and typed by hand at Point B. */
+  font-feature-settings: "zero" 1, "tnum" 1;
+  font-variant-numeric: slashed-zero tabular-nums;
+  font-size: 3.2mm;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* Never wrap: a public code split across two lines is a misread waiting to
+   * happen, and the label has room for it on one. */
+  white-space: nowrap;
+  text-align: center;
+}
+
+@media print {
+  /* Exactly one label per page, at its true size. Printer drivers may still
+   * impose a hardware margin; that is why the sticker has its own padding. */
+  @page {
+    size: 50mm 40mm;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  /* Hide the application without unmounting it: the sticker is nested deep in
+   * the app tree, so visibility is toggled rather than display, and the
+   * sticker is then anchored to the page origin. */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .sticker,
+  .sticker * {
+    visibility: visible !important;
+  }
+
+  .sticker {
+    position: fixed;
+    left: 0;
+    top: 0;
+    margin: 0;
+    border: none;
+    /* Ensure the QR prints as true black regardless of browser colour
+     * economy settings. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

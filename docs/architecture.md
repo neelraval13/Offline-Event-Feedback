@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 1 — local persistence and participant identity.** This document
+Status: **Phase 2 — Point A registration and QR sticker printing.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -373,6 +373,180 @@ a payload, and it copies the three identity fields explicitly — never by
 spreading, which would silently start leaking PII into stickers the moment the
 registration record grows a field.
 
+## Point A: the registration terminal
+
+`#/a` is the working registration desk. The screen orchestrates; it does not
+own identity or storage.
+
+```
+staff types name / phone / email
+        |
+        v
+validate  ------ invalid ------> errors beside the fields, nothing written
+        |
+        v
+createRegistration()  ---- throws ----> "could not save", NO sticker, nothing written
+        |
+        v
+IndexedDB transaction committed
+        |
+        v
+QR rendered from the SAVED record  ---- throws ----> "saved, do NOT re-register",
+        |                                            retry the sticker
+        v
+sticker on screen -> Print -> Reprint as often as needed
+```
+
+The ordering is the whole point. `useRegistrationTerminal` is the only place it
+lives, and a sticker is unreachable before the commit because the record
+returned by `createRegistration` is the sole input to the QR payload — there is
+no other path to a `Sticker` component. A failed save produces no sticker state
+at all, so there is nothing to print.
+
+The screen never generates a participant ID, never formats a public code and
+never touches the sequence counter. It passes contact details plus provenance to
+storage and treats what comes back as fact.
+
+### Keyboard-first
+
+Name is focused on arrival, tab order runs down the fields to the button, and
+Enter submits from any field. Once the sticker is ready focus moves to **Print
+sticker**, so a full participant is `type, tab, type, tab, type, Enter, Enter`.
+**Next participant** clears the form and returns focus to Name.
+
+Submissions are guarded by a ref rather than by render state, because two fast
+Enter presses can both land before React re-renders.
+
+## The sticker
+
+**50 mm × 40 mm**, containing a QR code and the public code beneath it. Nothing
+else.
+
+```
++---------------------------+
+|      +-------------+      |
+|      |             |      |
+|      |   QR 26mm   |      |   50mm x 40mm label
+|      |             |      |   2mm padding
+|      +-------------+      |
+|     A1-B8EFD9-00001-X     |   3.2mm, monospace, no wrap
++---------------------------+
+```
+
+No name, no phone number, no email — no participant PII of any kind. This is
+enforced by the component's shape: `Sticker` takes a public code and
+pre-rendered QR markup, **not** a registration record, so there is nothing in
+scope that could leak onto a label.
+
+The public code is set in a monospaced face with `font-feature-settings: "zero"
+1, "tnum" 1` (slashed zero, tabular figures) and `white-space: nowrap`. The
+issuer segment is hexadecimal and so can never contain `O` or `I`; the check
+character still can, which is why the typography matters. A wrapped code is a
+misread waiting to happen at Point B.
+
+Sizes are declared in millimetres, so the on-screen preview is the printed
+artefact at 1:1 rather than an approximation of it.
+
+## QR rendering
+
+The `qrcode` package, bundled with the application. No network call is involved
+at any point — a QR fetched from a service would put participant identifiers on
+someone else's infrastructure and would fail at an event with no connectivity.
+
+**SVG, not raster.** Vector modules land on exact device pixels at whatever DPI
+the label printer runs, with no resampling blur along module edges — which is
+the failure that makes small QR codes unscannable.
+
+**Error correction level M** (~15%). Measured against the real 109-byte payload
+at 26 mm:
+
+| Level | Version | Modules | Module size |
+| --- | --- | --- | --- |
+| L | 5 | 37 | 0.58 mm |
+| **M** | **6** | **41** | **0.53 mm** |
+| Q | 8 | 49 | 0.46 mm |
+| H | 10 | 57 | 0.40 mm |
+
+Higher correction packs more modules into the same 26 mm, so each module gets
+smaller and the symbol gets *harder* to scan — at 203 dpi, H would give barely 3
+printer dots per module against M's 4.2. The usual reason to accept that trade
+is damage tolerance, but this system already has a designed answer for an
+unreadable QR: the public code printed underneath, which staff types instead.
+Spending module size on redundancy we have a better fallback for would be the
+wrong way round.
+
+The standard four-module quiet zone is kept. No logo, no tint.
+
+## Printing
+
+Generic browser printing — `window.print()` behind a one-function module, with
+`@page { size: 50mm 40mm; margin: 0 }` and `@media print` rules that hide the
+application and anchor the sticker to the page origin. No vendor SDK, because
+the printer model is not chosen yet and nothing here needs one.
+
+Printing is **not** invoked automatically after a save. The QR must be rendered
+and in the DOM before the dialog opens, and a dialog that appears by itself is a
+poor thing to put in front of someone working at speed. Instead the print button
+takes focus, so Enter prints.
+
+### Printing cannot be confirmed
+
+`window.print()` returns when the dialog closes. The browser does not report
+whether the operator pressed Print or Cancel, whether the printer had stock, or
+whether the label came out legible. Treating that return as proof of a printed
+sticker would be a lie the UI then tells staff.
+
+So the system tracks two separate facts:
+
+| Fact | Knowable? | Consequence |
+| --- | --- | --- |
+| Registration persisted | Yes — the transaction committed | Invariant 1 turns on this |
+| Sticker physically printed | **No** | Operator's judgement; reprint always available |
+
+### Reprint
+
+Reprint re-renders the QR from the stored record and prints again. It creates no
+record, moves no counter, and mints no identity — the symbol is identical
+because the input is the same committed row. It is available for the current
+registration and for any of the recent ones.
+
+## Recovery after a refresh
+
+A refresh throws away screen state, never the record. **Recent registrations on
+this device** lists the latest few local registrations, newest first, and each
+can be reprinted. It shows public codes and times only — a list of participant
+names on a desk-facing screen would be a privacy leak that buys nothing.
+
+This is deliberately not a management dashboard. It is the path back to a
+sticker that failed to come out.
+
+## Correcting contact details
+
+Staff can correct name, phone and email on a saved registration.
+`updateRegistration` bumps `revision`, refreshes `updatedAt`, and returns the
+record to `pending` so an already-uploaded copy gets re-sent. Everything that
+identifies the participant — `recordId`, `participantId`, `publicCode`,
+`eventId`, `stationId`, `deviceId`, `createdAt` — is immutable: the first three
+are printed on a sticker the participant is physically wearing, and the rest
+record what happened.
+
+A correction therefore never requires a reprint, because none of it was ever on
+the label.
+
+## Failure states at Point A
+
+| Situation | What is written | What staff sees |
+| --- | --- | --- |
+| Validation fails | Nothing | Errors beside the fields; other values kept |
+| IndexedDB write fails | Nothing | "Could not save… nothing was written"; no sticker; print impossible |
+| Saved, QR rendering fails | The registration | "Saved — do **not** register again"; public code shown; Retry sticker |
+| Saved, printing cancelled or jams | The registration | Sticker stays; Reprint |
+| Local storage unavailable at open | Nothing | Banner warning not to register until resolved |
+
+The shape of these matters more than the wording: every state makes it obvious
+whether a retry would create a second participant, because that is the mistake a
+busy operator is most likely to make.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -390,7 +564,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 1
+## What exists after Phase 2
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -399,8 +573,9 @@ synchronisation.
 - participant ID generation, per-device issuer codes, public code issuing and
   validation
 - the QR payload contract: serialiser, parser and validation
-- minimal placeholder screens for Point A and Point B, and device diagnostics on
-  Admin
+- **Point A**: the working registration terminal — validation, durable save, QR
+  sticker rendering, printing, reprint, refresh recovery and PII correction
+- placeholder screens for Point B, and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
 
@@ -408,10 +583,10 @@ synchronisation.
 
 None of the following exists yet:
 
-- QR rendering and printer integration
 - QR camera scanning
-- the registration form workflow
+- Point B manual code entry
 - the feedback questionnaire and its workflow
+- printer-vendor SDKs and any automatic paper-out/jam detection
 - backup / export
 - synchronisation API
 - central database

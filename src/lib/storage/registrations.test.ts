@@ -7,6 +7,7 @@ import {
   getRegistrationByParticipantId,
   getRegistrationByPublicCode,
   getRegistrationByRecordId,
+  listRecentRegistrations,
   listRegistrationsBySyncStatus,
   updateRegistration,
   type NewRegistrationInput,
@@ -275,6 +276,86 @@ describe('updateRegistration', () => {
     await expect(
       updateRegistration(database, toRecordId('missing'), { name: 'X' }),
     ).rejects.toThrow(/No registration/)
+  })
+})
+
+describe('sync status after a correction', () => {
+  it('returns an already-synced record to pending', async () => {
+    const created = await createRegistration(database, input())
+    await updateRegistration(database, created.recordId, {
+      syncStatus: 'synced',
+    })
+
+    // The server's copy is now stale, so the record has to go again.
+    const corrected = await updateRegistration(database, created.recordId, {
+      email: 'corrected@example.test',
+    })
+
+    expect(corrected.syncStatus).toBe('pending')
+  })
+
+  it('takes an explicit sync status at its word', async () => {
+    // This is the sync engine's path; it must not be overridden.
+    const created = await createRegistration(database, input())
+    const marked = await updateRegistration(database, created.recordId, {
+      syncStatus: 'synced',
+    })
+
+    expect(marked.syncStatus).toBe('synced')
+  })
+
+  it('lets the sync engine mark a record synced alongside a correction', async () => {
+    const created = await createRegistration(database, input())
+    const updated = await updateRegistration(database, created.recordId, {
+      email: 'corrected@example.test',
+      syncStatus: 'syncing',
+    })
+
+    expect(updated.syncStatus).toBe('syncing')
+  })
+})
+
+describe('listRecentRegistrations', () => {
+  it('returns nothing when there are no registrations', async () => {
+    expect(await listRecentRegistrations(database, 5)).toEqual([])
+  })
+
+  it('returns the newest first', async () => {
+    const first = await createRegistration(database, input({ name: 'First' }))
+    const second = await createRegistration(database, input({ name: 'Second' }))
+    const third = await createRegistration(database, input({ name: 'Third' }))
+
+    const recent = await listRecentRegistrations(database, 10)
+
+    expect(recent.map((r) => r.recordId)).toEqual([
+      third.recordId,
+      second.recordId,
+      first.recordId,
+    ])
+  })
+
+  it('respects the limit', async () => {
+    for (let i = 0; i < 6; i += 1) {
+      await createRegistration(database, input({ name: `Participant ${i}` }))
+    }
+
+    expect(await listRecentRegistrations(database, 3)).toHaveLength(3)
+  })
+
+  it('returns nothing for a non-positive limit', async () => {
+    await createRegistration(database, input())
+    expect(await listRecentRegistrations(database, 0)).toEqual([])
+    expect(await listRecentRegistrations(database, -1)).toEqual([])
+  })
+
+  it('survives a restart, which is what makes reprint recoverable', async () => {
+    const created = await createRegistration(database, input())
+    const name = database.name
+
+    database.close()
+    const reopened = new OfflineEventDb(name)
+    expect(await listRecentRegistrations(reopened, 5)).toEqual([created])
+    reopened.close()
   })
 })
 

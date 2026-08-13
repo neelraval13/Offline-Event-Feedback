@@ -109,7 +109,14 @@ export async function getRegistrationByPublicCode(
  * Every mutation bumps `revision` and `updatedAt`. Identity fields are not
  * patchable: a participant's ID and public code are printed on a sticker they
  * are physically wearing, so changing them locally would silently break the
- * link the whole system rests on.
+ * link the whole system rests on. Provenance (`eventId`, `stationId`,
+ * `deviceId`, `createdAt`) is equally fixed — it records what happened, not
+ * what someone would prefer.
+ *
+ * Correcting contact details returns the record to `pending`, because a record
+ * already uploaded now differs from the server's copy and has to go again. A
+ * patch that sets `syncStatus` explicitly — which is what the sync engine will
+ * do — is taken at its word instead.
  */
 export async function updateRegistration(
   database: OfflineEventDb,
@@ -122,14 +129,19 @@ export async function updateRegistration(
       throw new Error(`No registration with recordId ${id}`)
     }
 
+    const touchesContactDetails =
+      patch.name !== undefined ||
+      patch.phone !== undefined ||
+      patch.email !== undefined
+
     const updated: RegistrationRecord = {
       ...existing,
       ...(patch.name === undefined ? {} : { name: patch.name }),
       ...(patch.phone === undefined ? {} : { phone: patch.phone }),
       ...(patch.email === undefined ? {} : { email: patch.email }),
-      ...(patch.syncStatus === undefined
-        ? {}
-        : { syncStatus: patch.syncStatus }),
+      syncStatus:
+        patch.syncStatus ??
+        (touchesContactDetails ? 'pending' : existing.syncStatus),
       revision: existing.revision + 1,
       updatedAt: now(),
     }
@@ -137,6 +149,28 @@ export async function updateRegistration(
     await database.registrations.put(updated)
     return updated
   })
+}
+
+/**
+ * The most recently created registrations on this device, newest first.
+ *
+ * Exists for reprint and recovery after a refresh, not for browsing: Point A
+ * staff need to reach the sticker they just failed to print, and nothing more.
+ * Ordered by the indexed `createdAt`, so it does not scan the store.
+ */
+export async function listRecentRegistrations(
+  database: OfflineEventDb,
+  limit: number,
+): Promise<RegistrationRecord[]> {
+  if (limit <= 0) {
+    return []
+  }
+
+  return database.registrations
+    .orderBy('createdAt')
+    .reverse()
+    .limit(limit)
+    .toArray()
 }
 
 export async function countRegistrations(

@@ -24,9 +24,29 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 1 — local persistence and participant identity.**
+**Phase 2 — Point A registration and QR sticker printing.**
 
-What works now, beneath the UI:
+Point A is a working registration terminal and can be physically tested end to
+end. Staff enters a participant's details, the registration is durably saved to
+this device, and only then is a QR sticker produced for printing.
+
+```
+name / phone / email  ->  saved to IndexedDB  ->  QR sticker  ->  print / reprint
+```
+
+- **50 mm × 40 mm sticker** carrying a 26 mm QR code and the public code
+  beneath it — and no participant PII of any kind.
+- **Print and reprint** through the browser's own print dialog. Reprint produces
+  the identical sticker: no new record, no new identity, no counter movement.
+- **Survives a refresh** — recent local registrations stay reachable for
+  reprint.
+- **Correct name, phone or email** on a saved registration without changing its
+  identity or needing a new sticker.
+
+See [docs/point-a-physical-test.md](docs/point-a-physical-test.md) for the
+manual print/scan QA pass.
+
+Beneath the UI:
 
 - **Local storage** — IndexedDB (Dexie) holding registrations, feedback and
   device configuration, with unique-index protection against duplicate
@@ -40,10 +60,14 @@ What works now, beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-The three surfaces are still placeholder screens, apart from device diagnostics
-on Admin. QR rendering, scanning, printing, the registration form, the feedback
-questionnaire and synchronisation are **not implemented yet** — see the deferred
-list in [docs/architecture.md](docs/architecture.md).
+Point B is still a placeholder screen. QR scanning, manual code entry, the
+feedback questionnaire, the offline app shell and synchronisation are **not
+implemented yet** — see the deferred list in
+[docs/architecture.md](docs/architecture.md).
+
+> Offline **data** operations work today. Offline **app startup** does not: there
+> is no service worker yet, so the page must be loaded while the host is
+> reachable.
 
 ### Participant identity at a glance
 
@@ -92,11 +116,13 @@ src/
   components/   Shared presentational components
   config/       Typed V1 event / station / device configuration
   features/
-    registration/  Point A
+    registration/  Point A — form, sticker, print/reprint, recovery
     feedback/      Point B
     admin/         Device admin
     home/          Development navigation screen
   lib/
+    print/      The browser print boundary
+    qr/         QR rendering (SVG, bundled locally)
     routing/    Hash router
     identity/   Participant/record/device IDs, public codes, QR payload
     storage/    IndexedDB schema, repositories, device identity, sequences
@@ -105,6 +131,7 @@ src/
   types/        Domain types: IDs, records, sync status
 docs/
   architecture.md
+  point-a-physical-test.md
 ```
 
 ## Roadmap
@@ -112,8 +139,8 @@ docs/
 | Phase | Content |
 | --- | --- |
 | 0 | Foundation, architecture, routing, types, config — done |
-| 1 | Local persistence, participant identity, public codes, QR contract *(current)* |
-| 2 | Registration flow, QR generation, sticker printing |
+| 1 | Local persistence, participant identity, public codes, QR contract — done |
+| 2 | Point A registration, QR generation, sticker printing *(current)* |
 | 3 | QR scanning, manual fallback entry, feedback questionnaire |
 | 4 | Admin: record counts, backup/export, diagnostics |
 | 5 | Synchronisation API, central database, reconciliation |
