@@ -2,6 +2,7 @@ import { EVENT_CONFIG } from '../../config/event'
 import { APP_VERSION, BUILD_ID } from '../pwa/appVersion'
 import { newRecordId } from '../identity/uuid'
 import { DB_VERSION, type OfflineEventDb } from '../storage'
+import { EXCLUDED_FROM_BACKUP_KEYS } from '../sync/syncCredentials'
 import { deviceId as toDeviceId, isoTimestamp } from '../../types'
 import type { BackupPayloadV1 } from './format'
 import { BACKUP_FORMAT_VERSION } from './format'
@@ -52,7 +53,21 @@ export async function createSnapshot(
       const sortedRegistrations = byKey(registrations, (record) => record.recordId)
       const sortedFeedback = byKey(feedback, (record) => record.recordId)
       const sortedSequences = byKey(sequences, (row) => row.key)
-      const sortedDeviceConfig = byKey(deviceConfig, (row) => row.key)
+      /*
+       * The synchronisation credential is stripped before it can reach a file.
+       *
+       * A device token is not event data. Carrying it in a backup would make
+       * the file a reusable server credential in anyone's hands, and restoring
+       * it would hand a replacement machine the failed one's upload identity.
+       * A replacement enrols itself. `deviceId` stays, exactly as Phase 5
+       * requires — that is provenance, not a credential.
+       */
+      const sortedDeviceConfig = byKey(
+        deviceConfig.filter(
+          (row) => !EXCLUDED_FROM_BACKUP_KEYS.includes(row.key),
+        ),
+        (row) => row.key,
+      )
 
       const storedDeviceId =
         sortedDeviceConfig.find((row) => row.key === 'deviceId')?.value ?? ''

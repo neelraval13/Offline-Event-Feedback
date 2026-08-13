@@ -4,6 +4,7 @@ import { EVENT_CONFIG } from '../../config/event'
 import { BackupPanel } from './BackupPanel'
 import { LocalDataPanel } from './LocalDataPanel'
 import { OfflineReadinessPanel } from './OfflineReadinessPanel'
+import { SyncPanel } from './SyncPanel'
 import { useDeviceDiagnostics } from './useDeviceDiagnostics'
 
 /** Local device utilities for staff supporting a station. */
@@ -63,11 +64,10 @@ export function AdminScreen() {
 
       <BackupPanel onDataChanged={() => setDataGeneration((n) => n + 1)} />
 
+      <SyncPanel onDataChanged={() => setDataGeneration((n) => n + 1)} />
+
       <PendingCapabilities
-        items={[
-          'Sync state and outbox inspection',
-          'Further diagnostic information',
-        ]}
+        items={['Reconciliation of conflicting records', 'Central reporting']}
       />
     </article>
   )

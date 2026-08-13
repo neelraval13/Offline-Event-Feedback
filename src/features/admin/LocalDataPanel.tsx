@@ -79,6 +79,22 @@ export function LocalDataPanel({ refreshToken = 0 }: { readonly refreshToken?: n
             {counts === null ? '—' : format(counts.feedback.pending)}
           </dd>
         </div>
+        <div>
+          <dt>Synced</dt>
+          <dd data-testid="count-synced">
+            {counts === null
+              ? '—'
+              : format(counts.registrations.synced + counts.feedback.synced)}
+          </dd>
+        </div>
+        <div>
+          <dt>Errors</dt>
+          <dd data-testid="count-error">
+            {counts === null
+              ? '—'
+              : format(counts.registrations.error + counts.feedback.error)}
+          </dd>
+        </div>
       </dl>
 
       <p className="screen__note">

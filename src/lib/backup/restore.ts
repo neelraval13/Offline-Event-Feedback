@@ -74,6 +74,37 @@ const FEEDBACK_IMMUTABLE = [
   'createdAt',
 ] as const
 
+/*
+ * Transport state, excluded from every merge comparison.
+ *
+ * `syncStatus` and its companions describe whether a record reached the central
+ * server *from this device* — they are not part of the record's contents. Two
+ * copies of one registration will routinely disagree here: the source device
+ * synced it, the replacement has not. Comparing them would report a conflict
+ * for records that are in every meaningful sense identical, and abort a restore
+ * that should have succeeded.
+ *
+ * Discovered when synchronisation began changing these fields in earnest.
+ */
+const TRANSPORT_FIELDS: readonly string[] = [
+  'syncStatus',
+  'lastSyncedAt',
+  'syncErrorCode',
+]
+
+/** A record without its transport bookkeeping. */
+function domainFieldsOf(record: object): Record<string, unknown> {
+  const fields: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(record)) {
+    if (!TRANSPORT_FIELDS.includes(key)) {
+      fields[key] = value
+    }
+  }
+
+  return fields
+}
+
 /** Key-order-independent structural comparison. */
 function deepEqual(left: unknown, right: unknown): boolean {
   if (left === right) {
@@ -160,7 +191,9 @@ function mergeDecision(
     return 'unchanged'
   }
 
-  if (deepEqual(local, incoming)) {
+  // Compared on domain contents only: a difference in delivery state is not a
+  // difference in the record.
+  if (deepEqual(domainFieldsOf(local), domainFieldsOf(incoming))) {
     return 'unchanged'
   }
 

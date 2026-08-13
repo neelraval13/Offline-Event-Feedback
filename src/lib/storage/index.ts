@@ -37,6 +37,13 @@ export {
   type NewFeedbackInput,
 } from './feedback'
 export {
+  markFeedbackSyncError,
+  markFeedbackSynced,
+  markRegistrationSyncError,
+  markRegistrationSynced,
+  type SyncErrorCode,
+} from './transport'
+export {
   getLocalCounts,
   type LocalCounts,
   type StoreCounts,

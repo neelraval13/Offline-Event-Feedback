@@ -39,7 +39,16 @@ export interface OfflineRecordMetadata {
   readonly createdAt: IsoTimestamp
   readonly updatedAt: IsoTimestamp
   readonly revision: number
+
+  /*
+   * Transport state. Describes delivery to the central server, never an edit.
+   * Mutating these must not touch `revision` or `updatedAt` — see
+   * `src/lib/storage/transport.ts`.
+   */
   readonly syncStatus: SyncStatus
+  readonly lastSyncedAt?: IsoTimestamp
+  /** Stable, non-PII reason a record will not sync. */
+  readonly syncErrorCode?: string
 }
 
 /**

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 5 — encrypted backup and restore.** This document
+Status: **Phase 6 — central server and idempotent synchronisation.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -1213,6 +1213,208 @@ Web Crypto. No network call is involved at any point, and nothing about them is
 placed in Cache Storage — the precache holds application code only, never
 participant data.
 
+## Central synchronisation
+
+The first networked component. Local capture stays authoritative for the field;
+the server becomes authoritative for consolidation. **No event operation depends
+on synchronisation succeeding** — with the server switched off, every earlier
+phase behaves exactly as it did.
+
+```
+offline local capture  ->  Internet eventually  ->  idempotent upload  ->  Postgres
+```
+
+### At-least-once, and why that is fine
+
+The same record may legitimately be sent once, twice or ten times. A device
+cannot distinguish "the request never arrived" from "the response was lost", so
+it keeps the record pending and sends it again. `recordId` — generated on the
+capturing device, printed indirectly on a sticker — is the idempotency key, and
+the server returns `already_current` for a record it already holds. Nothing is
+duplicated and the device can finally stop.
+
+No server-side record identity is generated. A central ID would break the link
+to the sticker a participant is wearing.
+
+### Repository shape
+
+The Vite application is untouched. A small server sits alongside it:
+
+```
+server/     Hono on Node, Postgres, migrations, tests
+shared/     The wire contract, imported by both sides
+src/lib/sync/   The client outbox
+```
+
+**One protocol definition, shared.** Two independently written validators drift,
+and the drift shows up as records that upload from one build and are rejected by
+another — at an event, with no way to diagnose it. Zod earns its place here
+because both sides consume the same schemas; the server parses every request
+with them, because TypeScript types do not survive an HTTP boundary.
+
+`postgres` (porsager) is used as a plain tagged-template SQL client, not an ORM.
+The interesting logic is conditional upserts, and those need to be read exactly
+as written.
+
+### Schema
+
+`registrations` and `feedback` keyed by `record_id`, plus `sync_devices` and a
+counts-only `sync_batches` audit table. Two decisions worth stating:
+
+- **`feedback.public_code` is not unique**, and there is **no foreign key** to
+  `registrations`. Two terminals may each hold a response for one participant,
+  and feedback may reach the server before the registration it refers to. Both
+  are ordinary, and ingest must not resolve either.
+- **`registrations` has unique indexes** on `(event_id, participant_id)` and
+  `(event_id, public_code)`. Two devices uploading the same record at the same
+  instant is a race, and the database is what settles it.
+
+Migrations are applied by `pnpm server:migrate`, never on startup: a process
+restart must not be able to alter a schema holding an event's data.
+
+### Enrolment, not a shared secret
+
+A single API key inside the PWA would not be a secret — the bundle is readable.
+Instead an operator types a shared enrolment code once, on a device with
+Internet, and the device receives **its own** 256-bit token. The server stores
+only a SHA-256 hash, so a leaked database yields no usable upload credential.
+The plaintext exists exactly once, in the enrolment response.
+
+The enrolment code is compared in constant time and is never persisted on either
+side. A wrong code always produces the same answer, so nothing leaks about how
+close a guess was.
+
+Plain SHA-256 rather than a password KDF is deliberate: the token is a 256-bit
+random value with no dictionary to attack, so an expensive KDF would slow every
+ingest request and buy nothing.
+
+### Uploader is not the source device
+
+The distinction Phase 5 makes unavoidable:
+
+```
+record.deviceId          the device that CAPTURED the record
+uploaderDeviceId         the device DELIVERING it now
+```
+
+After a recovery these differ, and requiring them to match would make every
+restored record permanently unsyncable. The server therefore stores
+`source_device_id` from the record and `last_uploader_device_id` from the
+authenticated device, and never compares them.
+
+What it does require: the token's event matches the batch's event, the token's
+device matches the claimed uploader, and every record belongs to the
+authenticated event.
+
+### Ingest semantics
+
+For a given `recordId`:
+
+| Incoming | Outcome |
+| --- | --- |
+| Not present centrally | insert → `accepted` |
+| Participant or public code owned by another record | `conflict` |
+| Immutable identity or provenance differs | `conflict` |
+| Revision higher | update mutable fields → `accepted` |
+| Revision equal, contents identical | `already_current` |
+| **Revision equal, contents differ** | **`conflict`** |
+| Revision lower | `server_newer`, central row untouched |
+
+Never last-write-wins. Equal revisions with different contents means two devices
+believe different things about the same record, and guessing would silently
+discard somebody's capture.
+
+Responses carry outcomes only — no name, phone, email or answers. The ingest API
+is write-oriented, and nothing about a person needs to travel back to a device
+that already has it.
+
+### Batch semantics
+
+One `POST /v1/sync/batch`, at most 100 records. A malformed **envelope** rejects
+the whole request — there is no sensible per-record answer when the batch itself
+cannot be parsed. Records inside a well-formed batch are processed
+independently: 98 accepted, 1 already current and 1 conflicting commits the 99
+and reports all 100. A single conflict must never strand real captures that are
+sitting on one device.
+
+### The client outbox
+
+```
+pending records -> wire DTOs -> batches of 100 -> POST -> per-record result
+```
+
+Wire records are built field by field, never spread, so transport bookkeeping
+cannot leak onto the network and a new local field cannot silently break the
+batch.
+
+There is deliberately **no persisted `syncing` state**. A browser closed
+mid-request would strand every record in it forever, and since ingest is
+idempotent there is nothing to gain. Records stay `pending` until the server has
+actually said something about them.
+
+### Transport state is not a domain revision
+
+This is the sharpest edge in the phase. `updateRegistration` increments
+`revision` on every call — appropriate for a correction at Point A, catastrophic
+for an acknowledgement. Marking a record synced through it would raise the
+revision, the server would see a higher revision carrying identical contents,
+and the two would ratchet against each other indefinitely.
+
+So synchronisation uses dedicated functions in `src/lib/storage/transport.ts`
+that touch `syncStatus`, `lastSyncedAt` and `syncErrorCode` and **nothing
+else** — not `revision`, not `updatedAt`, not identity.
+
+| Concern | Fields | Meaning |
+| --- | --- | --- |
+| Domain | `revision`, `updatedAt` | what a person changed |
+| Transport | `syncStatus`, `lastSyncedAt`, `syncErrorCode` | whether it arrived |
+
+A record corrected at Point A returns to `pending` with a higher revision and
+uploads normally on the next sync.
+
+### Failure behaviour
+
+| Situation | Local records |
+| --- | --- |
+| Offline, timeout, 5xx, dropped connection | stay **pending**, retried later |
+| `accepted` / `already_current` | **synced** |
+| `conflict` / `invalid` / `server_newer` | **error** with a non-PII code, not retried |
+
+Transient failures never mark a record permanently in error: nothing is known to
+be wrong with it. Requests are abandoned after 25 seconds via `AbortController`
+rather than hanging until the browser gives up.
+
+The wording matters. A failed sync says the records are *safe and pending*,
+never "failed" or "lost", because they are neither.
+
+### Manual and opportunistic
+
+**Sync now** is the operator control. Beyond that: one attempt when Admin opens,
+and one when the browser fires `online`. No polling, no background sync,
+no service-worker sync API. `navigator.onLine` is treated as a hint — it reports
+a link, not a reachable server — so an opportunistic failure is silent, visible
+only in Admin.
+
+Point A and Point B display nothing about synchronisation at all.
+
+### Interaction with earlier phases
+
+**Backups exclude the sync credential.** A device token is not event data:
+carrying it would make a backup file a reusable server credential, and restoring
+it would hand a replacement machine the failed one's upload identity. A
+replacement enrols itself. `deviceId` stays in the backup exactly as before —
+that is provenance.
+
+**The service worker does not cache sync.** Precaching is GET-only over built
+assets; there is no runtime caching rule at all, so `POST /v1/sync/*` is always
+network-only. Startup never waits on `/health`, `/enroll` or `/sync`.
+
+**Restore compares domain contents only.** Synchronisation actively changes
+`syncStatus`, so two copies of one record will routinely disagree about
+delivery. Comparing transport state during a merge reported conflicts for
+records that were identical in every meaningful sense — see the regression note
+below.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -1230,7 +1432,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 5
+## What exists after Phase 6
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -1247,7 +1449,9 @@ synchronisation.
   server reachable; operator-gated updates; readiness and version on Admin
 - **Encrypted backup and restore**: an operator-initiated `.oefbackup` file,
   verify-before-trust, and a non-destructive merge onto a replacement device
-- local record counts and device diagnostics on Admin
+- **Central synchronisation**: device enrolment, an idempotent batched ingest
+  API over Postgres, and a client outbox that survives lost responses
+- local record counts, sync status and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
 
@@ -1258,8 +1462,7 @@ None of the following exists yet:
 - cross-device duplicate detection and reconciliation
 - background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
-- synchronisation API
-- central database
+- central record browsing or reporting
 - reconciliation and dashboards
 - authentication
 
@@ -1267,6 +1470,14 @@ The offline application shell, previously listed here as unscheduled, landed in
 Phase 4.
 
 ## Known concerns carried into later phases
+
+- **Restore once compared transport state.** Until Phase 6, the backup merge
+  compared whole records, including `syncStatus`. Once synchronisation began
+  changing that field, two copies of one record — synced on the source device,
+  pending on the replacement — compared as different contents at the same
+  revision and aborted the restore as a conflict. The merge now compares domain
+  contents only. Latent since Phase 5; only reachable once records could be
+  marked synced.
 
 - **Ambiguous glyphs in printed codes.** The check character is drawn from the
   full `0-9A-Z` alphabet, so a code can still end in `O` or `I`. Normalisation

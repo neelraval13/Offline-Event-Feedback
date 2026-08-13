@@ -24,9 +24,35 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 5 — encrypted backup and restore.**
+**Phase 6 — central server and idempotent synchronisation.**
 
-Records no longer live on exactly one machine. A device can be backed up to an
+Records captured offline can now be consolidated into a central Postgres
+database, whenever a connection happens to exist. **No event operation depends
+on it**: with the server switched off, every earlier phase behaves exactly as
+before.
+
+```
+offline capture  ->  Internet eventually  ->  idempotent upload  ->  Postgres
+```
+
+- **At-least-once delivery, exactly-once storage.** `recordId` is the
+  idempotency key. A lost response is harmless — the device retries, the server
+  answers `already_current`, and nothing is duplicated.
+- **Per-device credentials.** An operator types a shared enrolment code once;
+  the device gets its own 256-bit token and the server keeps only a hash. No API
+  key is baked into the bundle, because a bundle is readable.
+- **Never last-write-wins.** A higher revision updates; an equal revision with
+  different contents is a conflict the server refuses to guess about.
+- **Recovery-aware.** A replacement device uploads records captured by the
+  machine it replaced; the server records both the capturing device and the
+  uploader, and never requires them to match.
+- **Sync is an operator action.** Point A and Point B show nothing about it.
+
+See [docs/sync-test.md](docs/sync-test.md) for the real-Postgres QA pass.
+
+### Backup and restore
+
+Independently of the server, records no longer live on exactly one machine. A device can be backed up to an
 encrypted file, that file can be **verified before it is trusted**, and a
 replacement device can restore it without cloning the failed machine's identity.
 
@@ -151,8 +177,8 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-Synchronisation, the central server and cross-device duplicate reconciliation
-are **not implemented yet** — see the deferred list in
+Reconciliation of duplicate or conflicting records, central reporting and any
+read API are **not implemented yet** — see the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
 > The field deployment must be served over **HTTPS**. Both the service worker
@@ -201,6 +227,21 @@ pnpm verify:pwa  # re-check dist/ for offline-cold-start readiness
 pnpm icons       # regenerate the temporary PWA icons
 ```
 
+### Central sync server
+
+```bash
+cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
+pnpm server:migrate    # apply the schema, deliberately — never on startup
+pnpm server:start      # serve the ingest API
+pnpm server:typecheck
+pnpm server:test
+```
+
+The client only talks to it when `VITE_SYNC_API_BASE_URL` is set at build time.
+Leave it unset and synchronisation is cleanly disabled; everything else is
+unaffected. Production must be **https** — registrations carry participant
+contact details.
+
 `pnpm dev` runs **without** a service worker, so development never fights a
 stale cached shell. Test PWA behaviour against `pnpm build && pnpm preview`.
 
@@ -218,6 +259,7 @@ src/
     home/          Development navigation screen
   lib/
     backup/     Encrypted backup, verification and non-destructive restore
+    sync/       Outbox, wire DTOs, enrolment and the sync worker
     print/      The browser print boundary
     pwa/        Service-worker lifecycle, offline readiness, app version
     scanner/    QR camera boundary (ZXing, bundled locally)
@@ -228,12 +270,15 @@ src/
     sync/       (seam) upload to the central server — not implemented
   test/         Test database helpers and the fake-indexeddb setup
   types/        Domain types: IDs, records, sync status
+server/           Central sync API (Hono + Postgres), migrations, tests
+shared/           The wire protocol, shared by client and server
 docs/
   architecture.md
   backup-restore-test.md
   offline-cold-start-test.md
   point-a-physical-test.md
   point-b-physical-test.md
+  sync-test.md
 scripts/
   generate-icons.mjs      Temporary PWA icons
   verify-pwa-build.mjs    Fails the build if the shell would not cold-start
@@ -248,8 +293,9 @@ scripts/
 | 2 | Point A registration, QR generation, sticker printing — done |
 | 3 | Point B scanning, manual fallback entry, feedback questionnaire — done |
 | 4 | Offline application shell / installable PWA — done |
-| 5 | Local counts, encrypted backup and restore *(current)* |
-| 6 | Synchronisation API, central database, reconciliation |
+| 5 | Local counts, encrypted backup and restore — done |
+| 6 | Central server, device enrolment, idempotent sync *(current)* |
+| 7 | Reconciliation, central reporting |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

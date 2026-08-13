@@ -118,6 +118,22 @@ check(
   'the service worker calls skipWaiting() unconditionally — an update could reload a terminal mid-registration',
 )
 
+/*
+ * ---- synchronisation is never cached ----
+ *
+ * Sync is network-only by construction: precaching is GET-only over built
+ * assets and there is no runtime caching rule. A cached upload response would
+ * be a device believing it had synced when it had not.
+ */
+check(
+  !sw.includes('/v1/sync'),
+  'the service worker references the sync API — upload responses must never be cached',
+)
+check(
+  !sw.includes('runtimeCaching'),
+  'the service worker has a runtime caching rule; sync must stay network-only',
+)
+
 /* ---- icons ---- */
 
 for (const icon of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {
@@ -141,6 +157,9 @@ for (const file of [...javascript.map((n) => join(DIST, 'assets', n)), serviceWo
  */
 const ALLOWED_HOSTS = new Set([
   'www.w3.org',
+  // Zod embeds JSON Schema `$schema` identifiers as string literals. They are
+  // identifiers, not endpoints, and nothing fetches them.
+  'json-schema.org',
   'react.dev',
   'bit.ly',
   'tinyurl.com',

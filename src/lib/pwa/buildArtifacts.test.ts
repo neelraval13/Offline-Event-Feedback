@@ -122,6 +122,10 @@ describeBuild('production PWA artifacts', () => {
      */
     const allowed = new Set([
       'www.w3.org',
+      // Zod embeds JSON Schema `$schema` identifiers as string literals when
+      // converting schemas. They are identifiers, not endpoints; verified that
+      // nothing fetches them.
+      'json-schema.org',
       'react.dev',
       'bit.ly',
       'tinyurl.com',
