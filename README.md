@@ -24,11 +24,38 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 4 — offline application shell.**
+**Phase 5 — encrypted backup and restore.**
 
-Both stations work end to end, and the application now **cold-starts with no
-server reachable**. After one online preparation, a device runs the entire event
-from its own cache: no origin server, no network, no CDN.
+Records no longer live on exactly one machine. A device can be backed up to an
+encrypted file, that file can be **verified before it is trusted**, and a
+replacement device can restore it without cloning the failed machine's identity.
+
+```
+device  ->  encrypted .oefbackup  ->  verify  ->  merge onto a replacement
+```
+
+- **AES-GCM with PBKDF2-SHA-256 at 600,000 iterations.** The unopened file
+  reveals only that it is a backup of this application — no event, no counts, no
+  participant. The passphrase is never stored and cannot be recovered.
+- **Verify without importing.** Generating a file is weak evidence; selecting it
+  back off disk and decrypting it is real evidence, and Admin tracks the two
+  separately.
+- **Restore merges, never replaces.** The destination is never cleared, the
+  whole merge is one transaction, and any conflict aborts it entirely — no
+  partial import. Restoring the same file twice changes nothing.
+- **Device identity is never cloned.** A replacement keeps its own `deviceId`
+  and its own public-code issuer namespace, so a recovered machine can never
+  collide with the original if that one returns.
+- **Works entirely offline**, like everything else.
+
+See [docs/backup-restore-test.md](docs/backup-restore-test.md) for the recovery
+drill.
+
+### Cold start
+
+The application also **cold-starts with no server reachable**. After one online
+preparation, a device runs the entire event from its own cache: no origin
+server, no network, no CDN.
 
 ```
 prepare device online  ->  shell precached  ->  server can disappear entirely
@@ -53,6 +80,7 @@ preview server**, which every earlier offline test did not.
 > ⚠️ Chrome's **Clear site data** deletes IndexedDB, and IndexedDB holds the
 > participant records. Never use it to reset the app cache — the safe procedure
 > is in [docs/architecture.md](docs/architecture.md#resetting-the-app-cache-safely).
+> Keep an encrypted backup regardless.
 
 Both stations can be physically tested.
 
@@ -123,8 +151,8 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-Synchronisation, the central server, backup/export and cross-device duplicate
-reconciliation are **not implemented yet** — see the deferred list in
+Synchronisation, the central server and cross-device duplicate reconciliation
+are **not implemented yet** — see the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
 > The field deployment must be served over **HTTPS**. Both the service worker
@@ -189,6 +217,7 @@ src/
     admin/         Device admin
     home/          Development navigation screen
   lib/
+    backup/     Encrypted backup, verification and non-destructive restore
     print/      The browser print boundary
     pwa/        Service-worker lifecycle, offline readiness, app version
     scanner/    QR camera boundary (ZXing, bundled locally)
@@ -201,6 +230,7 @@ src/
   types/        Domain types: IDs, records, sync status
 docs/
   architecture.md
+  backup-restore-test.md
   offline-cold-start-test.md
   point-a-physical-test.md
   point-b-physical-test.md
@@ -217,8 +247,8 @@ scripts/
 | 1 | Local persistence, participant identity, public codes, QR contract — done |
 | 2 | Point A registration, QR generation, sticker printing — done |
 | 3 | Point B scanning, manual fallback entry, feedback questionnaire — done |
-| 4 | Offline application shell / installable PWA *(current)* |
-| 5 | Admin: record counts, backup/export, diagnostics |
+| 4 | Offline application shell / installable PWA — done |
+| 5 | Local counts, encrypted backup and restore *(current)* |
 | 6 | Synchronisation API, central database, reconciliation |
 
 Phase boundaries are indicative; the ordering constraint that matters is that

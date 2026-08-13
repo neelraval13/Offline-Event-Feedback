@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { PendingCapabilities } from '../../components/PendingCapabilities'
 import { EVENT_CONFIG } from '../../config/event'
+import { BackupPanel } from './BackupPanel'
+import { LocalDataPanel } from './LocalDataPanel'
 import { OfflineReadinessPanel } from './OfflineReadinessPanel'
 import { useDeviceDiagnostics } from './useDeviceDiagnostics'
 
 /** Local device utilities for staff supporting a station. */
 export function AdminScreen() {
   const { loading, deviceId, database, error } = useDeviceDiagnostics()
+  // Bumped after a restore so the counts above reflect the merged data.
+  const [dataGeneration, setDataGeneration] = useState(0)
 
   return (
     <article className="screen">
@@ -54,10 +59,12 @@ export function AdminScreen() {
 
       <OfflineReadinessPanel />
 
+      <LocalDataPanel refreshToken={dataGeneration} />
+
+      <BackupPanel onDataChanged={() => setDataGeneration((n) => n + 1)} />
+
       <PendingCapabilities
         items={[
-          'Local record counts',
-          'Backup and export of local records',
           'Sync state and outbox inspection',
           'Further diagnostic information',
         ]}

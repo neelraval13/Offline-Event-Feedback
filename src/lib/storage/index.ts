@@ -37,6 +37,11 @@ export {
   type NewFeedbackInput,
 } from './feedback'
 export {
+  getLocalCounts,
+  type LocalCounts,
+  type StoreCounts,
+} from './counts'
+export {
   getDatabaseStatus,
   type DatabaseState,
   type DatabaseStatus,

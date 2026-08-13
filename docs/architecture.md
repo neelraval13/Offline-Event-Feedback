@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 4 — offline application shell.** This document
+Status: **Phase 5 — encrypted backup and restore.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -996,6 +996,223 @@ dependencies and no network. There is no final branding yet and none is being
 invented. Replacing them is a matter of dropping new PNGs into `public/icons/`;
 nothing in the architecture depends on what they look like.
 
+## Encrypted backup and restore
+
+Until this phase, unsynchronised records existed on exactly one machine. A
+dropped laptop or a browser that lost its storage took an event's registrations
+with it. Backup closes that gap; there is still no server, and nothing here
+touches the network.
+
+### Two layers
+
+A `.oefbackup` file is an **envelope** wrapping a **payload**.
+
+```json
+{
+  "format": "offline-event-feedback-backup",
+  "version": 1,
+  "kdf":    { "algorithm": "PBKDF2", "hash": "SHA-256", "iterations": 600000, "salt": "..." },
+  "cipher": { "algorithm": "AES-GCM", "iv": "..." },
+  "ciphertext": "..."
+}
+```
+
+That is the entire plaintext. Everything else — records, counts, event, source
+device — lives inside the ciphertext. Someone holding the file without the
+passphrase learns that it is a backup of this application and **nothing more**:
+not the event, not how many participants, and above all not who.
+
+The filename carries a timestamp and nothing else, because a filename is visible
+in a file manager and an email client long before anyone types a passphrase.
+
+### Encryption
+
+PBKDF2-SHA-256, **600,000 iterations**, a random 16-byte salt, deriving a
+256-bit AES-GCM key with a random 12-byte IV. Salt and IV come from
+`crypto.getRandomValues`; the derived key is non-extractable.
+
+AES-GCM rather than AES-CBC because it **authenticates**. A wrong passphrase, a
+flipped byte, an altered IV and a truncated file all fail the same way, and none
+of them can produce partially decoded records. The UI reports one message for
+all of them: which it was helps an attacker more than an operator, and the
+operator's next move — check the passphrase, check the file — is the same
+regardless.
+
+Encrypting the same snapshot twice produces two different files. Fresh salt and
+IV per run is not a quirk to be normalised away: reusing an AES-GCM IV under one
+key is catastrophic, and deterministic output would also reveal that two backups
+hold identical data.
+
+**The passphrase is never stored** — not in IndexedDB, not in localStorage, not
+in a URL, not in a log — and the input fields are cleared after every operation.
+There is no recovery mechanism and no pretence of one.
+
+A backup declares its own iteration count, which it must, or an older file could
+never be opened. That value is attacker-controlled, so it is bounded before any
+work is done with it; an unbounded one would let a single click freeze the
+browser.
+
+### One coherent snapshot
+
+All four stores are read inside a single Dexie read transaction. Reading them
+one at a time would let a registration land between two reads, producing a
+backup whose sequence counter had not moved — a file that looks valid and
+quietly reissues a printed code on restore.
+
+Arrays are sorted before serialisation, so two snapshots of an unchanged
+database are identical and the plaintext is reviewable.
+
+### Validated before it is encrypted
+
+The snapshot is checked with **the same validator the restore path runs on
+untrusted files** — record shapes, UUIDs, public-code check characters, event
+match, uniqueness, declared counts. If the local database has drifted into a
+state this application would refuse to restore, no file is produced.
+
+A backup of corrupt data is worse than no backup: it cannot be used, and the
+operator believes the device is protected.
+
+### Restore files are untrusted input
+
+A restore file arrives from a USB stick, an email attachment, a shared drive.
+`JSON.parse` succeeding says nothing about whether it is safe to merge into a
+database holding an event's records. Everything crosses the boundary as
+`unknown` and becomes typed only after being checked field by field. No branded
+cast is applied to unvalidated input.
+
+Validation is hand-written rather than delegated to a schema library. The shapes
+are few and stable, and the interesting checks are not shape checks at all — a
+public code has to satisfy its own check character, a `qr` capture has to carry a
+participant ID while a `manual` one must not, the event has to match this build.
+Those rules already exist in the identity layer; a library would either duplicate
+them or need bridging back into it.
+
+Every validation message is structural — a field name and an index — so a
+failure can never print a participant's name or email.
+
+A file is refused before parsing if it exceeds **64 MiB**. A full
+10,000-participant backup measures about 12 MB.
+
+### Event compatibility
+
+V1 is one event on one day, so a backup restores only into a build configured for
+the same `eventId` and `eventDay`. Records are checked individually, not just the
+header. Merging another event's records into this database would corrupt both.
+
+### Restore is a merge, never a replace
+
+The destination database is **never cleared**. The most likely restore is onto a
+device that has already started working, and wiping it to make room for older
+data would destroy exactly the records nobody else has a copy of.
+
+`recordId` is the identity for both stores.
+
+| Situation | Outcome |
+| --- | --- |
+| Not present locally | insert as captured |
+| Identical | skip |
+| Same identity, backup revision higher | take the backup's |
+| Same identity, local revision higher | keep local |
+| **Same revision, different contents** | **conflict — abort** |
+| Same `recordId`, different identity or provenance | **conflict — abort** |
+| Backup `participantId` or `publicCode` already belongs to another local record | **conflict — abort** |
+
+Immutable fields — `kind`, `recordId`, `participantId`, `publicCode`, `eventId`,
+`eventDay`, `stationId`, `deviceId`, `createdAt` — may never differ between two
+copies of one record. A participant ID or public code is printed on a sticker
+somebody is wearing; provenance records what actually happened. If two copies
+disagree on any of them, they are not the same record and no merge rule can make
+them one.
+
+Equal revisions with different contents is a genuine conflict. Guessing which
+side is authoritative would silently discard somebody's data, so the restore
+stops instead.
+
+Feedback merges by `recordId` only. **Feedback public codes are deliberately not
+unique**: two Point B terminals may each hold a response for the same
+participant, and both must survive for the server to reconcile later.
+
+`syncStatus`, `revision` and `updatedAt` are preserved exactly. Restore does not
+mark records `pending` — synchronisation semantics belong to a later phase and
+inventing them here would corrupt whatever that phase decides.
+
+### Sequences take the maximum
+
+```
+restored value = max(local, backup)
+```
+
+A counter is never lowered. An older backup restored onto a device that has kept
+working would otherwise reissue public codes that are already printed and on
+participants — reintroducing, through recovery, the exact collision the
+per-device issuer was built to eliminate.
+
+### Atomicity
+
+The whole merge runs in one readwrite transaction across registrations, feedback
+and sequences. Any conflict throws, the transaction aborts, and **nothing** is
+committed — not the 99 good records that preceded the bad one. A half-restored
+database cannot be reasoned about or safely retried.
+
+Restoring the same file twice is idempotent: the second pass reports everything
+as unchanged and writes nothing.
+
+### Device identity is never cloned
+
+A backup records `sourceDeviceId` for provenance. Restoring it onto another
+installation does **not** make that installation the source device.
+
+```
+failed device        DEVICE-A
+replacement          DEVICE-B
+
+after restoring A's backup onto B:
+  restored records   keep deviceId DEVICE-A     (provenance preserved)
+  the installation   remains DEVICE-B
+  new registrations  deviceId DEVICE-B, DEVICE-B issuer namespace
+```
+
+If DEVICE-A ever came back into service, a cloned identity would give two
+independent offline machines the same public-code namespace — the collision
+Phase 1.1 exists to eliminate, reintroduced by the recovery procedure.
+
+**No `deviceConfig` key is imported at all.** The store is captured in the
+payload for diagnostics, and restore reads none of it. The destination keeps its
+`deviceId`, and the backup bookkeeping keys below keep describing the device in
+front of the operator rather than one that failed last week.
+
+| `deviceConfig` key | Restored? |
+| --- | --- |
+| `deviceId` | **No** — the destination keeps its own |
+| `lastBackupGeneratedAt` | No — describes this installation |
+| `lastBackupVerifiedAt` | No — describes this installation |
+| `lastRestoreAt` | No — describes this installation |
+
+Restored registrations keep their `participantId`, `publicCode` and `recordId`
+exactly, so the stickers participants are already wearing stay valid. A new
+device ID for future registrations does not invalidate old stickers.
+
+### Generated is not stored; verified is evidence
+
+The browser cannot report whether the operator kept a downloaded file, so the UI
+says **"Backup file generated"** and never "safely stored". Two timestamps are
+tracked, and they mean different things:
+
+- `lastBackupGeneratedAt` — a file was produced. Weak evidence.
+- `lastBackupVerifiedAt` — a file was **selected back off disk and successfully
+  decrypted**. That is real evidence the device is protected.
+
+Verification imports nothing. It exists so an operator can establish a file is
+recoverable *before* trusting it — and before a real recovery, when the original
+device may no longer exist.
+
+### Everything works offline
+
+Backup, verification and restore are pure local computation over IndexedDB and
+Web Crypto. No network call is involved at any point, and nothing about them is
+placed in Cache Storage — the precache holds application code only, never
+participant data.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -1013,7 +1230,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 4
+## What exists after Phase 5
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -1028,7 +1245,9 @@ synchronisation.
   the `feedback-v1` questionnaire, durable save, same-device duplicate refusal
 - **Offline application shell**: the whole app precached, cold-starting with no
   server reachable; operator-gated updates; readiness and version on Admin
-- device diagnostics on Admin
+- **Encrypted backup and restore**: an operator-initiated `.oefbackup` file,
+  verify-before-trust, and a non-destructive merge onto a replacement device
+- local record counts and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
 
@@ -1039,7 +1258,6 @@ None of the following exists yet:
 - cross-device duplicate detection and reconciliation
 - background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
-- backup / export
 - synchronisation API
 - central database
 - reconciliation and dashboards
