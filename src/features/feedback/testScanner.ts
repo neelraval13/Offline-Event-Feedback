@@ -9,7 +9,8 @@ import type {
  *
  * Tests drive decode callbacks directly, which is the only way to exercise the
  * cases that matter: a sticker decoding on forty consecutive frames, a
- * permission refusal, a camera dying mid-shift.
+ * permission refusal, a camera dying mid-shift, and — the one that reached
+ * production — thousands of ordinary frames containing no QR at all.
  */
 export class FakeScanner implements QrScanner {
   startCalls = 0
@@ -68,8 +69,22 @@ export class FakeScanner implements QrScanner {
     this.#options?.onDecode(text)
   }
 
-  /** A failure occurring after a successful start. */
+  /**
+   * An unfamiliar decoder fault — the diagnostic channel.
+   *
+   * Non-fatal by contract. A real adapter routes anything it does not recognise
+   * here, and the terminal must not change state because of it.
+   */
+  emitDecodeIssue(error: unknown): void {
+    this.#options?.onDecodeIssue?.(error)
+  }
+
+  /**
+   * The camera has genuinely stopped — unplugged, or seized by another app.
+   *
+   * The only non-startup path that may put Point B into a camera error.
+   */
   fail(error: ScannerError): void {
-    this.#options?.onError(error)
+    this.#options?.onFatalError(error)
   }
 }

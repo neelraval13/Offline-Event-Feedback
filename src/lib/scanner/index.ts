@@ -6,4 +6,4 @@ export {
   type ScannerErrorKind,
   type ScannerStartOptions,
 } from './types'
-export { createZxingScanner } from './zxingScanner'
+export { createZxingScanner, isOrdinaryDecodeMiss } from './zxingScanner'

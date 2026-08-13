@@ -209,7 +209,12 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
       await scanner.start({
         video,
         onDecode: handleDecode,
-        onError: (error) => {
+        /*
+         * Fatal only. Frames that fail to decode never arrive here — they are
+         * the normal condition of a scan loop, and treating them as faults is
+         * what previously killed the camera on its first frame.
+         */
+        onFatalError: (error) => {
           if (mountedRef.current) {
             acceptingRef.current = false
             scannerRunningRef.current = false
