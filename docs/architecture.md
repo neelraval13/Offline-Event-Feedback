@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 3 — Point B feedback capture.** This document
+Status: **Phase 4 — offline application shell.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -843,6 +843,159 @@ test database, a scan is completed against it, and the rendered output is
 asserted to contain none of that participant's details. In the field the record
 would not be there at all.
 
+## The offline application shell
+
+Everything before this phase removed the network from *operations*. This phase
+removes it from *starting up*.
+
+The distinction matters more than it sounds. Point A and Point B were tested
+with the Internet disconnected while a local dev server kept serving the app —
+which proved there are no API calls, no CDN, no lookups. It proved nothing about
+what happens when the server itself is gone. A venue laptop that sleeps, a
+process that dies, a tab reopened the next morning: any of those and the app
+would simply not load.
+
+**vite-plugin-pwa** with the **`generateSW`** strategy. What is needed here is
+deterministic precaching of the built shell, which is exactly what the generated
+worker does. `injectManifest` would mean owning a service-worker source file —
+more surface to get wrong, and nothing gained until there is a server to sync
+with. There is no background sync, no runtime API caching, no push.
+
+### What is precached
+
+Everything the build emits, verified rather than assumed:
+
+| Entry | Why |
+| --- | --- |
+| `index.html` | the only document; every hash route resolves from it |
+| `assets/index-*.js` | ~830 kB — React, Dexie, `qrcode`, the ZXing scanner |
+| `assets/workbox-window.prod.es5-*.js` | the registration client |
+| `assets/index-*.css` | all styling, including the print rules |
+| `manifest.webmanifest` | installability |
+| `icons/icon-{192,512,maskable-512}.png` | installability |
+
+`maximumFileSizeToCacheInBytes` is raised to 8 MiB. Workbox's 2 MiB default
+would silently drop the main bundle, leaving a device that reports itself ready
+and then cannot scan once the network is gone — precisely the failure this
+phase exists to prevent.
+
+**The scanner is never lazily fetched.** A dynamically imported chunk needs the
+network at the moment staff press *Start scanner*, which is when the device is
+offline by design. Everything ships in one eagerly-loaded bundle.
+
+`scripts/verify-pwa-build.mjs` runs as part of `pnpm build` and fails the build
+if any emitted JS or CSS asset is missing from the precache manifest, if the
+navigation fallback is absent, or if the worker would activate without being
+asked. It is checked against a deliberately broken manifest, so it is known to
+catch the case rather than merely assert it.
+
+### Hash routes and the navigation fallback
+
+`#/a`, `#/b` and `#/admin` are all the same document, so the worker registers a
+`NavigationRoute` that serves the precached `index.html` for any navigation. The
+client router then resolves the hash. This is why hash routing was chosen in
+Phase 0 and why it still earns its place: no server rewrite rule exists offline
+to be depended on.
+
+### Offline readiness is a real state, not a guess
+
+```
+unsupported ── no service worker (a dev build, or an old browser)
+preparing   ── registering, or precaching not yet confirmed
+ready       ── the shell is precached and a worker controls this page
+failed      ── registration or precaching failed; this device is not field-safe
+```
+
+`navigator.onLine` is deliberately **not** part of this model. It reports
+whether a network interface believes it has a link, which answers a different
+question: a device can be online and completely unprepared, or offline and
+perfectly ready. Readiness means *the shell is on disk*, and only the service
+worker can attest to that.
+
+Two signals establish `ready`. Workbox's `onOfflineReady` fires once, when
+precaching completes on first install. On every later visit it never fires
+again, so readiness is also derived from a worker **controlling the page** —
+which means the shell is being served from cache at that very moment, the
+strongest evidence available.
+
+A device never claims readiness merely because registration was *started*.
+
+### Updates wait for an operator
+
+`registerType: 'prompt'`, and the generated worker calls `skipWaiting()` only in
+response to a message the Admin screen sends.
+
+An event terminal must never reload itself. A half-typed participant at Point A,
+or a participant mid-questionnaire at Point B, would lose their input to a
+deployment that happened to land at the wrong moment. So:
+
+- a new version downloads and **waits**
+- the running version keeps working, and stays `ready`
+- **Point A and Point B say nothing at all** about updates — the only control is
+  on `#/admin`, where nobody is holding a queue
+- applying reloads the page, deliberately, because an operator pressed a button
+
+Updates should be applied before a shift, not during participant handling.
+
+### Cache Storage is not IndexedDB
+
+| | Cache Storage | IndexedDB |
+| --- | --- | --- |
+| Holds | application code, CSS, icons | **participant records** |
+| Written by | the service worker | the application |
+| Losing it costs | a re-download | **the event's data** |
+
+Installing, updating and resetting the shell touch only the first. Nothing in
+`src/lib/pwa` imports the storage layer, and no service-worker lifecycle code
+opens the database. `deviceId` lives in IndexedDB and therefore survives
+install, activation, update, PWA installation and offline relaunch.
+
+The precache contains application code and static assets only. No participant
+PII is ever written to Cache Storage, no URL contains a name, phone, email or
+comment, and no lifecycle code logs anything about a participant.
+
+### Resetting the app cache safely
+
+Chrome's **Clear site data** clears Cache Storage *and* IndexedDB. On a device
+holding a day of registrations that is data loss, and there is no export yet.
+
+To reset only the application cache:
+
+1. DevTools → Application → Service Workers → **Unregister**
+2. DevTools → Application → Cache Storage → right-click the
+   `workbox-precache-*` entry → **Delete**
+3. Reload
+
+IndexedDB is untouched by both steps. **Do not use Clear site data for PWA
+debugging.**
+
+`pnpm dev` runs with no service worker at all (`devOptions.enabled: false`), so
+ordinary development never fights a stale cached shell. PWA behaviour is tested
+against `pnpm build && pnpm preview`.
+
+### Application version
+
+`APP_VERSION` and `BUILD_ID` are injected at build time and shown on Admin, so
+an operator can answer "what is this device running?" and compare two terminals
+with no network, no server and no repository access. Deliberately just a package
+version and an ISO build timestamp — no commit hash, no branch, nothing about
+the machine that produced the build.
+
+### Secure context
+
+The service worker and the camera both require a secure context. `localhost` is
+fine for development; the field deployment must be **HTTPS**. A plain-HTTP LAN
+address gets neither an offline shell nor a camera, and no workaround for that
+is being added — see the Point B notes.
+
+### Icons
+
+`public/icons/*.png` are **temporary placeholders**: a flat accent-blue tile
+with an "EF" mark, generated by `scripts/generate-icons.mjs` with no
+dependencies and no network. There is no final branding yet and none is being
+invented. Replacing them is a matter of dropping new PNGs into `public/icons/`;
+nothing in the architecture depends on what they look like.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -860,7 +1013,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 3
+## What exists after Phase 4
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -873,6 +1026,8 @@ synchronisation.
   sticker rendering, printing, reprint, refresh recovery and PII correction
 - **Point B**: the working feedback terminal — QR scanning, manual fallback,
   the `feedback-v1` questionnaire, durable save, same-device duplicate refusal
+- **Offline application shell**: the whole app precached, cold-starting with no
+  server reachable; operator-gated updates; readiness and version on Admin
 - device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
@@ -882,6 +1037,7 @@ synchronisation.
 None of the following exists yet:
 
 - cross-device duplicate detection and reconciliation
+- background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
 - backup / export
 - synchronisation API
@@ -889,10 +1045,8 @@ None of the following exists yet:
 - reconciliation and dashboards
 - authentication
 
-One further item, still unscheduled and required before the event: an **offline
-application shell** (service worker or equivalent packaging) so the app loads on
-a device with no connectivity. What exists today guarantees only that the *build
-output* has no server-side dependency.
+The offline application shell, previously listed here as unscheduled, landed in
+Phase 4.
 
 ## Known concerns carried into later phases
 

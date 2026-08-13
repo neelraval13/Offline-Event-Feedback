@@ -24,9 +24,37 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 3 — Point B feedback capture.**
+**Phase 4 — offline application shell.**
 
-Both stations now work end to end and can be physically tested.
+Both stations work end to end, and the application now **cold-starts with no
+server reachable**. After one online preparation, a device runs the entire event
+from its own cache: no origin server, no network, no CDN.
+
+```
+prepare device online  ->  shell precached  ->  server can disappear entirely
+```
+
+- **Installable PWA** — the whole app is precached, including the ~830 kB bundle
+  carrying Dexie, the QR generator and the ZXing scanner. Nothing is lazily
+  fetched, so nothing can be missing when the network is gone.
+- **Updates never interrupt anyone** — a new version downloads and waits. Point A
+  and Point B say nothing about it; only Admin offers **Apply update**, and only
+  an operator pressing it reloads the terminal.
+- **Offline readiness is verified, not assumed** — Admin reports *Ready for
+  offline use* only when the shell is genuinely precached, never from
+  `navigator.onLine`.
+- **Updating never touches participant data** — application code lives in Cache
+  Storage, records live in IndexedDB, and the two never meet.
+
+See [docs/offline-cold-start-test.md](docs/offline-cold-start-test.md) for the
+test that decides whether a device is venue-ready — it requires **stopping the
+preview server**, which every earlier offline test did not.
+
+> ⚠️ Chrome's **Clear site data** deletes IndexedDB, and IndexedDB holds the
+> participant records. Never use it to reset the app cache — the safe procedure
+> is in [docs/architecture.md](docs/architecture.md#resetting-the-app-cache-safely).
+
+Both stations can be physically tested.
 
 **Point A** — staff enters a participant's details, the registration is durably
 saved to this device, and only then is a QR sticker produced for printing.
@@ -95,13 +123,13 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-The offline app shell, synchronisation, the central server and cross-device
-duplicate reconciliation are **not implemented yet** — see the deferred list in
+Synchronisation, the central server, backup/export and cross-device duplicate
+reconciliation are **not implemented yet** — see the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
-> Offline **data** operations work today. Offline **app startup** does not: there
-> is no service worker yet, so the page must be loaded while the host is
-> reachable.
+> The field deployment must be served over **HTTPS**. Both the service worker
+> and the Point B camera require a secure context; `localhost` works for
+> development, a plain-HTTP LAN address gets neither.
 
 ### Participant identity at a glance
 
@@ -139,9 +167,14 @@ pnpm dev         # start the dev server
 pnpm typecheck   # type-check without emitting
 pnpm test        # run unit tests once
 pnpm test:watch  # run unit tests in watch mode
-pnpm build       # type-check and produce a production build in dist/
+pnpm build       # type-check, build, and verify the PWA precache
 pnpm preview     # serve the production build locally
+pnpm verify:pwa  # re-check dist/ for offline-cold-start readiness
+pnpm icons       # regenerate the temporary PWA icons
 ```
+
+`pnpm dev` runs **without** a service worker, so development never fights a
+stale cached shell. Test PWA behaviour against `pnpm build && pnpm preview`.
 
 ## Project structure
 
@@ -157,6 +190,7 @@ src/
     home/          Development navigation screen
   lib/
     print/      The browser print boundary
+    pwa/        Service-worker lifecycle, offline readiness, app version
     scanner/    QR camera boundary (ZXing, bundled locally)
     qr/         QR rendering (SVG, bundled locally)
     routing/    Hash router
@@ -167,8 +201,12 @@ src/
   types/        Domain types: IDs, records, sync status
 docs/
   architecture.md
+  offline-cold-start-test.md
   point-a-physical-test.md
   point-b-physical-test.md
+scripts/
+  generate-icons.mjs      Temporary PWA icons
+  verify-pwa-build.mjs    Fails the build if the shell would not cold-start
 ```
 
 ## Roadmap
@@ -178,9 +216,10 @@ docs/
 | 0 | Foundation, architecture, routing, types, config — done |
 | 1 | Local persistence, participant identity, public codes, QR contract — done |
 | 2 | Point A registration, QR generation, sticker printing — done |
-| 3 | Point B scanning, manual fallback entry, feedback questionnaire *(current)* |
-| 4 | Admin: record counts, backup/export, diagnostics |
-| 5 | Synchronisation API, central database, reconciliation |
+| 3 | Point B scanning, manual fallback entry, feedback questionnaire — done |
+| 4 | Offline application shell / installable PWA *(current)* |
+| 5 | Admin: record counts, backup/export, diagnostics |
+| 6 | Synchronisation API, central database, reconciliation |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

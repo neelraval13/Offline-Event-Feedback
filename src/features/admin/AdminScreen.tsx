@@ -1,5 +1,6 @@
 import { PendingCapabilities } from '../../components/PendingCapabilities'
 import { EVENT_CONFIG } from '../../config/event'
+import { OfflineReadinessPanel } from './OfflineReadinessPanel'
 import { useDeviceDiagnostics } from './useDeviceDiagnostics'
 
 /** Local device utilities for staff supporting a station. */
@@ -50,6 +51,8 @@ export function AdminScreen() {
           </p>
         )}
       </section>
+
+      <OfflineReadinessPanel />
 
       <PendingCapabilities
         items={[
