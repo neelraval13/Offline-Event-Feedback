@@ -25,6 +25,20 @@ const SURFACES: readonly SurfaceLink[] = [
   },
 ]
 
+/*
+ * Kept apart from the station surfaces above. Reporting reads the central
+ * server's copy of every participant, needs its own secret, and belongs on the
+ * organiser's machine rather than on a desk.
+ */
+const CENTRAL: readonly SurfaceLink[] = [
+  {
+    path: '/reporting',
+    title: 'Central Reporting',
+    description:
+      'Review, analyse and export the reconciled central data. Requires the reporting secret.',
+  },
+]
+
 /**
  * Development entry point. In the field a device is opened directly on its own
  * surface URL, so this screen exists for developers and for setup, not for
@@ -48,9 +62,17 @@ export function HomeScreen() {
           </li>
         ))}
       </ul>
-      <p className="screen__note">
-        Phase 0: project foundation and architecture scaffolding only.
-      </p>
+      <h2 className="section-title">Central reporting</h2>
+      <ul className="surface-list">
+        {CENTRAL.map((surface) => (
+          <li key={surface.path}>
+            <a className="surface-list__link" href={hrefFor(surface.path)}>
+              {surface.title}
+            </a>
+            <p className="surface-list__description">{surface.description}</p>
+          </li>
+        ))}
+      </ul>
     </article>
   )
 }

@@ -89,6 +89,21 @@ describeBuild('production PWA artifacts', () => {
     expect(unconditional).not.toContain('skipWaiting()')
   })
 
+  it('registers no runtime cache, so no API response is ever stored', () => {
+    /*
+     * Reporting responses carry every participant's contact details, and a sync
+     * upload response cached as successful would be a device believing it had
+     * synced when it had not. The only route the worker registers is the
+     * navigation fallback.
+     */
+    const source = sw()
+
+    expect([...source.matchAll(/registerRoute\(/g)]).toHaveLength(1)
+    expect(source).toContain('NavigationRoute')
+    expect(source).not.toContain('/v1/reporting')
+    expect(source).not.toContain('/v1/sync')
+  })
+
   it('describes an installable application', () => {
     const manifest = JSON.parse(
       readFileSync(join(DIST, 'manifest.webmanifest'), 'utf8'),

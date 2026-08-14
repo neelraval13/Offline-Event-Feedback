@@ -24,7 +24,42 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 7 — central reconciliation.**
+**Phase 8 — central reporting, review and export.**
+
+The first API that returns participant PII, and the only screen that shows the
+whole event at once. It reads what Phase 7 concluded and presents it; it decides
+nothing.
+
+```
+reconciliation run  ->  reporting API (protected)  ->  #/reporting, CSV, XLSX
+```
+
+- **Its own credential.** `REPORTING_ADMIN_SECRET`, compared in constant time,
+  entirely separate from `SYNC_ENROLLMENT_SECRET` and from device tokens. A
+  tablet left on a desk can upload what it captured; it cannot read the venue's
+  contact list. Unset means reporting **fails closed** — sync is unaffected.
+- **Read-only about the event.** Reporting never edits, merges, deletes, picks a
+  winner, or marks an anomaly resolved. Its one write is an explicit
+  "Run reconciliation", which calls the Phase 7 engine unchanged.
+- **It consumes reconciliation; it does not repeat it.** Every status, count and
+  duplicate pair on screen comes from a run. Nothing is reclassified in the UI.
+- **Nothing is stored on the device.** Report data lives in React state only:
+  never IndexedDB, localStorage, sessionStorage or CacheStorage. Every response
+  is `Cache-Control: no-store, private`, and the service worker has no rule that
+  could cache one. The secret is held in memory and dies with the tab.
+- **Search terms are POSTed.** A search is frequently a phone number, and a
+  query string ends up in access logs, history and `Referer` headers.
+- **Two different numbers, kept apart.** Coverage counts participants who
+  responded at all; analytics averages only the responses a run matched to
+  exactly one participant. A participant with two conflicting responses raises
+  the first and not the second.
+- **Exports are spreadsheet-safe.** Participant text is neutralised so that
+  `=`, `+`, `-` and `@` are treated as text, and every XLSX cell is a string.
+  Filenames carry an event, a kind and a date — never a participant.
+
+See [docs/reporting-test.md](docs/reporting-test.md) for the real-Postgres pass.
+
+### Central reconciliation
 
 Once records reach the server, reconciliation asks what they mean together:
 which feedback belongs to which registration, which registrations never got a
@@ -209,8 +244,9 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-Merging duplicates, choosing between conflicting feedback, central reporting and
-any read API are **not implemented yet** — see the deferred list in
+Merging duplicates and choosing between conflicting feedback are **deliberately
+not implemented**: reporting shows both sides of every ambiguity and leaves the
+decision to a human. See the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
 > The field deployment must be served over **HTTPS**. Both the service worker
@@ -241,7 +277,12 @@ file server, or a USB stick, with no server-side rewrite rules.
 | `/#/a` | Point A — Registration |
 | `/#/b` | Point B — Feedback |
 | `/#/admin` | Device Admin |
+| `/#/reporting` | Central reporting — organiser's machine only, needs the reporting secret |
 | `/#/` | Development home / navigation |
+
+`/#/reporting` is deliberately absent from the in-app navigation: it is the only
+screen that shows every participant's contact details, and a station device
+should not reach it by mis-tapping.
 
 ## Local development
 
@@ -270,6 +311,25 @@ pnpm server:typecheck
 pnpm server:test
 ```
 
+Reporting is switched on by setting `REPORTING_ADMIN_SECRET` (at least 32
+characters; the server refuses to start with a shorter one):
+
+```bash
+openssl rand -hex 32   # generate one; never commit it, never put it in a URL
+```
+
+Without it the server still ingests and still reconciles — only
+`/v1/reporting/*` answers `503 reporting_not_configured`.
+
+The Postgres-backed server suites are skipped unless pointed at a scratch
+database. They delete rows, so never aim them at a database holding an event:
+
+```bash
+REPORTING_TEST_DATABASE_URL=postgres://localhost:5432/oef_report_test pnpm server:test
+REPORTING_SCALE_DATABASE_URL=postgres://localhost:5432/oef_scale_test pnpm server:test
+RECONCILIATION_TEST_DATABASE_URL=postgres://localhost:5432/oef_recon_test pnpm server:test
+```
+
 The client only talks to it when `VITE_SYNC_API_BASE_URL` is set at build time.
 Leave it unset and synchronisation is cleanly disabled; everything else is
 unaffected. Production must be **https** — registrations carry participant
@@ -289,9 +349,11 @@ src/
     registration/  Point A — form, sticker, print/reprint, recovery
     feedback/      Point B — scanner, manual entry, questionnaire
     admin/         Device admin
+    reporting/     Central reporting — review, analytics, export (loaded on demand)
     home/          Development navigation screen
   lib/
     backup/     Encrypted backup, verification and non-destructive restore
+    reporting/  The protected reporting client and its DTOs
     sync/       Outbox, wire DTOs, enrolment and the sync worker
     print/      The browser print boundary
     pwa/        Service-worker lifecycle, offline readiness, app version
@@ -303,7 +365,8 @@ src/
     sync/       (seam) upload to the central server — not implemented
   test/         Test database helpers and the fake-indexeddb setup
   types/        Domain types: IDs, records, sync status
-server/           Central sync API and reconciliation engine (Hono + Postgres)
+server/           Central sync API, reconciliation engine and reporting API
+                  (Hono + Postgres; exports via exceljs, server-only)
 shared/           The wire protocol, shared by client and server
 docs/
   architecture.md
@@ -312,6 +375,7 @@ docs/
   point-a-physical-test.md
   point-b-physical-test.md
   reconciliation-test.md
+  reporting-test.md
   sync-test.md
 scripts/
   generate-icons.mjs      Temporary PWA icons
@@ -329,8 +393,8 @@ scripts/
 | 4 | Offline application shell / installable PWA — done |
 | 5 | Local counts, encrypted backup and restore — done |
 | 6 | Central server, device enrolment, idempotent sync — done |
-| 7 | Central reconciliation engine *(current)* |
-| 8 | Reconciliation review and reporting |
+| 7 | Central reconciliation engine — done |
+| 8 | Central reporting, review and export *(current)* |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

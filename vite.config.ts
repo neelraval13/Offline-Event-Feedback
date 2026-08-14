@@ -133,16 +133,21 @@ export default defineConfig({
   },
   build: {
     /*
-     * One eager bundle, deliberately.
+     * One eager bundle for everything a station needs, deliberately.
      *
      * The ZXing scanner is ~495 kB of the total, and code-splitting it would be
      * the obvious move — except a lazily-fetched chunk needs the network at the
      * moment staff press "Start scanner". The service worker precaches every
      * emitted chunk, so splitting would now be safe, but a single bundle keeps
-     * "is the scanner cached?" impossible to get wrong. The limit is raised,
-     * not disabled, so further growth still gets flagged.
+     * "is the scanner cached?" impossible to get wrong.
+     *
+     * Central reporting is the one exception (see `src/app/routes.tsx`): it
+     * cannot function without the network anyway and never runs on a station
+     * device, so it loads on demand.
+     *
+     * The limit is raised, not disabled, so further growth still gets flagged.
      */
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1000,
   },
   test: {
     environment: 'jsdom',

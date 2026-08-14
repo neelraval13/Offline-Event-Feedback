@@ -551,3 +551,56 @@ a {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* --------------------------------------------------------------------------
+ * Central reporting
+ *
+ * Only ever rendered on an organiser's machine, so this is the one place in the
+ * app with a dense table rather than desk-sized touch targets.
+ * -------------------------------------------------------------------------- */
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  /* Names, emails and codes overflow a laptop viewport; scroll rather than
+     wrap a public code across two lines. */
+  display: block;
+  overflow-x: auto;
+}
+
+.report-table th,
+.report-table td {
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.report-table th {
+  font-weight: 600;
+  background: var(--surface-muted);
+}
+
+.report-flag {
+  font-size: 0.8rem;
+  color: #8a5300;
+}
+
+.report-detail {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.notice--warning {
+  /* A historical or stale run changes what every number on the screen means, so
+     it reads as a warning rather than as informational chrome. */
+  border-color: #b45309;
+  background: #fff7ed;
+  color: #7c2d12;
+}

@@ -1564,8 +1564,249 @@ reconciling the wrong one silently would be worse than not reconciling at all �
 and is safe to re-run at any time.
 
 `reconciliation_latest_runs` exposes the most recent **completed** run per
-event, which is the data source Phase 8 will read. Incomplete runs are excluded
-by construction.
+event, which is the data source reporting reads. Incomplete runs are excluded by
+construction.
+
+## Central reporting, review and export
+
+Phase 7 concluded what the records mean. Phase 8 is the first place a human sees
+those conclusions — and the first API in the system that returns a participant's
+name, phone number or email address. That single fact shapes every decision
+below.
+
+### A separate credential, and failing closed
+
+Reporting requires `REPORTING_ADMIN_SECRET`. It is deliberately **not** the
+enrolment secret and **not** a device token.
+
+The threat model differs completely. A device token authorises one enrolled
+tablet to upload what it captured; the enrolment code lets a device obtain such a
+token. Both live on hardware sitting on a desk in a public venue all day. The
+reporting credential reads the contact details of everyone at the event. Sharing
+an identity between those two would mean a tablet left unattended is equivalent
+to the organiser's admin session.
+
+The secret is compared in constant time, after hashing both sides so the
+comparison runs over fixed-length buffers whatever was submitted — otherwise the
+length of a guess leaks through timing. The server refuses to start if it is
+shorter than 32 characters, so a weak secret is a deployment error rather than a
+discovery made afterwards.
+
+When it is not configured at all, reporting **fails closed**: every
+`/v1/reporting/*` request answers `503 reporting_not_configured`. Ingest is
+untouched — a deployment that only needs uploads never has to configure
+privileged access to PII. The reverse dependency does not exist either: reporting
+being switched off cannot break a device's ability to sync.
+
+### Read-only about the event
+
+Reporting may read registrations, feedback and reconciliation results; it may
+calculate; it may generate files; and it may ask for a new reconciliation run.
+That is the whole list.
+
+It cannot update, delete or merge a record, choose a winner between two
+responses, mark an anomaly resolved, or alter a device's sync state. There is no
+endpoint for any of it. This is not a permissions question that a later phase
+might relax — the event's records are the account of what happened at the desks,
+and a reporting screen that could rewrite them would destroy the only evidence
+there is.
+
+The one write is an explicit "Run reconciliation" button, which calls the Phase 7
+implementation unchanged. It is never automatic and never triggered by opening a
+screen: reconciliation is a whole-event analysis, and an operator asks for it
+having seen that the data has moved.
+
+### A run contains exactly what it classified
+
+Every browse, detail and export query is driven **from** the reconciliation
+result tables and joins the raw record, never the other way around.
+
+Starting from `registrations` and left-joining the run reads almost the same and
+is wrong in a way that matters. Sync keeps running after a run completes, so a
+record that arrived afterwards would show up in a historical view with no status
+— and in a historical export, which is then a file describing a state of the
+event that never existed. Row counts would silently stop matching the run's own
+counts, which is the arithmetic an operator uses to check a report.
+
+So a record the run never classified is absent from that run's views, and its
+detail endpoint answers 404 under that run and 200 under the run that did see it.
+The registrations export has exactly `registrationCount` rows and the feedback
+export exactly `feedbackCount` rows, by construction.
+
+The current canonical PII of those records is still read live, and the reports
+say so: a name corrected after the run shows corrected. Freezing a copy into the
+reconciliation tables would make reporting a writer of PII and give the event two
+disagreeing copies of every participant.
+
+### It consumes reconciliation; it never repeats it
+
+Every status, count, anomaly and duplicate pair on screen comes from a run.
+Nothing is reclassified in the browser and nothing is recomputed differently on
+the way to a CSV. If a figure looks wrong, the answer is to reconcile again, not
+to fix it in the UI — a second implementation of the matching rules would be a
+second source of truth, disagreeing with the first at exactly the moments that
+matter.
+
+### Coverage and analytics are different questions
+
+The two are reported separately and never merged into one "response rate":
+
+- **Coverage** — how many participants gave us anything at all. Includes a
+  participant with several conflicting responses: they did respond.
+- **Analytics** — what the unambiguous responses said. Averages only responses a
+  run classified `matched`, which is exactly one response for one participant.
+
+A participant with two conflicting responses therefore raises coverage and
+contributes to no average. Presenting a single number would hide precisely the
+case a reviewer needs to see, and would let an ambiguity quietly move a mean.
+
+A response whose `form_version` this build cannot read is counted and skipped
+rather than guessed at, and the count is published — a future questionnaire might
+reuse field names for a different scale, and averaging across them silently
+produces a number that looks fine and means nothing.
+
+### Where a `multiple_feedback` participant's answers are not
+
+For a participant with several valid responses, the answer columns are blank —
+on screen, in the registrations CSV, and in the workbook's Registrations sheet.
+Every individual response appears in full in the feedback export and on the
+participant's detail view.
+
+Filling those columns would require picking one, and picking one would present a
+guess as the participant's answer. The run refused to choose; so does the report.
+
+### Nothing central is stored on the device
+
+Report data exists in React state and nowhere else — never IndexedDB, never
+localStorage, never sessionStorage, never CacheStorage. Every reporting response
+carries `Cache-Control: no-store, private`, requests are made with
+`cache: 'no-store'` and `credentials: 'omit'`, and the service worker registers
+no runtime cache at all, so there is no rule that could store one. The build
+verifier fails if `sw.js` so much as mentions the reporting path.
+
+The secret is held in a React state variable, passed as a function argument, and
+never written anywhere. There is no "remember me": closing the tab ends the
+session, and Sign out clears it immediately for a machine about to be left
+unattended.
+
+`#/reporting` is not in the shell navigation. A device on a desk should not have
+a route to every participant's phone number one mis-tap away.
+
+### Search terms travel in request bodies
+
+A reviewer searching for a participant frequently types a phone number. Query
+strings end up in server access logs, browser history and `Referer` headers, so
+the browse endpoints are `POST /registrations/query` and `POST /feedback/query`
+with JSON bodies. Logs record counts, identifiers and timings; never a body,
+never a search term, never a name, and never the Authorization header.
+
+### Pagination is keyset, not offset
+
+Pages are cursors over `(created_at, record_id)`, base64url-encoded so the client
+treats them as opaque. `record_id` is the tiebreaker because two records captured
+in the same millisecond on two devices are ordinary, and without a total order a
+cursor can skip or repeat a row.
+
+`OFFSET` would re-scan everything before the page on every request, and would
+also shift under a concurrent insert — which, with sync still running, is not
+hypothetical.
+
+Migration 003 adds one index per table for exactly this shape. Measured at 10,000
+registrations, a page taken from the middle of the list costs 0.10 ms as an index
+only scan against 1.81 ms as a sequential scan plus a sort; the reason to have it
+is not the millisecond but the shape, since without it the cost of every page is
+proportional to the size of the whole event.
+
+Nothing is indexed for search: `ILIKE '%term%'` cannot use a B-tree, and the
+alternative is an extension plus ingest-time cost plus fuzzy behaviour this phase
+deliberately does not have.
+
+### Exports are hostile-input territory
+
+Participant text is untrusted spreadsheet input. A comment beginning `=` or a
+phone number beginning `+` is interpreted by Excel, Numbers and Google Sheets as
+a **formula** — which at worst can invoke external calls when the recipient opens
+the file, and at best mangles the value into `#NAME?`. Phone numbers make this
+unavoidable rather than theoretical: every international number starts with `+`.
+
+CSV values leading with `=`, `+`, `-`, `@`, tab, CR or LF are prefixed with an
+apostrophe, the standard "treat as text" marker, and quoted per RFC 4180. Every
+XLSX cell is written as an explicit string with a text number format; no cell is
+ever a formula.
+
+Filenames are `{event}-{kind}-{date}.{ext}` and never contain a participant: a
+filename is visible in a downloads folder, a mail client and a backup log long
+before anyone opens the file. The event id is sanitised so it cannot escape the
+filename.
+
+Downloads are fetched with the credential in an `Authorization` header and handed
+to the browser as a blob, whose object URL is revoked immediately. A plain link
+cannot carry a header, and the usual workaround — a token in the URL — would
+write the credential into history and every access log on the path.
+
+### Staleness has two halves, and neither is `last_received_at`
+
+A run stops describing the event in exactly two ways, and they are detected
+differently:
+
+- **Something arrived that the run never saw.** Membership answers this with no
+  timestamp at all: a record present now and absent from the run's results
+  arrived afterwards. Immune to every clock in the system.
+- **Something the run did classify was revised.** This needs a server-side
+  signal, and `content_changed_at` (migration 004) is it — written on an insert
+  and on an accepted revision, and deliberately *not* on the idempotent touch
+  that Phase 6 performs for an `already_current` result.
+
+The obvious signal was `last_received_at`, and it was the wrong one. Phase 6
+touches it on a re-delivery because knowing when a device last spoke is genuinely
+useful for diagnosing sync. The consequence was that an offline tablet
+reconnecting and re-uploading a batch it had already delivered — the most ordinary
+event in this system — made a perfectly current run report as stale. An operator
+told the data has changed when it has not either reconciles pointlessly or stops
+believing the warning by the time it is true.
+
+`last_received_at` keeps its meaning exactly; the new column answers the other
+question. Device `created_at` is used for neither: offline device clocks are never
+corrected, so a tablet running slow could make a genuinely newer record look older
+than the run and hide staleness completely.
+
+### Questionnaire fields belong to their version
+
+`overall_rating`, `experience`, `recommend` and `comments` are `feedback-v1`
+fields. Every query that extracts them guards on `form_version`, so a response
+captured under a later questionnaire contributes no rating to an average, no
+summary to a participant row, and no answer columns to an export — even if it
+happens to use identical key names for a ten-point scale.
+
+The response is never hidden. It is listed, exported with its version, and its
+detail view renders the stored answers exactly as recorded. What the system
+refuses to do is assert that a v2 `overall_rating` of 9 means the same thing as a
+v1 one, which is the failure that produces a number that looks right and means
+nothing.
+
+### 401 ends the session, it does not decorate a panel
+
+A rejected credential is not a per-panel error message. Once the server has
+refused it, every panel's data is unauthorised, so the client clears the secret
+from memory and unmounts the whole workspace, returning to the sign-in form.
+Leaving names and phone numbers on screen behind a "secret rejected" notice would
+be a privileged view of an event with nothing authorising it.
+
+This is a session-level concern by construction: every reporting request in the
+app goes through one `session.call`, so there is one place that recognises a 401
+rather than eight that could each forget.
+
+### Where reporting runs
+
+`exceljs` is a server dependency and is never imported from `src/`: it would add
+megabytes to a bundle that has to be precached onto a tablet for offline use.
+The workbook is built on the server and streamed.
+
+The reporting screen is the one part of the client loaded on demand. Every other
+surface must survive the network vanishing mid-shift and is therefore in the
+eager bundle; reporting cannot function without the network by definition and
+never runs on a station device. Its chunk is still precached like every other
+emitted asset, so this is a startup-cost decision, not an availability one.
 
 ## Why Point B works without Point A
 
@@ -1584,10 +1825,10 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 7
+## What exists after Phase 8
 
 - Vite + React + TypeScript project with strict compiler settings
-- hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
+- hash-based client-only routing (`#/a`, `#/b`, `#/admin`, `#/reporting`)
 - typed V1 event/station configuration, with device identity resolved at runtime
 - IndexedDB persistence for registrations, feedback and device configuration
 - participant ID generation, per-device issuer codes, public code issuing and
@@ -1606,6 +1847,10 @@ synchronisation.
 - **Central reconciliation**: a deterministic, versioned engine that classifies
   registration/feedback relationships and proposes duplicate candidates without
   ever altering the raw records
+- **Central reporting**: a separately-credentialled, read-only API and screen
+  over reconciled data — overview, participant and response browsers, anomaly
+  and duplicate review, an explicit reconciliation trigger, and CSV/XLSX exports
+  that never reach the device's storage
 - local record counts, sync status and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
@@ -1617,10 +1862,12 @@ None of the following exists yet:
 - cross-device duplicate detection and reconciliation
 - background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
-- automatic merging of duplicates or selection of a winning feedback record
-- central record browsing, reporting or export
-- reconciliation and dashboards
-- authentication
+- automatic merging of duplicates or selection of a winning feedback record —
+  reporting surfaces both sides and leaves the decision to a human
+- user accounts, roles and permissions: reporting has one shared secret, and
+  there is no way to tell two reviewers apart
+- charting libraries, fuzzy search, background reconciliation, emailed reports
+  and any publicly reachable reporting URL
 
 The offline application shell, previously listed here as unscheduled, landed in
 Phase 4.

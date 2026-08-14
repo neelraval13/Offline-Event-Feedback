@@ -16,6 +16,8 @@ import {
 } from './auth/tokens'
 import { ingestBatch } from './sync/ingest'
 import type { SyncStore } from './sync/store'
+import { createReportingRoutes } from './reporting/routes'
+import type { Sql } from 'postgres'
 
 /*
  * The central ingest API.
@@ -37,6 +39,14 @@ export interface AppOptions {
   readonly log?: (line: string) => void
   /** Reports database reachability for /health. */
   readonly checkDatabase?: () => Promise<boolean>
+  /*
+   * Reporting is mounted only when a database handle is supplied. It reads
+   * central PII and is entirely separate from ingest — different credential,
+   * different module, different failure mode. Sync works with or without it.
+   */
+  readonly sql?: Sql
+  /** `REPORTING_ADMIN_SECRET`. Absent means reporting fails closed. */
+  readonly reportingSecret?: string
 }
 
 interface AuthenticatedDevice {
@@ -58,7 +68,9 @@ export function createApp(options: AppOptions) {
     cors({
       origin: (origin) =>
         options.allowedOrigins.includes(origin) ? origin : null,
-      allowMethods: ['POST', 'OPTIONS'],
+      // GET is for reporting reads and downloads; POST remains what sync and
+      // enrolment use. Still no wildcard origin.
+      allowMethods: ['GET', 'POST', 'OPTIONS'],
       allowHeaders: ['Authorization', 'Content-Type'],
       maxAge: 600,
     }),
@@ -220,6 +232,18 @@ export function createApp(options: AppOptions) {
     }
     return context.json(response)
   })
+
+  if (options.sql !== undefined) {
+    app.route(
+      '/v1/reporting',
+      createReportingRoutes({
+        sql: options.sql,
+        adminSecret: options.reportingSecret,
+        log,
+        ...(options.now === undefined ? {} : { now: options.now }),
+      }),
+    )
+  }
 
   return app
 }

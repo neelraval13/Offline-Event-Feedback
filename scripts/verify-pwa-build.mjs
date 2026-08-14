@@ -134,6 +134,18 @@ check(
   'the service worker has a runtime caching rule; sync must stay network-only',
 )
 
+/*
+ * ---- reporting is never cached ----
+ *
+ * Reporting responses carry every participant's name, phone number and email.
+ * A cached copy would survive on the organiser's disk after the tab closed, so
+ * the worker must not know the endpoint exists.
+ */
+check(
+  !sw.includes('/v1/reporting'),
+  'the service worker references the reporting API — participant data must never be cached',
+)
+
 /* ---- icons ---- */
 
 for (const icon of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {

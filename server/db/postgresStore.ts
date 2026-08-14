@@ -149,13 +149,15 @@ export function createPostgresStore(sql: Sql): SyncStore {
           event_id, event_day, station_id, source_device_id,
           name, phone, email,
           created_at, updated_at, revision,
-          first_received_at, last_received_at, last_uploader_device_id
+          first_received_at, last_received_at, last_uploader_device_id,
+          content_changed_at
         ) VALUES (
           ${record.recordId}, ${record.participantId}, ${record.publicCode},
           ${record.eventId}, ${record.eventDay}, ${record.stationId}, ${record.deviceId},
           ${record.name}, ${record.phone}, ${record.email},
           ${record.createdAt}, ${record.updatedAt}, ${record.revision},
-          ${receivedAt}, ${receivedAt}, ${uploaderDeviceId}
+          ${receivedAt}, ${receivedAt}, ${uploaderDeviceId},
+          now()
         )
         ON CONFLICT DO NOTHING
         RETURNING record_id
@@ -196,7 +198,19 @@ export function createPostgresStore(sql: Sql): SyncStore {
           updated_at = ${record.updatedAt},
           revision = ${record.revision},
           last_received_at = ${receivedAt},
-          last_uploader_device_id = ${uploaderDeviceId}
+          last_uploader_device_id = ${uploaderDeviceId},
+          -- Content actually changed, which is a different fact from "a device
+          -- talked to us". Reporting reads this to decide whether a
+          -- reconciliation run still describes the event.
+          --
+          -- Deliberately now() and not receivedAt. Reporting compares this
+          -- against reconciliation_runs.completed_at, which Postgres writes
+          -- with its own clock; receivedAt comes from the API process. If the
+          -- two hosts disagree by even a few seconds, a revision accepted after
+          -- a run could be stamped before it and vanish from staleness — the
+          -- run would report itself current while no longer describing the
+          -- event. Both sides of that comparison must come from one clock.
+          content_changed_at = now()
         WHERE record_id = ${record.recordId}
           AND revision = ${expectedRevision}
         RETURNING record_id
@@ -206,6 +220,12 @@ export function createPostgresStore(sql: Sql): SyncStore {
     },
 
     async touchRegistration(recordId, receivedAt, uploaderDeviceId) {
+      /*
+       * An idempotent re-delivery: the record we hold is already what the device
+       * is sending. `content_changed_at` is deliberately NOT touched — a tablet
+       * reconnecting and re-uploading a batch must not make a current
+       * reconciliation run look stale.
+       */
       await sql`
         UPDATE registrations
         SET last_received_at = ${receivedAt},
@@ -229,14 +249,16 @@ export function createPostgresStore(sql: Sql): SyncStore {
           event_id, event_day, station_id, source_device_id,
           form_version, answers,
           created_at, updated_at, revision,
-          first_received_at, last_received_at, last_uploader_device_id
+          first_received_at, last_received_at, last_uploader_device_id,
+          content_changed_at
         ) VALUES (
           ${record.recordId}, ${record.participantId ?? null}, ${record.publicCode},
           ${record.captureMethod},
           ${record.eventId}, ${record.eventDay}, ${record.stationId}, ${record.deviceId},
           ${record.formVersion}, ${sql.json(record.answers)},
           ${record.createdAt}, ${record.updatedAt}, ${record.revision},
-          ${receivedAt}, ${receivedAt}, ${uploaderDeviceId}
+          ${receivedAt}, ${receivedAt}, ${uploaderDeviceId},
+          now()
         )
         ON CONFLICT (record_id) DO NOTHING
         RETURNING record_id
@@ -253,7 +275,9 @@ export function createPostgresStore(sql: Sql): SyncStore {
           updated_at = ${record.updatedAt},
           revision = ${record.revision},
           last_received_at = ${receivedAt},
-          last_uploader_device_id = ${uploaderDeviceId}
+          last_uploader_device_id = ${uploaderDeviceId},
+          -- Postgres' clock, for the same reason as registrations above.
+          content_changed_at = now()
         WHERE record_id = ${record.recordId}
           AND revision = ${expectedRevision}
         RETURNING record_id
@@ -263,6 +287,8 @@ export function createPostgresStore(sql: Sql): SyncStore {
     },
 
     async touchFeedback(recordId, receivedAt, uploaderDeviceId) {
+      // As with registrations: a re-delivery of identical content is not a
+      // content change, and must not be reported as one.
       await sql`
         UPDATE feedback
         SET last_received_at = ${receivedAt},

@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import postgres from 'postgres'
 import { createApp } from './app'
 import { createPostgresStore } from './db/postgresStore'
+import { describeReportingConfigProblem } from './reporting/auth'
 
 /*
  * Server entry point.
@@ -26,6 +27,22 @@ function required(name: string): string {
 const databaseUrl = required('DATABASE_URL')
 const enrollmentSecret = required('SYNC_ENROLLMENT_SECRET')
 
+/*
+ * Reporting is optional. Without a secret it fails closed and sync carries on
+ * exactly as before — a deployment that only needs uploads need not configure
+ * privileged PII access at all.
+ *
+ * When it IS configured it must be strong and it must be a genuinely different
+ * credential from the enrolment code. Both are checked before the server listens,
+ * because the alternative is discovering it from the data.
+ */
+const reportingSecret = process.env['REPORTING_ADMIN_SECRET']
+const configProblem = describeReportingConfigProblem(reportingSecret, enrollmentSecret)
+if (configProblem !== null) {
+  console.error(configProblem)
+  process.exit(1)
+}
+
 const allowedOrigins = (process.env['SYNC_ALLOWED_ORIGINS'] ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -46,6 +63,8 @@ const app = createApp({
   store: createPostgresStore(sql),
   enrollmentSecret,
   allowedOrigins,
+  sql,
+  ...(reportingSecret === undefined ? {} : { reportingSecret }),
   checkDatabase: async () => {
     await sql`SELECT 1`
     return true
@@ -54,7 +73,8 @@ const app = createApp({
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(
-    `sync server listening on port ${info.port}; origins: ${allowedOrigins.join(', ')}`,
+    `sync server listening on port ${info.port}; origins: ${allowedOrigins.join(', ')}; ` +
+      `reporting: ${reportingSecret === undefined || reportingSecret.length === 0 ? 'disabled' : 'enabled'}`,
   )
 })
 

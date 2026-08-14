@@ -6,7 +6,7 @@
  * rewrite rules and no internet. `#/b` always resolves to `index.html`.
  */
 
-export const ROUTE_PATHS = ['/', '/a', '/b', '/admin'] as const
+export const ROUTE_PATHS = ['/', '/a', '/b', '/admin', '/reporting'] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]
 
