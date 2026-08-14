@@ -24,11 +24,34 @@ function withoutComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '')
 }
 
-/** The declarations inside the `@media print` block. */
+/**
+ * The declarations inside the `@media print` block, and only those.
+ *
+ * Bounded by matching braces rather than by slicing to the end of the file.
+ * The end-of-file version passed only for as long as the print rules happened
+ * to be last in the stylesheet: any rule appended afterwards was read as part
+ * of the print block, and an unrelated `visibility: hidden` elsewhere would
+ * fail an assertion about printing.
+ */
 function printBlock(): string {
-  const start = stylesheet.indexOf('@media print {')
+  const source = withoutComments(stylesheet)
+  const start = source.indexOf('@media print {')
   expect(start).toBeGreaterThan(-1)
-  return withoutComments(stylesheet.slice(start))
+
+  let depth = 0
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index]
+    if (character === '{') {
+      depth += 1
+    } else if (character === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return source.slice(start, index + 1)
+      }
+    }
+  }
+
+  throw new Error('the @media print block is not closed')
 }
 
 const PARTICIPANT = {

@@ -124,6 +124,94 @@ describeBuild('production PWA artifacts', () => {
     expect(source).not.toContain('StaleWhileRevalidate')
   })
 
+  it('precaches the campaign fonts, so headings survive going offline', () => {
+    /*
+     * A device that has been offline since the morning must render Point A
+     * exactly as designed. A display face that was not precached falls back to
+     * Impact mid-shift, which is a visible failure at a desk.
+     */
+    const precached = precachedUrls()
+
+    for (const font of [
+      'fonts/FlyingFlea-Bold.otf',
+      'fonts/Graphik-Medium.otf',
+      'fonts/Inter_18pt-Medium.ttf',
+      'fonts/Inter_18pt-Bold.ttf',
+    ]) {
+      expect(precached.has(font)).toBe(true)
+    }
+  })
+
+  it('precaches the campaign photography', () => {
+    /*
+     * Switching motorcycle colour offline must not need the network, and the
+     * banner must render on a cold start in aeroplane mode. These three files
+     * are part of the application, so their absence is a failure rather than a
+     * degraded state.
+     */
+    const precached = precachedUrls()
+
+    for (const image of [
+      'assets/flying-flea/bike-flea-green.webp',
+      'assets/flying-flea/bike-storm-black.webp',
+      'assets/flying-flea/registration-header.webp',
+    ]) {
+      expect(existsSync(join(DIST, image))).toBe(true)
+      expect(precached.has(image)).toBe(true)
+    }
+  })
+
+  it('ships web derivatives rather than photographic masters', () => {
+    /*
+     * The supplied banner master is 5913x3140 — about 74 MB of decoded image on
+     * a tablet, to fill a strip a few hundred pixels tall. The master is kept
+     * outside the application in `design/assets/`.
+     */
+    const banner = join(DIST, 'assets/flying-flea/registration-header.webp')
+    const bytes = readFileSync(banner).byteLength
+
+    expect(bytes).toBeLessThan(400 * 1024)
+  })
+
+  it('ships the favicon as a local asset', () => {
+    // A tab icon that needs the network is a tab icon that is missing at a
+    // venue.
+    for (const icon of ['favicon.svg', 'favicon.png', 'apple-touch-icon.png']) {
+      expect(existsSync(join(DIST, icon))).toBe(true)
+    }
+
+    const html = readFileSync(join(DIST, 'index.html'), 'utf8')
+    expect(html).toContain('rel="icon"')
+    expect(html).toContain('/favicon.svg')
+    expect(html).toContain('apple-touch-icon')
+  })
+
+  it('references no remote campaign asset host anywhere in the build', () => {
+    /*
+     * The reference hot-links its fonts from Google and its photography from
+     * Royal Enfield's CDN. Point A and Point B must render with no network at
+     * all, so none of those hosts may appear in what ships.
+     */
+    const built = [
+      readFileSync(join(DIST, 'index.html'), 'utf8'),
+      ...assets()
+        .filter((asset) => asset.endsWith('.js') || asset.endsWith('.css'))
+        .map((name) => readFileSync(join(DIST, 'assets', name), 'utf8')),
+      sw(),
+    ].join('')
+
+    for (const host of [
+      'fonts.googleapis.com',
+      'fonts.gstatic.com',
+      'flyingflea.royalenfield.com',
+      'royalenfield.com',
+      'twisstedx.com',
+      'cloudinary',
+    ]) {
+      expect(built).not.toContain(host)
+    }
+  })
+
   it('describes an installable application', () => {
     const manifest = JSON.parse(
       readFileSync(join(DIST, 'manifest.webmanifest'), 'utf8'),

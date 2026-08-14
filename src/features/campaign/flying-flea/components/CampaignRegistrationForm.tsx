@@ -12,11 +12,13 @@ import type { RegistrationFormValues } from '../../../registration/validation'
 import { FLYING_FLEA_CAMPAIGN } from '../config'
 import {
   emptyCampaignDraft,
+  normalisePastedPhone,
   validateCampaignRegistration,
   type CampaignFieldErrors,
   type CampaignRegistrationDraft,
 } from '../registrationForm'
-import { ColourSelector } from './ColourSelector'
+import { ClusteredNumericInput } from './ClusteredNumericInput'
+import { MotorcycleColourExperience } from './MotorcycleColourExperience'
 import { VehicleSelector } from './VehicleSelector'
 
 /*
@@ -117,7 +119,11 @@ export function CampaignRegistrationForm({
           title="Interest"
           subtitle="Interested in Color?"
         />
-        <ColourSelector
+        {/*
+          The picture and the choice are one component: the image is a function
+          of the value that will be persisted, not a second piece of state.
+        */}
+        <MotorcycleColourExperience
           value={draft.interestedColour}
           onChange={(interestedColour: FlyingFleaColour) =>
             patch({ interestedColour })
@@ -232,41 +238,35 @@ export function CampaignRegistrationForm({
             )}
           </BrandField>
 
-          <BrandField
+        </div>
+
+        {/*
+          The campaign's instrument-cluster treatment for the two numbers. They
+          still accept typing and paste — see ClusteredNumericInput — so the
+          look costs staff nothing at a busy desk.
+        */}
+        <div className="ff-clusters">
+          <ClusteredNumericInput
             label="Phone Number"
             required
+            length={10}
+            value={draft.phone}
             error={errors.phone}
-            hint="10-digit mobile number"
-          >
-            {(field) => (
-              <input
-                {...field}
-                type="tel"
-                /* Raises the numeric keypad without costing staff a paste. */
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={14}
-                value={draft.phone}
-                disabled={busy}
-                onChange={(event) => patch({ phone: event.target.value })}
-              />
-            )}
-          </BrandField>
+            disabled={busy}
+            autoComplete="tel-national"
+            normalisePaste={normalisePastedPhone}
+            onChange={(phone) => patch({ phone })}
+          />
 
-          <BrandField label="Pincode" error={errors.pincode}>
-            {(field) => (
-              <input
-                {...field}
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={6}
-                value={draft.pincode}
-                disabled={busy}
-                onChange={(event) => patch({ pincode: event.target.value })}
-              />
-            )}
-          </BrandField>
+          <ClusteredNumericInput
+            label="Pincode"
+            length={6}
+            value={draft.pincode}
+            error={errors.pincode}
+            disabled={busy}
+            autoComplete="postal-code"
+            onChange={(pincode) => patch({ pincode })}
+          />
         </div>
       </BrandCard>
 

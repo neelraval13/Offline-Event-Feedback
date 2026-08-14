@@ -1,10 +1,9 @@
 import { BrandButton } from '../../components/brand/BrandButton'
-import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHeader'
+import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignHeroHeader'
 import { stationFor } from '../../config/event'
 import type { QrScannerFactory } from '../../lib/scanner'
 import { CampaignFeedbackForm } from '../campaign/flying-flea/components/CampaignFeedbackForm'
 import { CampaignSuccessPanel } from '../campaign/flying-flea/components/CampaignSuccessPanel'
-import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { ManualCodeEntry } from './ManualCodeEntry'
 import { usePointBTerminal } from './usePointBTerminal'
 
@@ -42,17 +41,11 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
 
   return (
     <article className="screen">
-      <FlyingFleaBrandHeader
-        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
+      <CampaignHeroHeader
+        lead="Test Ride"
+        accent="Feedback"
+        subtitle={`${station.label} · ${station.stationId}`}
       />
-
-      <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>
-      <h1 className="ff-display ff-heading">
-        Test Ride <span className="ff-heading__accent">Feedback</span>
-      </h1>
-      <p className="ff-sub">
-        {station.label} · {station.stationId}
-      </p>
 
       {/* The preview element must exist before the camera starts, so it is
           always mounted and only shown while scanning. */}

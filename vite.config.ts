@@ -61,7 +61,15 @@ export default defineConfig({
          * scan once the network is gone.
          */
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        /*
+         * Fonts and images are in the glob for one reason: Point A and Point B
+         * must render exactly as designed on a device that has been offline
+         * since the morning. A heading that falls back to Impact because a font
+         * was not precached is a visible failure at a desk.
+         */
+        globPatterns: [
+          '**/*.{js,css,html,ico,png,svg,webmanifest,otf,ttf,woff,woff2,webp,jpg,jpeg,avif}',
+        ],
 
         /*
          * Hash routing means every route is the same document. Serving the
@@ -98,9 +106,9 @@ export default defineConfig({
          */
         start_url: './#/',
         scope: './',
-        /* Matches --surface-muted and --accent in src/styles.css. */
-        background_color: '#f4f5f7',
-        theme_color: '#1a56b8',
+        /* The campaign's own surfaces — see src/styles/tokens.css. */
+        background_color: '#0b0d0e',
+        theme_color: '#0b0d0e',
         icons: [
           {
             src: 'icons/icon-192.png',

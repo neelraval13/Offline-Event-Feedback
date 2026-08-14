@@ -3,9 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Matches theme_color in the web app manifest and --accent in styles.css. -->
-    <meta name="theme-color" content="#1a56b8" />
-    <title>Offline Event Feedback</title>
+    <!--
+      Matches theme_color in the web app manifest and the campaign background.
+      An installed tablet paints its window chrome with this before a single
+      pixel of the app renders.
+    -->
+    <meta name="theme-color" content="#0b0d0e" />
+
+    <!--
+      The Flying Flea favicon, from the campaign package's own `custom-domain`
+      assets. Local files: a tab icon that needs the network is a tab icon that
+      is missing at a venue, and this application is offline-first.
+    -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" sizes="67x67" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <title>Flying Flea — Test Ride</title>
   </head>
   <body>
     <div id="root"></div>

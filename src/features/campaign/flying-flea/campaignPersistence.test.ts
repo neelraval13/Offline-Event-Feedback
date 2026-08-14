@@ -9,7 +9,11 @@ import { toRegistrationWire } from '../../../lib/sync/wire'
 import { registrationWireSchema } from '../../../../shared/sync/protocol'
 import { deviceId, eventDay, eventId, stationId } from '../../../types'
 import type { RegistrationRecord } from '../../../types'
-import { validateCampaignRegistration, emptyCampaignDraft } from './registrationForm'
+import {
+  emptyCampaignDraft,
+  normalisePastedPhone,
+  validateCampaignRegistration,
+} from './registrationForm'
 import { isCampaignRegistration, needsLegacyCorrection } from './campaignRecord'
 import { validateCampaignFeedback, EMPTY_CAMPAIGN_DRAFT } from './feedbackForm'
 
@@ -417,5 +421,75 @@ describe('which correction experience a record gets', () => {
     // Every campaign answer the correction did not mention is still there.
     const { name: _name, phone: _phone, email: _email, ...campaign } = RIDER
     expect(corrected).toMatchObject(campaign)
+  })
+})
+
+describe('normalising a pasted phone number', () => {
+  it('keeps a plain ten-digit number as it is', () => {
+    expect(normalisePastedPhone('9876543210')).toBe('9876543210')
+  })
+
+  it('strips the formatting people actually type', () => {
+    expect(normalisePastedPhone(' 98765 43210 ')).toBe('9876543210')
+    expect(normalisePastedPhone('98765-43210')).toBe('9876543210')
+  })
+
+  it('drops a +91 country code', () => {
+    for (const pasted of [
+      '+91 98765 43210',
+      '+91-98765-43210',
+      '+919876543210',
+      '91 98765 43210',
+    ]) {
+      expect(normalisePastedPhone(pasted)).toBe('9876543210')
+    }
+  })
+
+  it('drops a leading trunk zero', () => {
+    expect(normalisePastedPhone('0987654321')).toBe('0987654321')
+    expect(normalisePastedPhone('09876543210')).toBe('9876543210')
+  })
+
+  it('never invents a number from an arbitrary over-long string', () => {
+    /*
+     * The failure this prevents: taking the tail of `123456789012345` gives
+     * `6789012345`, a perfectly plausible mobile number that nobody typed and
+     * that passes the 10-digit rule. Truncating from the front leaves
+     * `1234567890`, which the validator rejects — so the operator is told,
+     * rather than a wrong number being stored silently.
+     */
+    const normalised = normalisePastedPhone('123456789012345')
+
+    expect(normalised).toBe('1234567890')
+    expect(normalised).not.toBe('6789012345')
+
+    const result = validateCampaignRegistration({
+      ...emptyCampaignDraft(),
+      ...RIDER,
+      phone: normalised,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors.phone).toBe('Enter a valid 10-digit mobile number.')
+    }
+  })
+
+  it('does not treat a long number that merely starts with 91 as a country code', () => {
+    // Thirteen digits is not `+91` plus a mobile; the rule is exact about
+    // length so it cannot fire on a coincidence.
+    expect(normalisePastedPhone('9198765432109')).toBe('9198765432')
+  })
+
+  it('produces the same canonical string the field has always stored', () => {
+    const result = validateCampaignRegistration({
+      ...emptyCampaignDraft(),
+      ...RIDER,
+      phone: normalisePastedPhone('+91 98765 43210'),
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.values.phone).toBe('9876543210')
+    }
   })
 })

@@ -1,3 +1,4 @@
+@import './styles/fonts.css';
 @import './styles/tokens.css';
 
 /*
@@ -100,6 +101,7 @@ a {
 }
 
 .screen__note {
+  font-family: var(--ff-font-body);
   margin-bottom: 0;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
@@ -690,6 +692,8 @@ a {
 }
 
 .ff-sub {
+  /* Prose: a hero sub-line is read as a sentence, not scanned as a label. */
+  font-family: var(--ff-font-body);
   color: var(--ff-muted);
   font-size: 15px;
   margin: 8px 0 0;
@@ -820,7 +824,9 @@ a {
   padding: 20px 26px;
   font-family: var(--ff-font-display);
   font-size: 22px;
-  letter-spacing: 6px;
+  /* FlyingFlea is already wide; the reference's 7px tracking on Anton would
+     push a four-word plate off a tablet. */
+  letter-spacing: 3px;
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
@@ -907,6 +913,8 @@ a {
 }
 
 .ff-question__prompt {
+  /* A rider reads these standing up, once. Prose face, generous size. */
+  font-family: var(--ff-font-body);
   font-size: 16px;
   font-weight: 500;
   margin: 0 0 14px;
@@ -981,6 +989,7 @@ a {
 }
 
 .ff-success__body {
+  font-family: var(--ff-font-body);
   color: var(--ff-muted);
   margin: 10px 0 0;
 }
@@ -1018,6 +1027,7 @@ a {
 }
 
 .ff-home__desc {
+  font-family: var(--ff-font-body);
   color: var(--ff-muted);
   margin: 8px 0 0;
   font-size: 15px;
@@ -1034,4 +1044,355 @@ a {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * The numeric cluster
+ *
+ * Adapted from the reference's `.dial` pod. The geometry, the sweeping teal arc
+ * and the keypad are the reference's; the transparent input over the face is
+ * ours, so the control still accepts typing and paste (see
+ * ClusteredNumericInput).
+ * ------------------------------------------------------------------------- */
+
+.ff-cluster {
+  margin-bottom: 18px;
+}
+
+.ff-dial {
+  container-type: inline-size;
+  position: relative;
+  /* Smaller than the reference's 440px: two of these sit in one form beside
+     eight other fields, and a 440px circle pushes the submit button off a
+     tablet. */
+  width: min(300px, 100%);
+  aspect-ratio: 1 / 1;
+  margin: 12px auto 4px;
+  border-radius: 50%;
+  padding: 6px;
+  background: linear-gradient(160deg, #2a2d31, #101214 55%, #1d2023);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.ff-dial__face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 32%,
+    #1a1d20 0%,
+    #101214 58%,
+    #0a0c0d 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 10px 30px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 2.4cqw, 10px);
+  overflow: hidden;
+}
+
+.ff-dial__arc {
+  position: absolute;
+  inset: 2%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 135deg,
+    var(--ff-interactive) 0deg calc(var(--ff-dial-progress, 0) * 270deg),
+    rgba(255, 255, 255, 0.07) calc(var(--ff-dial-progress, 0) * 270deg) 270deg,
+    transparent 270deg
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 92.5%, #000 93.5%);
+  mask: radial-gradient(closest-side, transparent 92.5%, #000 93.5%);
+  filter: drop-shadow(0 0 6px var(--ff-interactive-soft));
+}
+
+.ff-dial--invalid .ff-dial__arc {
+  background: conic-gradient(
+    from 135deg,
+    var(--ff-error) 0deg calc(var(--ff-dial-progress, 0) * 270deg),
+    rgba(255, 255, 255, 0.07) calc(var(--ff-dial-progress, 0) * 270deg) 270deg,
+    transparent 270deg
+  );
+}
+
+.ff-dial__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 62% 30% at 50% 12%,
+    rgba(255, 255, 255, 0.07),
+    transparent 65%
+  );
+}
+
+/*
+ * The actual field: invisible, full-bleed, and on top of everything except the
+ * keypad. Tapping the pod anywhere focuses it, which is what makes the tablet's
+ * own numeric keyboard appear.
+ */
+.ff-dial__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  /* Transparent rather than hidden: a hidden input cannot be focused on iOS,
+     and the caret would otherwise sit over the rendered digits. */
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px; /* Below 16px, iOS zooms the page on focus. */
+  outline: none;
+  z-index: 2;
+}
+
+.ff-dial__input:focus-visible + .ff-dial__digits,
+.ff-dial:focus-within .ff-dial__digits {
+  /* The focus ring goes on the digits, since the input itself is invisible. */
+  text-shadow: 0 0 12px var(--ff-interactive);
+}
+
+.ff-dial:focus-within {
+  box-shadow:
+    0 0 0 3px var(--ff-interactive-soft),
+    0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.ff-dial__digits {
+  display: flex;
+  gap: clamp(2px, 1.4cqw, 6px);
+  font-family: var(--ff-font-ui);
+  pointer-events: none;
+}
+
+.ff-dial__digits span {
+  width: 1ch;
+  text-align: center;
+  font-size: clamp(13px, 5cqw, 24px);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.ff-dial__digits span.ff-dial__digit--on {
+  color: #fff;
+}
+
+.ff-dial__count {
+  font-family: var(--ff-font-ui);
+  font-size: clamp(9px, 2.4cqw, 12px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--ff-interactive);
+  pointer-events: none;
+}
+
+.ff-dial--invalid .ff-dial__count {
+  color: var(--ff-error);
+}
+
+.ff-dial__keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(3px, 1.6cqw, 7px);
+  width: 62%;
+  /* Above the transparent input, so a tap on a key is a key press. */
+  position: relative;
+  z-index: 3;
+}
+
+.ff-dial__key {
+  background: rgba(255, 255, 255, 0.045);
+  border: none;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--ff-font-ui);
+  font-size: clamp(12px, 5.4cqw, 18px);
+  font-weight: 500;
+  padding: clamp(4px, 2.6cqw, 10px) 0;
+  cursor: pointer;
+}
+
+.ff-dial__key:active {
+  background: rgba(58, 198, 190, 0.28);
+  box-shadow: 0 0 14px rgba(58, 198, 190, 0.35);
+}
+
+.ff-dial__key--gap {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Two clusters sit side by side on a wide screen and stack on a tablet. */
+.ff-clusters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--ff-gap);
+  align-items: start;
+}
+
+/* ---------------------------------------------------------------------------
+ * Motorcycle preview and hero banner
+ * ------------------------------------------------------------------------- */
+
+.ff-colour-experience {
+  display: grid;
+  gap: var(--ff-gap);
+}
+
+.ff-bike {
+  background: #000;
+  border: 1px solid var(--ff-border);
+  border-radius: 20px;
+  padding: 16px;
+  text-align: center;
+}
+
+.ff-bike__stage {
+  position: relative;
+  width: 100%;
+  /*
+   * Matched to the wider of the two supplied photographs (940x593). A 16:9 box
+   * would letterbox both and render the motorcycle smaller than it needs to be;
+   * this leaves the green bike, which is fractionally narrower, with about 2%
+   * of breathing room on either side.
+   *
+   * Fixed regardless of selection, so choosing a colour cannot move the form
+   * under an operator's finger.
+   */
+  aspect-ratio: 940 / 593;
+  max-height: 340px;
+  margin: 0 auto;
+}
+
+.ff-bike__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Contain, never cover: cropping a motorcycle to fill a box is how a wheel
+     or the tail goes missing on one screen size and not another. */
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.ff-bike__image--shown {
+  opacity: 1;
+}
+
+/* Both images are mounted; only the selected one is painted. Switching is a
+   composited opacity change with no network and no decode. */
+@media (prefers-reduced-motion: reduce) {
+  .ff-bike__image {
+    transition: none;
+  }
+}
+
+.ff-bike__pending {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--ff-border-strong);
+  border-radius: 14px;
+  color: var(--ff-muted);
+}
+
+.ff-bike__pending-colour {
+  font-family: var(--ff-font-display);
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.ff-bike__caption {
+  font-family: var(--ff-font-display);
+  font-size: 24px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 12px 0 0;
+  color: var(--ff-text);
+}
+
+.ff-hero {
+  margin-bottom: var(--ff-gap-section);
+}
+
+.ff-hero__banner {
+  position: relative;
+  padding: 28px 20px;
+  border-bottom: 1px solid var(--ff-border);
+  background: var(--ff-bg);
+  /* Tall enough to read as a banner, short enough that the first field stays
+     on screen on a tablet in portrait. */
+  min-height: clamp(170px, 24vw, 280px);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.ff-hero__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The subjects sit around the middle of the frame; this keeps both the
+     motorcycle and the rider in a shallow crop. */
+  object-position: center 45%;
+}
+
+/*
+ * The scrim, on the container rather than baked into the photograph: the title
+ * stays legible, and the image stays a photograph rather than artwork with text
+ * burned into it.
+ */
+.ff-hero__banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(11, 13, 14, 0.25) 0%,
+    rgba(11, 13, 14, 0.78) 62%,
+    var(--ff-bg) 100%
+  );
+}
+
+.ff-hero__content {
+  position: relative;
+  /* Above both the photograph and the scrim. */
+  z-index: 2;
+}
+
+/*
+ * On a phone the banner is mostly scrim, so it gives back its height to the
+ * form rather than showing a sliver of photograph.
+ */
+@media (max-width: 480px) {
+  .ff-hero__banner {
+    min-height: 140px;
+  }
+
+  .ff-bike__stage {
+    max-height: 220px;
+  }
+
+  .ff-dial {
+    width: min(260px, 100%);
+  }
 }

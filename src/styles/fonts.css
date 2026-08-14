@@ -1,0 +1,56 @@
+/*
+ * The campaign's typefaces, served from this application and nowhere else.
+ *
+ * Every file is a local asset under `public/fonts/`. Nothing is fetched from
+ * Google Fonts or any other host, which is not a preference: this application
+ * cold-starts on a tablet with no network at a venue, and a heading that waits
+ * on fonts.googleapis.com is a heading that never arrives.
+ *
+ * The supplied reference page loaded Anton and Inter from Google Fonts. Anton
+ * was standing in for the campaign's own display face; `FlyingFlea-Bold` is that
+ * face, so it takes the role Anton had and Anton is gone.
+ *
+ * `font-display: swap` throughout. These files are between 60 KB and 340 KB and
+ * are precached, so the swap window is normally invisible — but on a first load
+ * over a venue's Wi-Fi, text that renders immediately in a fallback and reflows
+ * is strictly better than a form staff cannot read yet.
+ */
+
+@font-face {
+  font-family: 'FlyingFlea';
+  src: url('/fonts/FlyingFlea-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Graphik';
+  src: url('/fonts/Graphik-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Inter, in one optical size.
+ *
+ * The 18pt cut is used for both weights rather than mixing it with the default
+ * cut: two optical sizes in one interface differ subtly in letterform width and
+ * spacing, which reads as inconsistent rather than as intentional.
+ */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter_18pt-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter_18pt-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHeader'
 import { BrandButton } from '../../components/brand/BrandButton'
+import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignHeroHeader'
 import { stationFor } from '../../config/event'
 import { CampaignRegistrationForm } from '../campaign/flying-flea/components/CampaignRegistrationForm'
 import { needsLegacyCorrection } from '../campaign/flying-flea/campaignRecord'
-import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { RegistrationForm } from './RegistrationForm'
 import type { CampaignRegistrationDraft } from '../campaign/flying-flea/registrationForm'
 import { emptyCampaignDraft } from '../campaign/flying-flea/registrationForm'
@@ -99,17 +98,11 @@ export function RegistrationScreen() {
 
   return (
     <article className="screen">
-      <FlyingFleaBrandHeader
-        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
+      <CampaignHeroHeader
+        lead="Test Ride"
+        accent="Registration"
+        subtitle={`${station.label} · ${station.stationId}`}
       />
-
-      <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>
-      <h1 className="ff-display ff-heading">
-        Test Ride <span className="ff-heading__accent">Registration</span>
-      </h1>
-      <p className="ff-sub">
-        {station.label} · {station.stationId}
-      </p>
 
       {deviceError !== null && (
         <p className="notice notice--error" role="alert">

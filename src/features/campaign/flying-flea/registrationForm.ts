@@ -65,6 +65,39 @@ export type CampaignRegistrationResult =
 
 /** The supplied form's own rule: a 10-digit Indian mobile. */
 const INDIAN_MOBILE = /^[6-9]\d{9}$/
+
+/**
+ * Normalises a pasted phone number to the ten digits that are stored.
+ *
+ * Two prefixes are recognised, and only two, because they are the two ways a
+ * real Indian mobile number is written down:
+ *
+ *   +91 98765 43210   twelve digits beginning 91  -> the country code is dropped
+ *   098765 43210      eleven digits beginning 0   -> the trunk prefix is dropped
+ *
+ * Anything else over-long is NOT trimmed to fit. Taking the tail of an arbitrary
+ * number — `123456789012345` becoming `6789012345` — would invent a plausible
+ * ten-digit number that nobody typed, and it would pass validation. Those are
+ * truncated from the front instead, exactly as typing into a full field behaves,
+ * so what is left either is the number or is visibly rejected by the rule above.
+ *
+ * The result is the same canonical digit string the field has always stored.
+ */
+export function normalisePastedPhone(pasted: string): string {
+  const digits = pasted.replace(/\D/g, '')
+
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2)
+  }
+
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1)
+  }
+
+  // Not a recognised prefix. Keep what fits, and let validation have the last
+  // word rather than quietly manufacturing a number.
+  return digits.slice(0, 10)
+}
 const PINCODE = /^\d{6}$/
 
 export const MAX_LICENCE_LENGTH = 32

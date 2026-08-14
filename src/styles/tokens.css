@@ -47,21 +47,41 @@
   --ff-radius-pill: 999px;
 
   /*
-   * Type stack.
+   * Type.
    *
-   * The supplied design uses Anton for display and Inter for text, loaded from
-   * Google Fonts. The package ships no font files, and this application must
-   * work with no network, so the CDN link is deliberately NOT carried over.
-   * These stacks name the licensed families first — a device that already has
-   * them installed gets the intended type — and fall back to system faces with
-   * comparable proportions. See docs/flying-flea-campaign.md.
+   * Three roles, three faces, all served locally from `public/fonts` — see
+   * `src/styles/fonts.css`. The supplied reference loaded Anton and Inter from
+   * Google Fonts; Anton was standing in for the campaign's own display face, and
+   * `FlyingFlea` is that face.
+   *
+   * The roles are deliberate. Setting everything in the display face would look
+   * like the campaign for about a minute and then cost an operator real time: a
+   * condensed display cut is hard to scan in a dense reporting table and hard to
+   * read at 13px on a tablet held at arm's length.
+   *
+   *   --ff-font-display   FlyingFlea. Headings, section titles, number plates,
+   *                       the campaign's loud moments.
+   *   --ff-font-body      Graphik. Human-readable prose: hero sub-lines,
+   *                       questionnaire prompts, explanatory copy.
+   *   --ff-font-ui        Inter. Everything compact and functional: field
+   *                       labels, controls, metadata, tables, digits.
+   *
+   * Each stack keeps system fallbacks, so a face that fails to load degrades to
+   * something legible rather than to nothing.
    */
-  --ff-font-text:
+  --ff-font-ui:
     'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
+  --ff-font-body: 'Graphik', var(--ff-font-ui);
   --ff-font-display:
-    'Anton', 'Inter', 'Haettenschweiler', 'Arial Narrow Bold', Impact,
-    var(--ff-font-text);
+    'FlyingFlea', 'Haettenschweiler', 'Arial Narrow Bold', Impact,
+    var(--ff-font-ui);
+
+  /*
+   * The application default. Its own name because most of this product —
+   * Admin, Reporting, forms — is interface rather than prose.
+   */
+  --ff-font-text: var(--ff-font-ui);
 
   /* Spacing rhythm used by the brand shell */
   --ff-gap-tight: 8px;

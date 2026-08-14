@@ -20,3 +20,6 @@ logs
 npm-debug.log*
 pnpm-debug.log*
 .env.vercel
+
+# Font sources are extracted to public/fonts; the archive is not an app asset.
+Fonts.zip
