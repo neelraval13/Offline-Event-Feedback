@@ -36,6 +36,13 @@ import type {
 /**
  * Reporting is served by the same process as sync, so it shares the configured
  * base URL. It does **not** share the credential.
+ *
+ * Concatenation, not `new URL()`: the base may legitimately be a same-origin
+ * path (`/api` in production), and `new URL('/api')` needs a base to resolve
+ * against and would throw. Appending keeps `/api` → `/api/v1/reporting` and
+ * `https://api.example.com` → `https://api.example.com/v1/reporting`, and the
+ * browser resolves the relative form against the page's own origin — which is
+ * exactly the same origin the app was served from.
  */
 export const REPORTING_API_BASE_URL: string | null =
   SYNC_API_BASE_URL === null ? null : `${SYNC_API_BASE_URL}/v1/reporting`

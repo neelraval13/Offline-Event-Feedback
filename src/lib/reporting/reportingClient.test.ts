@@ -48,6 +48,54 @@ describe('configuration', () => {
     expect(client.REPORTING_API_BASE_URL).toBe(`${BASE}/v1/reporting`)
     expect(client.isReportingConfigured()).toBe(true)
   })
+
+  it('derives a same-origin base without doubling the prefix', async () => {
+    /*
+     * Production: the app and the API are one deployment behind `/api`. The
+     * mistake this guards against is `/api/api/v1/reporting`, which 404s in a
+     * way that looks like the reporting API is missing entirely.
+     */
+    vi.stubEnv('VITE_SYNC_API_BASE_URL', '/api')
+    vi.resetModules()
+    const sameOrigin = await import('./reportingClient')
+
+    expect(sameOrigin.REPORTING_API_BASE_URL).toBe('/api/v1/reporting')
+    expect(sameOrigin.REPORTING_API_BASE_URL).not.toContain('/api/api')
+    expect(sameOrigin.isReportingConfigured()).toBe(true)
+  })
+
+  it('requests same-origin paths, and puts no credential in them', async () => {
+    vi.stubEnv('VITE_SYNC_API_BASE_URL', '/api')
+    vi.resetModules()
+    const sameOrigin = await import('./reportingClient')
+
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ runs: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await sameOrigin.fetchRuns(SECRET, 'evt-dev-001')
+
+    const url = String(fetchSpy.mock.calls.at(-1)?.[0])
+    // Relative, so the browser resolves it against the page's own origin.
+    expect(url.startsWith('/api/v1/reporting/runs')).toBe(true)
+    expect(url).not.toContain('//')
+    expect(url).not.toContain(SECRET)
+  })
+
+  it('keeps an absolute base absolute', async () => {
+    vi.stubEnv('VITE_SYNC_API_BASE_URL', 'http://localhost:8788')
+    vi.resetModules()
+    const local = await import('./reportingClient')
+
+    expect(local.REPORTING_API_BASE_URL).toBe(
+      'http://localhost:8788/v1/reporting',
+    )
+    expect(local.REPORTING_API_BASE_URL).not.toContain('/api')
+  })
 })
 
 describe('requests', () => {

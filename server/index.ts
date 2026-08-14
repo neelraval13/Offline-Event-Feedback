@@ -1,80 +1,51 @@
 import { serve } from '@hono/node-server'
-import postgres from 'postgres'
-import { createApp } from './app'
-import { createPostgresStore } from './db/postgresStore'
-import { describeReportingConfigProblem } from './reporting/auth'
+import { createCentralApp, describeConfiguration } from './centralApp'
+import { readServerConfig } from './config'
 
 /*
- * Server entry point.
+ * The local Node runtime.
  *
- * Reads configuration, opens a pool, serves. It deliberately does **not** apply
- * migrations: a process restart must never be able to alter a schema holding an
- * event's records. Migrations run through `pnpm server:migrate`.
+ * Everything about *what* the API is lives in `centralApp.ts` and is shared with
+ * the Vercel function. What is here is what only a long-lived process does:
+ * bind a port, log that it did, and close its database connections on the way
+ * out.
+ *
+ * It deliberately does **not** apply migrations. A process restart must never be
+ * able to alter a schema holding an event's records; migrations run through
+ * `pnpm server:migrate`, deliberately, by an operator.
  */
 
-function required(name: string): string {
-  const value = process.env[name]
+const result = readServerConfig(process.env)
 
-  if (value === undefined || value.length === 0) {
-    // The name only — never the value, and never the connection string.
-    console.error(`Missing required environment variable: ${name}`)
-    process.exit(1)
-  }
-
-  return value
-}
-
-const databaseUrl = required('DATABASE_URL')
-const enrollmentSecret = required('SYNC_ENROLLMENT_SECRET')
-
-/*
- * Reporting is optional. Without a secret it fails closed and sync carries on
- * exactly as before — a deployment that only needs uploads need not configure
- * privileged PII access at all.
- *
- * When it IS configured it must be strong and it must be a genuinely different
- * credential from the enrolment code. Both are checked before the server listens,
- * because the alternative is discovering it from the data.
- */
-const reportingSecret = process.env['REPORTING_ADMIN_SECRET']
-const configProblem = describeReportingConfigProblem(reportingSecret, enrollmentSecret)
-if (configProblem !== null) {
-  console.error(configProblem)
+if (!result.ok) {
+  // The problem names the variable that is wrong. It never contains a value.
+  console.error(result.problem)
   process.exit(1)
 }
 
-const allowedOrigins = (process.env['SYNC_ALLOWED_ORIGINS'] ?? '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter((origin) => origin.length > 0)
+const { config } = result
 
-if (allowedOrigins.length === 0) {
-  console.error(
-    'SYNC_ALLOWED_ORIGINS is empty: no browser origin would be permitted to sync.',
+/*
+ * A local split-origin setup needs its origins listed: the Vite dev server on
+ * :5173 calling this on :8788 is cross-origin, and without an allowlist the
+ * browser refuses every request in a way that looks like the server is down.
+ *
+ * In production the app and the API share an origin and the list is correctly
+ * empty, so this is a warning rather than a failure.
+ */
+if (config.allowedOrigins.length === 0) {
+  console.warn(
+    'SYNC_ALLOWED_ORIGINS is empty: only same-origin requests will be accepted. ' +
+      'Local development usually needs http://localhost:5173,http://localhost:4173',
   )
-  process.exit(1)
 }
 
-const port = Number(process.env['PORT'] ?? 8788)
+const { app, sql } = createCentralApp({ config, runtime: 'local' })
 
-const sql = postgres(databaseUrl, { max: 10, onnotice: () => {} })
-
-const app = createApp({
-  store: createPostgresStore(sql),
-  enrollmentSecret,
-  allowedOrigins,
-  sql,
-  ...(reportingSecret === undefined ? {} : { reportingSecret }),
-  checkDatabase: async () => {
-    await sql`SELECT 1`
-    return true
-  },
-})
-
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(
-    `sync server listening on port ${info.port}; origins: ${allowedOrigins.join(', ')}; ` +
-      `reporting: ${reportingSecret === undefined || reportingSecret.length === 0 ? 'disabled' : 'enabled'}`,
+    `sync server listening on port ${info.port}; ` +
+      describeConfiguration(config, 'local'),
   )
 })
 

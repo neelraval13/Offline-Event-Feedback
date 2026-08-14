@@ -1880,6 +1880,67 @@ rendered keypad is ten taps where the tablet's own keyboard is one paste. The
 plate and swatch motifs were kept, because those are faster than the alternative
 rather than slower.
 
+## Deployment: two runtimes, one API
+
+The application is deployed as a single Vercel project — the PWA served
+statically from `/`, and the same Hono API answering at `/api/*` — against a
+Neon Postgres. Nothing about the API changed to make that work.
+
+### The prefix belongs to the deployment
+
+`server/app.ts` defines `/health` and `/v1/...` and knows nothing about how it is
+served. The Vercel function mounts it under `/api`, which is where Vercel routes
+a function; the local Node server binds it to a port unprefixed. Rewriting every
+route to `/api/v1/...` inside the app would have baked one deployment's routing
+into the API, and would have meant the local server and the deployed one no
+longer served the same paths.
+
+### One configuration, two entry points
+
+`server/config.ts` validates the environment and `server/centralApp.ts` turns the
+result into a running app. `server/index.ts` and `api/[...path].ts` each add only
+what is genuinely theirs: binding a port and closing connections on a signal, or
+exporting a request handler.
+
+Two hand-written `createApp({...})` call sites is how a deployment ends up with
+reporting enabled in one runtime and not the other, or a health check that
+answers differently depending on where it runs — and the one that is wrong is
+always the one nobody tests locally.
+
+### Same origin removes a whole class of configuration
+
+In production the app and the API share an origin, so `VITE_SYNC_API_BASE_URL` is
+the path `/api`. It resolves against the page, which means it inherits the page's
+HTTPS and cannot be downgraded; it also means no request is cross-origin, so
+there is nothing to allow-list. Deployment hostnames change with every push, and a
+configuration that required listing them would be wrong within a day.
+
+The explicit origin allowlist stays for the local split-origin setup — a Vite dev
+server on :5173 calling an API on :8788 is genuinely cross-origin — and there is
+still no wildcard anywhere.
+
+### Serverless connections are not a smaller pool, they are a different shape
+
+A long-lived server holds one pool for the whole event. A function is many
+short-lived instances, so concurrency multiplies instances rather than
+connections within one: `max: 1` per instance is what scales predictably, and
+`sql.end()` between invocations would discard the connection a warm instance
+exists to reuse.
+
+`prepare: false` is not tuning. The pooled endpoint is PgBouncer in transaction
+mode, where named prepared statements do not survive being handed between
+sessions — and the resulting error appears only under the load that makes it
+hardest to reproduce.
+
+### Migrations never ride along
+
+Not on build, not on cold start, not on first request. A schema holding an
+event's records changes because an operator ran `pnpm server:migrate` and watched
+it, using the **direct** connection: a transaction-mode pooler cannot hold the
+session state DDL relies on. That is why the migration URL resolves separately
+from the application's, and why the application's may be pooled while the
+migration's must not be.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -1897,7 +1958,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 9
+## What exists after Phase 10
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`, `#/reporting`)
@@ -1926,6 +1987,9 @@ synchronisation.
 - **Campaign adaptation**: the Flying Flea design applied across the application,
   campaign registration fields captured end to end, a second versioned
   questionnaire alongside the original, and reporting that keeps the two apart
+- **Deployment compatibility**: one Vercel project serving the PWA and the same
+  Hono API from one origin, a shared server bootstrap behind both runtimes,
+  serverless-appropriate database settings, and migrations that stay manual
 - local record counts, sync status and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation

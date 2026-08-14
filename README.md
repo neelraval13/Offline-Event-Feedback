@@ -24,7 +24,35 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 9 — Flying Flea redesign and campaign forms.**
+**Phase 10 — Vercel production compatibility.**
+
+The repository is ready to deploy; nothing in it deploys. One Vercel project
+serves the PWA from `/` and the same Hono API from `/api/*`, against Neon.
+
+```
+Vercel
+├── /        Vite + React + PWA (static)
+└── /api/*   Hono, as a Vercel Function  →  Neon Postgres
+```
+
+- **One central app, two runtimes.** `server/centralApp.ts` builds it;
+  `server/index.ts` binds a port locally and `api/[...path].ts` answers requests
+  on Vercel. Neither restates the other's configuration.
+- **`/api` is a deployment fact, not an API fact.** The function mounts the
+  central app under that prefix; no route inside `server/app.ts` was rewritten,
+  and `pnpm server:start` still serves `/health` and `/v1/...` on port 8788.
+- **Same origin in production.** `VITE_SYNC_API_BASE_URL=/api` resolves against
+  the page, so there is no CORS to configure and no deployment hostname to
+  allow-list. Explicit origins remain for the local split-origin setup.
+- **Conservative serverless database settings.** One connection per instance,
+  reused warm, with prepared statements off for the pooled endpoint.
+- **Migrations stay manual.** Never on build, never on start, never on first
+  request; `MIGRATION_DATABASE_URL` (direct, unpooled) is operator-only.
+
+Deployment is documented for a human:
+[docs/vercel-production.md](docs/vercel-production.md).
+
+### Phase 9 — Flying Flea redesign and campaign forms
 
 The same offline system, dressed and worded for one campaign: the Flying Flea
 test-ride events. No architecture changed — identity, persistence, the QR
@@ -337,7 +365,7 @@ pnpm icons       # regenerate the temporary PWA icons
 ```bash
 cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
 pnpm server:migrate    # apply the schema, deliberately — never on startup
-pnpm server:start      # serve the ingest API
+pnpm server:start      # serve the ingest API on :8788, unprefixed
 pnpm server:reconcile -- --event evt-dev-001   # classify central data
 pnpm server:typecheck
 pnpm server:test
@@ -403,6 +431,10 @@ src/
   types/        Domain types: IDs, records, sync status
 server/           Central sync API, reconciliation engine and reporting API
                   (Hono + Postgres; exports via exceljs, server-only)
+  config.ts       Environment validation, shared by both runtimes
+  centralApp.ts   Assembles the app from a validated config
+  index.ts        The local Node runtime: binds a port, closes on SIGINT
+api/              The Vercel Function: mounts the central app under /api
 shared/
   sync/         The wire protocol, shared by client and server
   campaign/     The campaign questionnaire: version, keys, prompts, scale
@@ -414,6 +446,7 @@ docs/
   point-b-physical-test.md
   flying-flea-campaign.md
   flying-flea-qa.md
+  vercel-production.md
   reconciliation-test.md
   reporting-test.md
   sync-test.md
@@ -435,7 +468,8 @@ scripts/
 | 6 | Central server, device enrolment, idempotent sync — done |
 | 7 | Central reconciliation engine — done |
 | 8 | Central reporting, review and export — done |
-| 9 | Flying Flea redesign and campaign forms *(current)* |
+| 9 | Flying Flea redesign and campaign forms — done |
+| 10 | Vercel production compatibility *(current)* |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

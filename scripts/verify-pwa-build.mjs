@@ -146,6 +146,19 @@ check(
   'the service worker references the reporting API — participant data must never be cached',
 )
 
+/*
+ * ---- the same-origin API is not part of the precache ----
+ *
+ * Under `/api` the API shares an origin with the app, which is precisely when a
+ * navigation fallback or a stray glob could start answering API requests from
+ * the cache. A precached `/api/...` entry would serve a stale upload result, or
+ * worse, a participant's details from disk.
+ */
+check(
+  ![...precached].some((url) => url.startsWith('api/') || url.startsWith('/api')),
+  'an /api path is in the precache manifest — API responses must never be cached',
+)
+
 /* ---- icons ---- */
 
 for (const icon of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {
@@ -173,7 +186,18 @@ const syncUrl = /VITE_SYNC_API_BASE_URL:\s*`([^`]+)`/.exec(
   javascript.map((n) => readFileSync(join(DIST, 'assets', n), 'utf8')).join(''),
 )?.[1]
 
-if (syncUrl !== undefined) {
+if (syncUrl !== undefined && syncUrl.startsWith('/') && !syncUrl.startsWith('//')) {
+  /*
+   * A same-origin path — what a Vercel deployment uses, where the app and the
+   * API are one origin. There is no host to check and no protocol to downgrade:
+   * the browser resolves it against the page it was served from, so an app on
+   * HTTPS reaches the API on HTTPS by construction. This is the safest of the
+   * three shapes and needs no warning.
+   */
+  notes.push(
+    `sync API configured same-origin: ${syncUrl} — resolves against the page's own origin`,
+  )
+} else if (syncUrl !== undefined) {
   let syncHost = ''
   try {
     const parsed = new URL(syncUrl)

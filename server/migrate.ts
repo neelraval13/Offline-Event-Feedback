@@ -2,6 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
+import {
+  MISSING_MIGRATION_URL_MESSAGE,
+  resolveMigrationDatabaseUrl,
+} from './config'
 
 /*
  * Migration runner.
@@ -15,6 +19,10 @@ import postgres from 'postgres'
  * safe to run against a database with data in it.
  *
  *   pnpm server:migrate
+ *
+ * Never run automatically: not on server start, not on a Vercel build, not on
+ * the first request. A schema holding an event's records must only change
+ * because someone decided it should.
  */
 
 const MIGRATIONS_DIR = join(
@@ -22,11 +30,23 @@ const MIGRATIONS_DIR = join(
   'migrations',
 )
 
-const databaseUrl = process.env['DATABASE_URL']
-if (databaseUrl === undefined || databaseUrl.length === 0) {
-  console.error('Missing required environment variable: DATABASE_URL')
+/*
+ * A direct connection, not a pooled one.
+ *
+ * `MIGRATION_DATABASE_URL` wins because it is the operator's deliberate choice.
+ * Neon's own integration exports `DATABASE_URL_UNPOOLED`, so that is next, and
+ * `DATABASE_URL` last for a developer with one local Postgres and nothing to
+ * disambiguate. See `resolveMigrationDatabaseUrl` for why pooled is wrong here.
+ */
+const migration = resolveMigrationDatabaseUrl(process.env)
+if (migration.url === null) {
+  console.error(MISSING_MIGRATION_URL_MESSAGE)
   process.exit(1)
 }
+
+// The variable's name, never its value.
+console.log(`Applying migrations using ${migration.source}.`)
+const databaseUrl = migration.url
 
 const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} })
 

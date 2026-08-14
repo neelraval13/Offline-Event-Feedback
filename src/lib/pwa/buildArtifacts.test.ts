@@ -104,6 +104,26 @@ describeBuild('production PWA artifacts', () => {
     expect(source).not.toContain('/v1/sync')
   })
 
+  it('never precaches or runtime-caches the same-origin API', () => {
+    /*
+     * Under `/api` the API shares an origin with the app, which is exactly when
+     * a stray glob or a navigation fallback could start answering API requests
+     * from the cache — a stale upload result, or a participant's details served
+     * from disk after the operator signed out.
+     */
+    const source = sw()
+    const precached = precachedUrls()
+
+    expect(
+      [...precached].filter(
+        (url) => url?.startsWith('api/') || url?.startsWith('/api'),
+      ),
+    ).toEqual([])
+    expect(source).not.toContain('/api/v1')
+    expect(source).not.toContain('NetworkFirst')
+    expect(source).not.toContain('StaleWhileRevalidate')
+  })
+
   it('describes an installable application', () => {
     const manifest = JSON.parse(
       readFileSync(join(DIST, 'manifest.webmanifest'), 'utf8'),
@@ -127,6 +147,51 @@ describeBuild('production PWA artifacts', () => {
     expect(sizes).toContain('192x192')
     expect(sizes).toContain('512x512')
     expect(manifest.icons.some((icon) => icon.purpose === 'maskable')).toBe(true)
+  })
+
+  it('ships no server secret', () => {
+    /*
+     * `VITE_` variables are compiled into the bundle and readable by anyone
+     * holding a device. Server credentials must never be among them.
+     *
+     * Checked by name rather than by value: reading the operator's real secrets
+     * to prove they are absent would put them in this process, in the test
+     * output and potentially in CI logs. A name appearing in the bundle is
+     * enough to fail, and is the only thing a leak could look like.
+     */
+    const bundles = assets()
+      .filter((asset) => asset.endsWith('.js'))
+      .map((name) => readFileSync(join(DIST, 'assets', name), 'utf8'))
+      .join('')
+
+    for (const name of [
+      'DATABASE_URL',
+      'MIGRATION_DATABASE_URL',
+      'SYNC_ENROLLMENT_SECRET',
+      'REPORTING_ADMIN_SECRET',
+    ]) {
+      expect(bundles).not.toContain(name)
+    }
+
+    // Nothing that looks like a connection string, either.
+    expect(bundles).not.toContain('postgres://')
+    expect(bundles).not.toContain('postgresql://')
+  })
+
+  it('would notice a secret that had been compiled in', () => {
+    /*
+     * A guard on the guard, using a synthetic sentinel: the check above is only
+     * worth having if it would actually fail. No real secret is involved — the
+     * point is that scanning the bundle for a known string works.
+     */
+    const sentinel = 'SYNTHETIC_SECRET_DO_NOT_USE_9f3a'
+    const bundles = assets()
+      .filter((asset) => asset.endsWith('.js'))
+      .map((name) => readFileSync(join(DIST, 'assets', name), 'utf8'))
+      .join('')
+
+    expect(bundles).not.toContain(sentinel)
+    expect(`${bundles}${sentinel}`).toContain(sentinel)
   })
 
   it('ships no runtime dependency on another origin', () => {
@@ -164,9 +229,14 @@ describeBuild('production PWA artifacts', () => {
      * The sync API is a deliberate dependency when one is configured at build
      * time, so its host is expected rather than a surprise. `verify-pwa-build`
      * separately fails a production build that points at plain HTTP.
+     *
+     * A production build configures it as the same-origin path `/api`, which has
+     * no host at all — there is nothing to exempt, and nothing to parse. Passing
+     * it to `new URL()` throws, which is how this test failed the first time a
+     * production-shaped build was run through it.
      */
     const syncUrl = /VITE_SYNC_API_BASE_URL:\s*`([^`]+)`/.exec(bundles)?.[1]
-    if (syncUrl !== undefined) {
+    if (syncUrl !== undefined && !syncUrl.startsWith('/')) {
       hosts.delete(new URL(syncUrl).hostname.toLowerCase())
     }
 
