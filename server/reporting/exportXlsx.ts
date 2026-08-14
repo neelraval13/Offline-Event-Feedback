@@ -120,6 +120,13 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
       row.name,
       row.phone,
       row.email,
+      row.vehicle,
+      row.interestedColour,
+      row.location,
+      row.gender,
+      row.testRideAt,
+      row.drivingLicence,
+      row.pincode,
       row.createdAt,
       row.revision,
       row.status,
@@ -158,6 +165,12 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
       row.experience,
       row.recommend,
       row.comments,
+      row.testRideExperienceRating,
+      row.rotaryKnobRating,
+      row.rideModesRating,
+      row.overallExperienceRating,
+      row.topThreeFeatures,
+      row.overallExperienceComments,
     ])
   }
 

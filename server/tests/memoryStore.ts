@@ -112,13 +112,15 @@ export function createMemoryStore(): MemoryStore {
         return false
       }
 
+      /*
+       * Every mutable field, spread from the incoming record rather than listed
+       * one by one. The listed version silently dropped the campaign fields when
+       * they were added, which made a correction look accepted and change
+       * nothing — exactly the class of bug this fake exists to not have.
+       */
       registrations.set(record.recordId, {
         ...existing,
-        name: record.name,
-        phone: record.phone,
-        email: record.email,
-        updatedAt: record.updatedAt,
-        revision: record.revision,
+        ...record,
         lastReceivedAt: receivedAt,
         lastUploaderDeviceId: uploaderDeviceId,
       })

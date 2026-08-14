@@ -54,8 +54,31 @@ const FEEDBACK_IMMUTABLE = [
   'createdAt',
 ] as const
 
-/** Mutable domain contents, compared when revisions are equal. */
-const REGISTRATION_MUTABLE = ['name', 'phone', 'email', 'updatedAt'] as const
+/**
+ * Mutable domain contents, compared when revisions are equal.
+ *
+ * The campaign fields are mutable, and deliberately so: they are things a human
+ * typed at a desk — the wrong vehicle, a mistyped pincode — and a correction has
+ * to be able to reach them. Identity is what stays immutable, because a printed
+ * sticker in a rider's hand refers to it.
+ *
+ * Being listed here also means two copies of a record at the same revision that
+ * disagree about a campaign field are recognised as a conflict rather than
+ * silently accepted in whichever order they happened to arrive.
+ */
+const REGISTRATION_MUTABLE = [
+  'name',
+  'phone',
+  'email',
+  'vehicle',
+  'interestedColour',
+  'location',
+  'gender',
+  'testRideAt',
+  'drivingLicence',
+  'pincode',
+  'updatedAt',
+] as const
 const FEEDBACK_MUTABLE = ['formVersion', 'answers', 'updatedAt'] as const
 
 function deepEqual(left: unknown, right: unknown): boolean {

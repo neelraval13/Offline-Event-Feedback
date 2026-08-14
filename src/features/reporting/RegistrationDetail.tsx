@@ -7,6 +7,7 @@ import type {
   RegistrationDetail as Detail,
   RegistrationReconciliationStatus,
 } from '../../lib/reporting/types'
+import { ResponseSummary } from './ResponseSummary'
 import { useReportingSession } from './session'
 
 /*
@@ -118,6 +119,40 @@ export function RegistrationDetail({
               <dd>{detail.potentialDuplicate ? 'Yes' : 'No'}</dd>
             </div>
             <div>
+              <dt>Vehicle</dt>
+              <dd>{detail.vehicle ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Interested colour</dt>
+              <dd>{detail.interestedColour ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Location</dt>
+              <dd>{detail.location ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Gender</dt>
+              <dd>{detail.gender ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Test ride</dt>
+              <dd>
+                {detail.testRideAt === null
+                  ? '—'
+                  : /* A wall-clock slot at the venue: shown as captured, never
+                       shifted into the reader's timezone. */
+                    detail.testRideAt.replace('T', ' ')}
+              </dd>
+            </div>
+            <div>
+              <dt>Pincode</dt>
+              <dd>{detail.pincode ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Driving licence (sensitive)</dt>
+              <dd>{detail.drivingLicence ?? '—'}</dd>
+            </div>
+            <div>
               <dt>Registered</dt>
               <dd>{new Date(detail.createdAt).toLocaleString()}</dd>
             </div>
@@ -175,27 +210,10 @@ export function RegistrationDetail({
                 </span>
                 <span>
                   {/*
-                    Only `feedback-v1` has these fields. A response captured under
-                    another questionnaire shows its version instead of having its
-                    answers read as if they meant the same thing.
+                    Each response summarised on its own questionnaire's terms.
+                    Several responses means several lines, never a chosen one.
                   */}
-                  {response.formVersion === 'feedback-v1' ? (
-                    <>
-                      Rated {response.overallRating ?? '—'},{' '}
-                      {response.experience ?? '—'},{' '}
-                      {response.recommend === null
-                        ? 'no recommendation'
-                        : response.recommend
-                          ? 'would recommend'
-                          : 'would not recommend'}
-                    </>
-                  ) : (
-                    <>
-                      Captured under questionnaire {response.formVersion}, which
-                      this build cannot summarise — open the response to see its
-                      answers as recorded.
-                    </>
-                  )}
+                  <ResponseSummary response={response} />
                 </span>
                 <span className="recent__time">
                   {new Date(response.createdAt).toLocaleString()}

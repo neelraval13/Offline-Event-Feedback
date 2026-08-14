@@ -207,7 +207,7 @@ describe('operational screens stay free of update prompts', () => {
   it('Point A shows nothing about updates or readiness', async () => {
     setOfflineShell(fakeShell({ readiness: 'ready', updateAvailable: true }))
     const { container } = render(<RegistrationScreen />)
-    await screen.findByLabelText('Name')
+    await screen.findByLabelText(/^Name/)
 
     expect(screen.queryByRole('button', { name: 'Apply update' })).toBeNull()
     for (const wording of ['update', 'Ready for offline use', 'version']) {
@@ -245,7 +245,7 @@ describe('operational screens stay free of update prompts', () => {
 
     render(<RegistrationScreen />)
 
-    expect(await screen.findByLabelText('Name')).toBeDefined()
+    expect(await screen.findByLabelText(/^Name/)).toBeDefined()
     expect(
       screen.getByRole('button', { name: 'Register & Print' }),
     ).toBeDefined()

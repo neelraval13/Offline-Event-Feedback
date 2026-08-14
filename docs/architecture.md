@@ -1808,6 +1808,78 @@ eager bundle; reporting cannot function without the network by definition and
 never runs on a station device. Its chunk is still precached like every other
 emitted asset, so this is a startup-cost decision, not an availability one.
 
+## Campaign adaptation
+
+Phase 9 dressed the system for one campaign — Flying Flea test rides — without
+changing what it is. The full account is in
+[flying-flea-campaign.md](flying-flea-campaign.md); what belongs here is the
+shape of the seam, because the next campaign will use it.
+
+### Three layers, deliberately separated
+
+    campaign presentation   src/features/campaign/flying-flea/components/
+    campaign data model     src/types/campaign.ts
+    campaign wording/config src/features/campaign/flying-flea/config.ts
+
+The persisted model lives with the rest of the domain types, not in the feature
+folder. A stored answer outlives the screen that captured it: the central server,
+an export and a restore all read these shapes without importing a component, and
+a domain layer that depended on a feature folder would have that backwards.
+
+Presentation reads config; config holds no logic; persistence knows neither.
+
+### A questionnaire is added, never edited
+
+`flying-flea-feedback-v1` is a second member of the form-version union, not a
+replacement for `feedback-v1`. The two answer shapes share no field name, so a
+reader that forgets to branch fails to compile rather than quietly reading a 1-7
+rating as if it were the old 1-5 one.
+
+Every reader branches: the wire schema validates the pair together (a record may
+not declare one questionnaire and carry another's answers), the backup validator
+picks its rules by version, reporting computes two separate sets of figures, and
+the exports give each questionnaire its own columns.
+
+Reconciliation is the exception that proves the rule: it matches on identity and
+has no idea what was asked, so Phase 9 changed nothing in it. A campaign response
+is classified exactly as any other response is.
+
+### Registration fields are additive, and that is what makes them safe
+
+Every campaign field is optional in IndexedDB, on the wire and in Postgres, and
+null means "not captured" rather than a default. That is what lets a device
+holding records since Phase 1 keep reading its own history, lets a device on an
+older build keep uploading, and lets one deployment serve an event that ran the
+generic form in the morning and the campaign form in the afternoon.
+
+The IndexedDB schema is deliberately **not** versioned up for them: adding
+optional fields needs no new `version()` block and no index change, and a bump
+would carry upgrade risk for installed devices in exchange for nothing.
+
+Identity stays immutable and campaign answers are mutable, on both sides of the
+network. The printed sticker refers to identity; everything a human typed at a
+desk has to be correctable, or staff fix a mistyped digit by registering the same
+rider twice.
+
+### Brand assets are inlined, not fetched
+
+The marks are React components carrying the supplied path data. The campaign's
+own page inlines them for the same reason this does: a field application starts
+with no network, and an asset that can fail to load will.
+
+The campaign's bike photographs are hot-linked from a CDN in the supplied source
+and were not carried over. A control whose meaning depends on which photograph is
+showing would be a control with no visible options at a venue with no Wi-Fi, so
+the colour selector uses labelled swatches.
+
+### Design fidelity has a limit, and it is throughput
+
+The supplied design renders phone and pincode as circular dial keypads. They were
+not carried over: Point A is staff-operated several hundred times a day, and a
+rendered keypad is ten taps where the tablet's own keyboard is one paste. The
+plate and swatch motifs were kept, because those are faster than the alternative
+rather than slower.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -1825,7 +1897,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 8
+## What exists after Phase 9
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`, `#/reporting`)
@@ -1851,6 +1923,9 @@ synchronisation.
   over reconciled data — overview, participant and response browsers, anomaly
   and duplicate review, an explicit reconciliation trigger, and CSV/XLSX exports
   that never reach the device's storage
+- **Campaign adaptation**: the Flying Flea design applied across the application,
+  campaign registration fields captured end to end, a second versioned
+  questionnaire alongside the original, and reporting that keeps the two apart
 - local record counts, sync status and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation

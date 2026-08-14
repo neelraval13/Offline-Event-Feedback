@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { fillCampaignRegistration } from '../campaign/flying-flea/testSupport'
 
 /*
  * The one failure that is easy to get wrong: the registration committed, and
@@ -29,7 +30,7 @@ const renderQrSvgMock = vi.mocked(renderQrSvg)
 
 const PARTICIPANT = {
   name: 'Ada Lovelace',
-  phone: '+44 20 7946 0958',
+  phone: '9876543210',
   email: 'ada@example.com',
 }
 
@@ -46,9 +47,7 @@ afterEach(() => {
 
 async function submitParticipant() {
   const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Name'), PARTICIPANT.name)
-  await user.type(screen.getByLabelText('Phone number'), PARTICIPANT.phone)
-  await user.type(screen.getByLabelText('Email address'), PARTICIPANT.email)
+  await fillCampaignRegistration(user, PARTICIPANT)
   await user.click(screen.getByRole('button', { name: 'Register & Print' }))
   return user
 }

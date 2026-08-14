@@ -76,12 +76,36 @@ export interface FreshnessReport {
   readonly latestContentChangeAt: string | null
 }
 
+export interface CampaignRatingSummary {
+  readonly key: string
+  /** Canonical question wording, so a report never shows a machine key. */
+  readonly prompt: string
+  readonly average: number | null
+  readonly responses: number
+  readonly distribution: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6 | 7, number>>
+}
+
+/** Figures for `flying-flea-feedback-v1`, kept apart from the v1 ones. */
+export interface CampaignAnalytics {
+  readonly formVersion: string
+  readonly analysedResponses: number
+  readonly unreadableFormVersions: number
+  readonly ratings: readonly CampaignRatingSummary[]
+  readonly textAnswers: {
+    readonly topThreeFeatures: number
+    readonly overallExperienceComments: number
+  }
+}
+
 export interface OverviewResponse {
   readonly eventId: string
   readonly run: RunDescriptor
   readonly isHistoricalRun: boolean
   readonly freshness: FreshnessReport
   readonly analytics: FeedbackAnalytics
+  readonly campaignAnalytics: CampaignAnalytics
+  readonly responsesByFormVersion: Readonly<Record<string, number>>
+  readonly unreadableResponses: number
   readonly coverage: ResponseCoverage
 }
 
@@ -91,7 +115,17 @@ export interface FeedbackSummary {
   readonly recommend: boolean | null
 }
 
-export interface RegistrationRow {
+/** Campaign fields; null on a registration captured before the campaign. */
+export interface CampaignRegistrationFields {
+  readonly vehicle: string | null
+  readonly interestedColour: string | null
+  readonly location: string | null
+  readonly gender: string | null
+  readonly testRideAt: string | null
+  readonly pincode: string | null
+}
+
+export interface RegistrationRow extends CampaignRegistrationFields {
   readonly recordId: string
   readonly participantId: string
   readonly publicCode: string
@@ -111,6 +145,19 @@ export interface RegistrationRow {
   readonly feedbackSummary: FeedbackSummary | null
 }
 
+/**
+ * The campaign ratings, for a compact summary.
+ *
+ * Null on any questionnaire that is not `flying-flea-feedback-v1`, so a screen
+ * cannot read one questionnaire's numbers under another's labels.
+ */
+export interface CampaignFeedbackSummary {
+  readonly testRideExperience: number | null
+  readonly rotaryKnobUsage: number | null
+  readonly rideModesExperience: number | null
+  readonly overallExperienceRating: number | null
+}
+
 export interface FeedbackRow {
   readonly recordId: string
   readonly publicCode: string
@@ -122,9 +169,12 @@ export interface FeedbackRow {
   /** Never null, for the same reason as `RegistrationRow.reconciliationStatus`. */
   readonly reconciliationStatus: FeedbackReconciliationStatus
   readonly matchMethod: MatchMethod | null
+  /** `feedback-v1` answers. Null under any other questionnaire. */
   readonly overallRating: number | null
   readonly experience: string | null
   readonly recommend: boolean | null
+  /** `flying-flea-feedback-v1` answers. Null under any other questionnaire. */
+  readonly campaignSummary: CampaignFeedbackSummary | null
   readonly linkedRegistration: {
     readonly recordId: string
     readonly publicCode: string
@@ -153,6 +203,8 @@ export interface DuplicateCandidateRow {
 }
 
 export interface RegistrationDetail extends RegistrationRow {
+  /** Sensitive: shown on this privileged view only, never in the list. */
+  readonly drivingLicence: string | null
   readonly eventId: string
   readonly eventDay: string
   readonly stationId: string

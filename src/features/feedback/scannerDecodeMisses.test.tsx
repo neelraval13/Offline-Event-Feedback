@@ -11,6 +11,8 @@ import {
 import { FeedbackScreen } from './FeedbackScreen'
 import { createZxingScanner } from '../../lib/scanner'
 import { EVENT_CONFIG } from '../../config/event'
+import { answerCampaignFeedback } from '../campaign/flying-flea/testSupport'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { db } from '../../lib/storage'
 import { countFeedback } from '../../lib/storage/feedback'
 import { deriveIssuerCode } from '../../lib/identity/issuerCode'
@@ -182,12 +184,10 @@ describe('ordinary frames with no QR in them', () => {
       sticker.publicCode,
     )
 
-    await user.click(screen.getByRole('button', { name: '4' }))
-    await user.click(screen.getByRole('button', { name: 'Good' }))
-    await user.click(screen.getByRole('button', { name: 'Yes' }))
-    await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await answerCampaignFeedback(user)
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
 
-    await screen.findByText('Feedback recorded.')
+    await screen.findByText(FLYING_FLEA_CAMPAIGN.thanks)
     expect(await countFeedback(db)).toBe(1)
   })
 })

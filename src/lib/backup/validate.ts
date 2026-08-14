@@ -5,8 +5,18 @@ import { DB_NAME, DB_VERSION } from '../storage'
 import {
   EXPERIENCE_VALUES,
   FEEDBACK_FORM_VERSION,
+  FLYING_FLEA_FORM_VERSION,
+  MAX_CAMPAIGN_TEXT_LENGTH,
   MAX_COMMENTS_LENGTH,
+  MAX_LICENCE_LENGTH,
+  MAX_LOCATION_LENGTH,
+  MAX_VEHICLE_LENGTH,
   OVERALL_RATINGS,
+  isCampaignPincode,
+  isFlyingFleaColour,
+  isFlyingFleaGender,
+  isLocalDateTime,
+  isRating1To7,
 } from '../../types'
 import type {
   DeviceConfigRow,
@@ -272,6 +282,8 @@ function validateRegistration(
     issues.push(`${where}: missing provenance`)
   }
 
+  validateCampaignRegistrationFields(input, where, issues)
+
   if (issues.length > 0) {
     return null
   }
@@ -280,13 +292,102 @@ function validateRegistration(
   return input as unknown as RegistrationRecord
 }
 
+/** `flying-flea-feedback-v1`: four integer ratings and two optional texts. */
+function validateCampaignAnswers(
+  input: Record<string, unknown>,
+  where: string,
+  issues: string[],
+): void {
+  for (const key of [
+    'testRideExperience',
+    'rotaryKnobUsage',
+    'rideModesExperience',
+    'overallExperienceRating',
+  ]) {
+    if (!isRating1To7(input[key])) {
+      issues.push(`${where}: invalid ${key}`)
+    }
+  }
+
+  for (const key of ['topThreeFeatures', 'overallExperienceComments']) {
+    if (key in input) {
+      const value = input[key]
+      if (typeof value !== 'string' || value.length > MAX_CAMPAIGN_TEXT_LENGTH) {
+        issues.push(`${where}: invalid ${key}`)
+      }
+    }
+  }
+}
+
+/**
+ * Validates the answers against the questionnaire the record declares.
+ *
+ * Branching on `formVersion` is the whole point: a restore file may legitimately
+ * hold both questionnaires — a device that worked the generic event and then the
+ * campaign has records of each — and validating a campaign response against the
+ * old shape would reject a perfectly good backup.
+ */
+
+/**
+ * The Phase 9 campaign fields, when a record carries them.
+ *
+ * A restore file is untrusted input, so "the current build wrote it" is not a
+ * reason to skip anything. Every field is checked against the campaign's own
+ * constraints — the same ones the wire schema and the form use, imported rather
+ * than restated — and a record that carries none of them is a pre-campaign
+ * record and perfectly valid.
+ *
+ * Messages name the field and the index and nothing else. A validation message
+ * is written to a screen an operator is looking at and often into a support
+ * note; printing the value would put a licence number or a phone number there.
+ */
+function validateCampaignRegistrationFields(
+  input: Record<string, unknown>,
+  where: string,
+  issues: string[],
+): void {
+  /** Present-and-wrong is an issue; absent is not. */
+  function check(
+    field: string,
+    valid: (value: unknown) => boolean,
+  ): void {
+    if (!(field in input) || input[field] === undefined) {
+      return
+    }
+    if (!valid(input[field])) {
+      issues.push(`${where}: invalid ${field}`)
+    }
+  }
+
+  const bounded = (max: number) => (value: unknown) =>
+    typeof value === 'string' && value.length > 0 && value.length <= max
+
+  check('vehicle', bounded(MAX_VEHICLE_LENGTH))
+  check('location', bounded(MAX_LOCATION_LENGTH))
+  check('drivingLicence', bounded(MAX_LICENCE_LENGTH))
+
+  // Closed sets: an unrecognised colour or gender is not a long string, it is
+  // an answer no rider could have given.
+  check('interestedColour', isFlyingFleaColour)
+  check('gender', isFlyingFleaGender)
+
+  check('testRideAt', isLocalDateTime)
+  check('pincode', isCampaignPincode)
+}
+
 function validateFeedbackAnswers(
   input: unknown,
   where: string,
   issues: string[],
+  formVersion: unknown,
 ): void {
   if (!isRecord(input)) {
     issues.push(`${where}: invalid answers`)
+    return
+  }
+
+  if (formVersion === FLYING_FLEA_FORM_VERSION) {
+    validateCampaignAnswers(input, where, issues)
     return
   }
 
@@ -369,7 +470,17 @@ function validateFeedback(
   if (revision === null || revision < 1) {
     issues.push(`${where}: invalid revision`)
   }
-  if (input['formVersion'] !== FEEDBACK_FORM_VERSION) {
+  /*
+   * Both shipped questionnaires are accepted. An unknown one is refused rather
+   * than stored: a restore that quietly accepted answers this build cannot read
+   * would put records into the device's database that it can neither display
+   * nor validate on the way back out.
+   */
+  const formVersion = input['formVersion']
+  if (
+    formVersion !== FEEDBACK_FORM_VERSION &&
+    formVersion !== FLYING_FLEA_FORM_VERSION
+  ) {
     issues.push(`${where}: unsupported questionnaire version`)
   }
 
@@ -390,7 +501,7 @@ function validateFeedback(
     issues.push(`${where}: invalid captureMethod`)
   }
 
-  validateFeedbackAnswers(input['answers'], where, issues)
+  validateFeedbackAnswers(input['answers'], where, issues, formVersion)
 
   if (issues.length > before) {
     return null

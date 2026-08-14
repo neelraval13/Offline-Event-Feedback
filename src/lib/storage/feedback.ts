@@ -1,7 +1,6 @@
 import type {
   CapturedParticipantIdentity,
-  FeedbackAnswers,
-  FeedbackFormVersion,
+  FeedbackQuestionnairePayload,
   FeedbackRecord,
   PublicParticipantCode,
   RecordContext,
@@ -26,11 +25,16 @@ import { newRecordMetadata } from './metadata'
  * to a participant ID is the central server's job after synchronisation.
  */
 
-export interface NewFeedbackInput extends RecordContext {
+/**
+ * What Point B hands to the store.
+ *
+ * The questionnaire arrives as one value rather than as a version beside some
+ * answers, so a caller cannot pair a `feedback-v1` label with campaign answers.
+ * The identity union does the same job for the QR/manual distinction.
+ */
+export type NewFeedbackInput = RecordContext & {
   readonly identity: CapturedParticipantIdentity
-  readonly formVersion: FeedbackFormVersion
-  readonly answers: FeedbackAnswers
-}
+} & FeedbackQuestionnairePayload
 
 /**
  * Persists a feedback submission.
@@ -42,16 +46,29 @@ export async function createFeedback(
   database: OfflineEventDb,
   input: NewFeedbackInput,
 ): Promise<FeedbackRecord> {
+  const identity =
+    input.identity.captureMethod === 'qr'
+      ? { participantId: input.identity.participantId }
+      : {}
+
+  /*
+   * The questionnaire is narrowed before the record is built, so each branch
+   * writes a pair the type system has already checked. Spreading
+   * `formVersion`/`answers` together from an unnarrowed input would defeat the
+   * discriminated union it arrived as.
+   */
+  const questionnaire: FeedbackQuestionnairePayload =
+    input.formVersion === 'feedback-v1'
+      ? { formVersion: input.formVersion, answers: input.answers }
+      : { formVersion: input.formVersion, answers: input.answers }
+
   const record: FeedbackRecord = {
     ...newRecordMetadata(input),
     kind: 'feedback',
     captureMethod: input.identity.captureMethod,
     publicCode: input.identity.publicCode,
-    ...(input.identity.captureMethod === 'qr'
-      ? { participantId: input.identity.participantId }
-      : {}),
-    formVersion: input.formVersion,
-    answers: input.answers,
+    ...identity,
+    ...questionnaire,
   }
 
   await database.feedback.add(record)

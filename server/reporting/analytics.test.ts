@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeAnalytics,
+  computeCampaignAnalytics,
   computeCoverage,
+  FLYING_FLEA_FORM_VERSION,
   SUPPORTED_FORM_VERSION,
   type AnalysableResponse,
 } from './analytics'
+import { FLYING_FLEA_QUESTIONS } from './campaign'
 import type { RunDescriptor } from './types'
 
 function response(
@@ -132,5 +135,163 @@ describe('computeCoverage', () => {
 
   it('reports null rather than dividing by zero', () => {
     expect(computeCoverage(run({ registrationCount: 0 })).percentage).toBeNull()
+  })
+})
+
+describe('computeCampaignAnalytics', () => {
+  function campaignResponse(
+    answers: Record<string, unknown>,
+    formVersion = FLYING_FLEA_FORM_VERSION,
+  ): AnalysableResponse {
+    return { formVersion, answers }
+  }
+
+  const complete = {
+    testRideExperience: 7,
+    rotaryKnobUsage: 6,
+    rideModesExperience: 5,
+    overallExperienceRating: 7,
+    topThreeFeatures: 'Torque',
+    overallExperienceComments: 'Brilliant',
+  }
+
+  function ratingFor(
+    analytics: ReturnType<typeof computeCampaignAnalytics>,
+    key: string,
+  ) {
+    const summary = analytics.ratings.find((rating) => rating.key === key)
+    expect(summary).toBeDefined()
+    return summary as NonNullable<typeof summary>
+  }
+
+  it('averages each question separately and reports its distribution', () => {
+    const analytics = computeCampaignAnalytics(
+      [
+        campaignResponse(complete),
+        campaignResponse({ ...complete, testRideExperience: 5 }),
+      ],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    expect(analytics.analysedResponses).toBe(2)
+    expect(ratingFor(analytics, 'testRideExperience').average).toBe(6)
+    expect(ratingFor(analytics, 'testRideExperience').distribution[7]).toBe(1)
+    expect(ratingFor(analytics, 'testRideExperience').distribution[5]).toBe(1)
+    expect(ratingFor(analytics, 'rotaryKnobUsage').average).toBe(6)
+  })
+
+  it('quotes the campaign question, never the machine key', () => {
+    const analytics = computeCampaignAnalytics(
+      [campaignResponse(complete)],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    expect(ratingFor(analytics, 'rotaryKnobUsage').prompt).toBe(
+      'How do you rate usage of the rotary knob for changing modes?',
+    )
+  })
+
+  it('never reads a feedback-v1 response as a campaign one', () => {
+    /*
+     * The failure this prevents: a 1-5 `overall_rating` counted as if it were a
+     * 1-7 campaign answer, dragging every campaign average down by an amount
+     * nothing on the screen would explain.
+     */
+    const analytics = computeCampaignAnalytics(
+      [
+        campaignResponse(complete),
+        campaignResponse(
+          { overall_rating: 1, experience: 'very_poor', recommend: false },
+          'feedback-v1',
+        ),
+      ],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    expect(analytics.analysedResponses).toBe(1)
+    expect(analytics.unreadableFormVersions).toBe(1)
+    expect(ratingFor(analytics, 'overallExperienceRating').average).toBe(7)
+  })
+
+  it('excludes a rating that is not a whole number from 1 to 7', () => {
+    const analytics = computeCampaignAnalytics(
+      [
+        campaignResponse(complete),
+        campaignResponse({ ...complete, testRideExperience: 8 }),
+        campaignResponse({ ...complete, testRideExperience: 3.5 }),
+      ],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    const rating = ratingFor(analytics, 'testRideExperience')
+    // All three responses are analysed; only one carried a usable answer to
+    // this question, and the average says so.
+    expect(analytics.analysedResponses).toBe(3)
+    expect(rating.responses).toBe(1)
+    expect(rating.average).toBe(7)
+    expect(Object.values(rating.distribution).reduce((a, b) => a + b, 0)).toBe(1)
+  })
+
+  it('reports null rather than zero when a question was never answered', () => {
+    const analytics = computeCampaignAnalytics([], FLYING_FLEA_QUESTIONS)
+
+    for (const rating of analytics.ratings) {
+      // Zero would read as "riders rated it 0", which is not on the scale.
+      expect(rating.average).toBeNull()
+      expect(rating.responses).toBe(0)
+    }
+  })
+
+  it('counts how many riders wrote anything, per free-text question', () => {
+    const analytics = computeCampaignAnalytics(
+      [
+        campaignResponse(complete),
+        campaignResponse({ ...complete, topThreeFeatures: '   ' }),
+        campaignResponse({
+          testRideExperience: 4,
+          rotaryKnobUsage: 4,
+          rideModesExperience: 4,
+          overallExperienceRating: 4,
+        }),
+      ],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    // Whitespace is not an answer, and an absent field certainly is not.
+    expect(analytics.textAnswers.topThreeFeatures).toBe(1)
+    expect(analytics.textAnswers.overallExperienceComments).toBe(2)
+  })
+})
+
+describe('reporting quotes the shared questionnaire', () => {
+  it('renders the shared question objects, not a server-side copy', () => {
+    /*
+     * `server/reporting/campaign.ts` is a re-export of
+     * `shared/campaign/flyingFlea.ts`. Asserting identity rather than equality
+     * is what makes a divergent copy impossible: a second array would fail here
+     * even if somebody kept both in step by hand today.
+     */
+    const analytics = computeCampaignAnalytics(
+      [
+        {
+          formVersion: FLYING_FLEA_FORM_VERSION,
+          answers: {
+            testRideExperience: 7,
+            rotaryKnobUsage: 6,
+            rideModesExperience: 5,
+            overallExperienceRating: 7,
+          },
+        },
+      ],
+      FLYING_FLEA_QUESTIONS,
+    )
+
+    for (const rating of analytics.ratings) {
+      const shared = FLYING_FLEA_QUESTIONS.find(
+        (question) => question.key === rating.key,
+      )
+      expect(shared).toBeDefined()
+      expect(rating.prompt).toBe(shared?.prompt)
+    }
   })
 })

@@ -14,14 +14,14 @@ describe('App routing', () => {
   it('renders the registration surface at #/a', () => {
     renderAt('#/a')
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Point A — Registration' }),
+      screen.getByRole('heading', { level: 1, name: /Test Ride Registration/ }),
     ).toBeDefined()
   })
 
   it('renders the feedback surface at #/b', () => {
     renderAt('#/b')
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Point B — Feedback' }),
+      screen.getByRole('heading', { level: 1, name: /Test Ride Feedback/ }),
     ).toBeDefined()
   })
 
@@ -46,7 +46,7 @@ describe('App routing', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Point B — Feedback' }),
+      screen.getByRole('heading', { level: 1, name: /Test Ride Feedback/ }),
     ).toBeDefined()
   })
 })

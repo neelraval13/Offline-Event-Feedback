@@ -148,7 +148,97 @@ export function ReportingOverview({
             </div>
           </dl>
 
-          <h3 className="section-title">Answers</h3>
+          {/*
+            Which questionnaires this run actually holds. An event that ran both
+            gets both sets of figures, side by side and never averaged together:
+            a 1-5 rating and a 1-7 rating have no common mean.
+          */}
+          <h3 className="section-title">Responses by questionnaire</h3>
+          <ul className="recent__list">
+            {Object.entries(overview.responsesByFormVersion).map(
+              ([formVersion, count]) => (
+                <li className="recent__item" key={formVersion}>
+                  <span className="recent__code">{formVersion}</span>
+                  <span>{count.toLocaleString()} matched response(s)</span>
+                </li>
+              ),
+            )}
+            {Object.keys(overview.responsesByFormVersion).length === 0 && (
+              <li className="recent__item">
+                <span>No matched responses in this run.</span>
+              </li>
+            )}
+          </ul>
+          {overview.unreadableResponses > 0 && (
+            <p className="notice" role="status">
+              {overview.unreadableResponses.toLocaleString()} matched response(s)
+              use a questionnaire this build has no figures for. They are
+              exported and readable individually, and are excluded from every
+              average below rather than being folded into one.
+            </p>
+          )}
+
+          {overview.campaignAnalytics.analysedResponses > 0 && (
+            <>
+              <h3 className="section-title">
+                Flying Flea test ride ({overview.campaignAnalytics.analysedResponses.toLocaleString()}{' '}
+                response(s))
+              </h3>
+              <p className="screen__note">
+                Computed from responses this run matched to exactly one rider.
+                Each question is averaged on its own 1–7 scale.
+              </p>
+
+              {overview.campaignAnalytics.ratings.map((rating) => (
+                <div key={rating.key}>
+                  <h4 className="section-title">{rating.prompt}</h4>
+                  <dl className="station-badge">
+                    <div>
+                      <dt>Average</dt>
+                      <dd>
+                        {rating.average === null
+                          ? '—'
+                          : `${rating.average} / 7`}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Answered</dt>
+                      <dd>{rating.responses.toLocaleString()}</dd>
+                    </div>
+                  </dl>
+                  <ul className="recent__list">
+                    {([7, 6, 5, 4, 3, 2, 1] as const).map((value) => (
+                      <li className="recent__item" key={value}>
+                        <span className="recent__code">{value}</span>
+                        <span>
+                          {rating.distribution[value].toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              <dl className="station-badge">
+                <div>
+                  <dt>Wrote about top features</dt>
+                  <dd>
+                    {overview.campaignAnalytics.textAnswers.topThreeFeatures.toLocaleString()}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Wrote about overall experience</dt>
+                  <dd>
+                    {overview.campaignAnalytics.textAnswers.overallExperienceComments.toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+            </>
+          )}
+
+          {overview.analytics.analysedResponses > 0 && (
+            <>
+          <h3 className="section-title">Answers (feedback-v1)</h3>
           <p className="screen__note">
             Computed from the {overview.analytics.analysedResponses.toLocaleString()}{' '}
             response(s) this run matched to exactly one participant. Responses in
@@ -203,6 +293,9 @@ export function ReportingOverview({
               </li>
             ))}
           </ul>
+
+            </>
+          )}
 
           <h3 className="section-title">Needs review</h3>
           <dl className="station-badge">

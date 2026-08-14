@@ -1,4 +1,14 @@
 import { z } from 'zod'
+import {
+  FLYING_FLEA_COLOURS,
+  FLYING_FLEA_FORM_VERSION,
+  FLYING_FLEA_GENDERS,
+  MAX_CAMPAIGN_TEXT_LENGTH,
+  MAX_LICENCE_LENGTH,
+  MAX_LOCATION_LENGTH,
+  MAX_VEHICLE_LENGTH,
+  RATINGS_1_TO_7,
+} from '../campaign/flyingFlea'
 
 /*
  * The synchronisation wire contract, version 1.
@@ -66,6 +76,37 @@ export const registrationWireSchema = z.object({
   phone: z.string().min(1).max(64),
   email: z.string().min(1).max(320),
 
+  /*
+   * Campaign fields, all optional.
+   *
+   * Additive on purpose, and additive is what keeps this protocol version at 1:
+   * a device still running a pre-campaign build uploads a registration without
+   * them and is accepted exactly as before, and a device running this build
+   * uploads them to a server that has been deployed since. Making them required
+   * would strand every record captured before the campaign, including the ones
+   * sitting unsynced on a tablet during the deployment.
+   *
+   * The lengths are storage bounds, not campaign rules. Validation of what a
+   * campaign considers a well-formed licence number belongs at the desk, where
+   * someone can look at the document.
+   */
+  vehicle: z.string().min(1).max(MAX_VEHICLE_LENGTH).optional(),
+  /*
+   * Closed sets, from the shared campaign definition. A colour is a stored
+   * answer to a question, so an unrecognised one is not a long string — it is a
+   * value no rider could have chosen.
+   */
+  interestedColour: z.enum(FLYING_FLEA_COLOURS).optional(),
+  location: z.string().min(1).max(MAX_LOCATION_LENGTH).optional(),
+  gender: z.enum(FLYING_FLEA_GENDERS).optional(),
+  /** Local wall-clock `YYYY-MM-DDTHH:mm`, never shifted to UTC. */
+  testRideAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'must be a local date and time')
+    .optional(),
+  drivingLicence: z.string().min(1).max(MAX_LICENCE_LENGTH).optional(),
+  pincode: z.string().regex(/^\d{6}$/, 'must be a 6-digit pincode').optional(),
+
   createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
   revision,
@@ -82,6 +123,32 @@ export const feedbackAnswersSchema = z.object({
   experience: z.enum(['very_poor', 'poor', 'okay', 'good', 'excellent']),
   recommend: z.boolean(),
   comments: z.string().max(2000).optional(),
+})
+
+/** 1-7 inclusive, integers only. A 2.5 is not an answer to these questions. */
+const rating1to7 = z.union(
+  RATINGS_1_TO_7.map((value) => z.literal(value)) as unknown as [
+    z.ZodLiteral<1>,
+    z.ZodLiteral<2>,
+    ...z.ZodLiteral<number>[],
+  ],
+)
+
+/**
+ * `flying-flea-feedback-v1`.
+ *
+ * Deliberately a separate schema rather than an extension of the one above.
+ * The two questionnaires share no question, and a server that validated them
+ * with one schema would accept a campaign response missing every campaign
+ * answer.
+ */
+export const flyingFleaFeedbackAnswersSchema = z.object({
+  testRideExperience: rating1to7,
+  rotaryKnobUsage: rating1to7,
+  rideModesExperience: rating1to7,
+  overallExperienceRating: rating1to7,
+  topThreeFeatures: z.string().max(MAX_CAMPAIGN_TEXT_LENGTH).optional(),
+  overallExperienceComments: z.string().max(MAX_CAMPAIGN_TEXT_LENGTH).optional(),
 })
 
 /*
@@ -103,8 +170,12 @@ const feedbackWireObject = z.object({
     stationId: identifier,
     deviceId: uuid,
 
-    formVersion: z.literal('feedback-v1'),
-    answers: feedbackAnswersSchema,
+    /*
+     * The pair is validated together below: a record may not declare one
+     * questionnaire and carry another's answers.
+     */
+    formVersion: z.enum(['feedback-v1', FLYING_FLEA_FORM_VERSION]),
+    answers: z.union([feedbackAnswersSchema, flyingFleaFeedbackAnswersSchema]),
 
     createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
@@ -136,15 +207,43 @@ function checkCaptureIdentity(
   }
 }
 
-export const feedbackWireSchema = feedbackWireObject.superRefine(
-  checkCaptureIdentity,
-)
+/**
+ * The questionnaire a record declares must be the questionnaire it answers.
+ *
+ * Without this, `answers` being a union means a `flying-flea-feedback-v1`
+ * record carrying `feedback-v1` answers parses cleanly and lands in the
+ * database as a campaign response with no campaign answers in it — invisible
+ * until an analyst notices the averages are computed from fewer records than
+ * the count says.
+ */
+function checkFormVersionMatchesAnswers(
+  record: { formVersion: string; answers: unknown },
+  ctx: z.RefinementCtx,
+): void {
+  const schema =
+    record.formVersion === FLYING_FLEA_FORM_VERSION
+      ? flyingFleaFeedbackAnswersSchema
+      : feedbackAnswersSchema
+
+  if (!schema.safeParse(record.answers).success) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `answers do not match formVersion ${record.formVersion}`,
+      path: ['answers'],
+    })
+  }
+}
+
+export const feedbackWireSchema = feedbackWireObject
+  .superRefine(checkCaptureIdentity)
+  .superRefine(checkFormVersionMatchesAnswers)
 
 export const syncRecordSchema = z
   .discriminatedUnion('kind', [registrationWireSchema, feedbackWireObject])
   .superRefine((record, ctx) => {
     if (record.kind === 'feedback') {
       checkCaptureIdentity(record, ctx)
+      checkFormVersionMatchesAnswers(record, ctx)
     }
   })
 

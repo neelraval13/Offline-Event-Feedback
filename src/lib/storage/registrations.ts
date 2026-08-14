@@ -1,6 +1,10 @@
 import { deriveIssuerCode } from '../identity/issuerCode'
 import { newParticipantId } from '../identity/uuid'
 import type {
+  CampaignFieldCorrections,
+  FlyingFleaRegistrationFields,
+} from '../../types/campaign'
+import type {
   ParticipantId,
   PublicParticipantCode,
   RecordContext,
@@ -22,18 +26,97 @@ import { allocatePublicCode } from './sequences'
  * prints is correct by construction, and one that does not await it is not.
  */
 
-export interface NewRegistrationInput extends RecordContext {
-  readonly name: string
-  readonly phone: string
-  readonly email: string
-}
+export type NewRegistrationInput = RecordContext &
+  CampaignFieldCorrections & {
+    readonly name: string
+    readonly phone: string
+    readonly email: string
+  }
 
-/** Fields a later phase may legitimately correct after the fact. */
-export interface RegistrationPatch {
+/**
+ * Fields a correction may legitimately change after a sticker has been printed.
+ *
+ * Identity is absent from this list and always will be: `participantId`,
+ * `publicCode`, `recordId` and `deviceId` are what the printed sticker in the
+ * rider's hand refers to, and a correction that changed any of them would
+ * silently detach the record from the physical thing pointing at it.
+ *
+ * Everything a human can mistype — contact details and campaign answers — is
+ * correctable, because the alternative is staff registering the same rider
+ * twice to fix a digit. See docs/flying-flea-campaign.md.
+ */
+export type RegistrationPatch = CampaignFieldCorrections & {
   readonly name?: string
   readonly phone?: string
   readonly email?: string
   readonly syncStatus?: SyncStatus
+}
+
+/** The campaign fields, in one place, so a new one cannot be half-wired. */
+const CAMPAIGN_FIELDS = [
+  'vehicle',
+  'interestedColour',
+  'location',
+  'gender',
+  'testRideAt',
+  'drivingLicence',
+  'pincode',
+] as const
+
+/** Copies only the campaign fields a new registration actually carries. */
+function campaignFields(
+  source: CampaignFieldCorrections,
+): FlyingFleaRegistrationFields {
+  const copied: Record<string, string> = {}
+
+  for (const field of CAMPAIGN_FIELDS) {
+    const value = source[field]
+    if (value !== undefined && value !== null) {
+      copied[field] = value
+    }
+  }
+
+  return copied as FlyingFleaRegistrationFields
+}
+
+/**
+ * Applies a correction's campaign fields to a stored record.
+ *
+ * Returns the campaign portion of the updated record, and it is a *replacement*
+ * for that portion rather than an overlay: a cleared field is left out of the
+ * result, so spreading it over the existing record is not enough — the caller
+ * deletes the key. See {@link CampaignFieldCorrections} for the three states.
+ */
+function applyCampaignCorrections(
+  existing: RegistrationRecord,
+  patch: CampaignFieldCorrections,
+): { readonly fields: FlyingFleaRegistrationFields; readonly changed: boolean } {
+  const fields: Record<string, string> = {}
+  let changed = false
+
+  for (const field of CAMPAIGN_FIELDS) {
+    const correction = patch[field]
+    const current = existing[field]
+
+    if (correction === undefined) {
+      // Not part of this correction. Whatever is stored survives.
+      if (current !== undefined) {
+        fields[field] = current
+      }
+      continue
+    }
+
+    if (correction === null) {
+      // Cleared. The key is simply not written back.
+      changed = changed || current !== undefined
+      continue
+    }
+
+    changed = changed || current !== correction
+    fields[field] = correction
+  }
+
+  return { fields: fields as FlyingFleaRegistrationFields, changed }
 }
 
 /**
@@ -74,6 +157,7 @@ export async function createRegistration(
         name: input.name,
         phone: input.phone,
         email: input.email,
+        ...campaignFields(input),
       }
 
       await database.registrations.add(record)
@@ -129,16 +213,31 @@ export async function updateRegistration(
       throw new Error(`No registration with recordId ${id}`)
     }
 
+    const campaign = applyCampaignCorrections(existing, patch)
+
     const touchesContactDetails =
       patch.name !== undefined ||
       patch.phone !== undefined ||
-      patch.email !== undefined
+      patch.email !== undefined ||
+      campaign.changed
+
+    /*
+     * The campaign fields are stripped and reapplied rather than spread over the
+     * existing record. Spreading cannot express a deletion: a key the operator
+     * cleared would still be there underneath, and the correction would appear
+     * to succeed while changing nothing.
+     */
+    const withoutCampaignFields = { ...existing }
+    for (const field of CAMPAIGN_FIELDS) {
+      delete (withoutCampaignFields as Record<string, unknown>)[field]
+    }
 
     const updated: RegistrationRecord = {
-      ...existing,
+      ...withoutCampaignFields,
       ...(patch.name === undefined ? {} : { name: patch.name }),
       ...(patch.phone === undefined ? {} : { phone: patch.phone }),
       ...(patch.email === undefined ? {} : { email: patch.email }),
+      ...campaign.fields,
       syncStatus:
         patch.syncStatus ??
         (touchesContactDetails ? 'pending' : existing.syncStatus),

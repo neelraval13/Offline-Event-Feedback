@@ -24,7 +24,39 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 8 — central reporting, review and export.**
+**Phase 9 — Flying Flea redesign and campaign forms.**
+
+The same offline system, dressed and worded for one campaign: the Flying Flea
+test-ride events. No architecture changed — identity, persistence, the QR
+contract, sync, reconciliation and reporting are exactly as Phases 0–8 left them.
+
+- **The supplied package is the authority.** Palette, marks, labels, questions
+  and answer scales come from `flyingflea-testride.zip`, not from taste. See
+  [docs/flying-flea-campaign.md](docs/flying-flea-campaign.md).
+- **One questionnaire definition.** The form version, answer keys, exact prompts
+  and 1–7 scale live in `shared/campaign/flyingFlea.ts`, which the browser and
+  the reporting server both import. Vehicles, venues and hero copy — the parts
+  that can change without changing what an answer means — stay in
+  `src/features/campaign/flying-flea/config.ts`.
+- **A new questionnaire, not a changed one.** `flying-flea-feedback-v1` — four
+  1–7 ratings and two free-text answers — sits alongside `feedback-v1`. Nothing
+  reinterprets an existing response, and every reader branches on the version.
+- **Additive registration fields.** Vehicle, colour, location, gender, test-ride
+  time, licence and pincode are optional at every persistence boundary, so
+  records captured before the campaign still read, sync and restore.
+- **Still offline.** Brand marks are inlined, no font or image is fetched, and
+  the campaign's CDN-hosted bike photographs were deliberately not carried over.
+- **Reporting keeps the two questionnaires apart.** A 1–5 rating and a 1–7 rating
+  never share an average.
+
+- **Deployment is ordered.** The Phase 9 server (and its migration) goes first;
+  devices update second. A Phase 9 client must never be pointed at a
+  pre-Phase-9 server — it would strand campaign responses on the tablet. The
+  protocol stays at version 1, and the reasoning is written down.
+
+Campaign QA: [docs/flying-flea-qa.md](docs/flying-flea-qa.md).
+
+### Central reporting
 
 The first API that returns participant PII, and the only screen that shows the
 whole event at once. It reads what Phase 7 concluded and presents it; it decides
@@ -343,12 +375,16 @@ stale cached shell. Test PWA behaviour against `pnpm build && pnpm preview`.
 ```text
 src/
   app/          App shell wiring and the route table
-  components/   Shared presentational components
+  components/
+    brand/      Flying Flea shell components and the inlined brand marks
+  styles/       Design tokens (the only place brand values are written down)
   config/       Typed V1 event / station / device configuration
   features/
     registration/  Point A — form, sticker, print/reprint, recovery
     feedback/      Point B — scanner, manual entry, questionnaire
     admin/         Device admin
+    campaign/
+      flying-flea/ Campaign config, questionnaire, and its own form components
     reporting/     Central reporting — review, analytics, export (loaded on demand)
     home/          Development navigation screen
   lib/
@@ -367,13 +403,17 @@ src/
   types/        Domain types: IDs, records, sync status
 server/           Central sync API, reconciliation engine and reporting API
                   (Hono + Postgres; exports via exceljs, server-only)
-shared/           The wire protocol, shared by client and server
+shared/
+  sync/         The wire protocol, shared by client and server
+  campaign/     The campaign questionnaire: version, keys, prompts, scale
 docs/
   architecture.md
   backup-restore-test.md
   offline-cold-start-test.md
   point-a-physical-test.md
   point-b-physical-test.md
+  flying-flea-campaign.md
+  flying-flea-qa.md
   reconciliation-test.md
   reporting-test.md
   sync-test.md
@@ -394,7 +434,8 @@ scripts/
 | 5 | Local counts, encrypted backup and restore — done |
 | 6 | Central server, device enrolment, idempotent sync — done |
 | 7 | Central reconciliation engine — done |
-| 8 | Central reporting, review and export *(current)* |
+| 8 | Central reporting, review and export — done |
+| 9 | Flying Flea redesign and campaign forms *(current)* |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

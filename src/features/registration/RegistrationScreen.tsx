@@ -1,12 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
-import { StationBadge } from '../../components/StationBadge'
+import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHeader'
+import { BrandButton } from '../../components/brand/BrandButton'
 import { stationFor } from '../../config/event'
-import type { RegistrationRecord } from '../../types'
-import { PrintableSticker } from './PrintableSticker'
+import { CampaignRegistrationForm } from '../campaign/flying-flea/components/CampaignRegistrationForm'
+import { needsLegacyCorrection } from '../campaign/flying-flea/campaignRecord'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { RegistrationForm } from './RegistrationForm'
+import type { CampaignRegistrationDraft } from '../campaign/flying-flea/registrationForm'
+import { emptyCampaignDraft } from '../campaign/flying-flea/registrationForm'
+import type {
+  CampaignFieldCorrections,
+  FlyingFleaColour,
+  FlyingFleaGender,
+  RegistrationRecord,
+} from '../../types'
+import { PrintableSticker } from './PrintableSticker'
 import { Sticker } from './Sticker'
 import { useRegistrationTerminal } from './useRegistrationTerminal'
 import type { RegistrationFormValues } from './validation'
+
+/**
+ * Re-opens a saved registration for correction.
+ *
+ * Every campaign answer is carried back into the form, so a correction to one
+ * field cannot silently blank the rest — `undefined` on a record means "not
+ * captured", and a form that started empty would write that back as an erasure.
+ */
+function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
+  const empty = emptyCampaignDraft()
+
+  return {
+    name: record.name,
+    phone: record.phone,
+    email: record.email,
+    vehicle: record.vehicle ?? null,
+    interestedColour:
+      (record.interestedColour as FlyingFleaColour | undefined) ??
+      empty.interestedColour,
+    location: record.location ?? empty.location,
+    gender: (record.gender as FlyingFleaGender | undefined) ?? '',
+    testRideAt: record.testRideAt ?? '',
+    drivingLicence: record.drivingLicence ?? '',
+    pincode: record.pincode ?? '',
+  }
+}
 
 /**
  * Point A — the registration terminal.
@@ -50,7 +87,9 @@ export function RegistrationScreen() {
     setFormGeneration((generation) => generation + 1)
   }
 
-  async function handleCorrection(values: RegistrationFormValues) {
+  async function handleCorrection(
+    values: RegistrationFormValues & CampaignFieldCorrections,
+  ) {
     if (saved === null) {
       return
     }
@@ -60,8 +99,17 @@ export function RegistrationScreen() {
 
   return (
     <article className="screen">
-      <h1>Point A — Registration</h1>
-      <StationBadge station={station} />
+      <FlyingFleaBrandHeader
+        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
+      />
+
+      <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>
+      <h1 className="ff-display ff-heading">
+        Test Ride <span className="ff-heading__accent">Registration</span>
+      </h1>
+      <p className="ff-sub">
+        {station.label} · {station.stationId}
+      </p>
 
       {deviceError !== null && (
         <p className="notice notice--error" role="alert">
@@ -84,7 +132,7 @@ export function RegistrationScreen() {
             </p>
           )}
 
-          <RegistrationForm
+          <CampaignRegistrationForm
             onSubmit={(values) => void submit(values)}
             busy={phase.status === 'saving'}
             resetKey={formGeneration}
@@ -174,35 +222,49 @@ export function RegistrationScreen() {
             >
               {editing ? 'Cancel correction' : 'Correct details'}
             </button>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={handleNextParticipant}
-            >
-              Next participant
-            </button>
+            <BrandButton type="button" onClick={handleNextParticipant}>
+              Next rider
+            </BrandButton>
           </div>
 
           {editing && (
             <section className="correction" aria-labelledby="correction-heading">
               <h3 id="correction-heading" className="section-title">
-                Correct contact details
+                Correct rider details
               </h3>
               <p className="screen__note">
-                The sticker does not need reprinting: it carries no name, phone
-                or email. Identity stays as issued.
+                The sticker does not need reprinting: it carries no name, phone,
+                email, licence or campaign answer. Identity stays as issued.
               </p>
-              <RegistrationForm
-                onSubmit={(values) => void handleCorrection(values)}
-                busy={false}
-                resetKey={-phase.record.revision}
-                submitLabel="Save correction"
-                initialValues={{
-                  name: phase.record.name,
-                  phone: phase.record.phone,
-                  email: phase.record.email,
-                }}
-              />
+              {/*
+                A registration captured before this campaign has no vehicle, no
+                colour and no venue, because nobody was asked. Correcting it
+                through the campaign form would demand all three and default the
+                colour — so an operator fixing a typo in an email address would
+                save a bike, a colour and a venue that this rider never chose.
+                Legacy records therefore keep the generic contact-details form.
+              */}
+              {needsLegacyCorrection(phase.record) ? (
+                <RegistrationForm
+                  onSubmit={(values) => void handleCorrection(values)}
+                  busy={false}
+                  resetKey={-phase.record.revision}
+                  submitLabel="Save correction"
+                  initialValues={{
+                    name: phase.record.name,
+                    phone: phase.record.phone,
+                    email: phase.record.email,
+                  }}
+                />
+              ) : (
+                <CampaignRegistrationForm
+                  onSubmit={(values) => void handleCorrection(values)}
+                  busy={false}
+                  resetKey={-phase.record.revision}
+                  submitLabel="Save correction"
+                  initialDraft={draftFrom(phase.record)}
+                />
+              )}
             </section>
           )}
         </section>

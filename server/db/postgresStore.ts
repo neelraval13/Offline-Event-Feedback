@@ -1,4 +1,5 @@
 import type { Sql } from 'postgres'
+import { FLYING_FLEA_FORM_VERSION } from '../../shared/campaign/flyingFlea'
 import type {
   CentralFeedback,
   CentralRegistration,
@@ -36,6 +37,11 @@ function toDay(value: unknown): string {
     : String(value).slice(0, 10)
 }
 
+/** Omits a column that holds no value, rather than reporting it as null. */
+function optional(key: string, value: unknown): Record<string, string> {
+  return value === null || value === undefined ? {} : { [key]: String(value) }
+}
+
 function mapRegistration(row: Row): CentralRegistration {
   return {
     kind: 'registration',
@@ -49,6 +55,18 @@ function mapRegistration(row: Row): CentralRegistration {
     name: String(row['name']),
     phone: String(row['phone']),
     email: String(row['email']),
+    /*
+     * Campaign fields are absent rather than null when they were never
+     * captured: the wire contract's optionals reject an explicit null, and a
+     * pre-campaign registration must still round-trip through this store.
+     */
+    ...optional('vehicle', row['vehicle']),
+    ...optional('interestedColour', row['interested_colour']),
+    ...optional('location', row['location']),
+    ...optional('gender', row['gender']),
+    ...optional('testRideAt', row['test_ride_at']),
+    ...optional('drivingLicence', row['driving_licence']),
+    ...optional('pincode', row['pincode']),
     createdAt: toIso(row['created_at']),
     updatedAt: toIso(row['updated_at']),
     revision: Number(row['revision']),
@@ -56,6 +74,31 @@ function mapRegistration(row: Row): CentralRegistration {
     lastReceivedAt: toIso(row['last_received_at']),
     lastUploaderDeviceId: String(row['last_uploader_device_id']),
   }
+}
+
+/**
+ * The questionnaire a stored row declares.
+ *
+ * Read from the column, never inferred from the answer keys. Inference would be
+ * a guess that looks right until two questionnaires share a key name, and the
+ * whole point of storing a version is not having to guess.
+ *
+ * An unrecognised version throws rather than being silently downgraded to
+ * `feedback-v1`. It can only mean this build is older than the row — a
+ * deployment rolled back under a database that has moved on — and answering a
+ * comparison with the wrong questionnaire would be worse than refusing: ingest
+ * would report a campaign response as `conflict` and a device would retry it
+ * forever.
+ */
+function readFormVersion(value: unknown): CentralFeedback['formVersion'] {
+  const version = String(value)
+
+  if (version === 'feedback-v1' || version === FLYING_FLEA_FORM_VERSION) {
+    return version
+  }
+
+  // The version only — never the answers, never the record.
+  throw new Error(`Unknown feedback form_version in the database: ${version}`)
 }
 
 function mapFeedback(row: Row): CentralFeedback {
@@ -73,7 +116,7 @@ function mapFeedback(row: Row): CentralFeedback {
     eventDay: toDay(row['event_day']),
     stationId: String(row['station_id']),
     deviceId: String(row['source_device_id']),
-    formVersion: 'feedback-v1',
+    formVersion: readFormVersion(row['form_version']),
     answers: row['answers'] as CentralFeedback['answers'],
     createdAt: toIso(row['created_at']),
     updatedAt: toIso(row['updated_at']),
@@ -148,6 +191,8 @@ export function createPostgresStore(sql: Sql): SyncStore {
           record_id, participant_id, public_code,
           event_id, event_day, station_id, source_device_id,
           name, phone, email,
+          vehicle, interested_colour, location, gender,
+          test_ride_at, driving_licence, pincode,
           created_at, updated_at, revision,
           first_received_at, last_received_at, last_uploader_device_id,
           content_changed_at
@@ -155,6 +200,10 @@ export function createPostgresStore(sql: Sql): SyncStore {
           ${record.recordId}, ${record.participantId}, ${record.publicCode},
           ${record.eventId}, ${record.eventDay}, ${record.stationId}, ${record.deviceId},
           ${record.name}, ${record.phone}, ${record.email},
+          ${record.vehicle ?? null}, ${record.interestedColour ?? null},
+          ${record.location ?? null}, ${record.gender ?? null},
+          ${record.testRideAt ?? null}, ${record.drivingLicence ?? null},
+          ${record.pincode ?? null},
           ${record.createdAt}, ${record.updatedAt}, ${record.revision},
           ${receivedAt}, ${receivedAt}, ${uploaderDeviceId},
           now()
@@ -195,6 +244,13 @@ export function createPostgresStore(sql: Sql): SyncStore {
           name = ${record.name},
           phone = ${record.phone},
           email = ${record.email},
+          vehicle = ${record.vehicle ?? null},
+          interested_colour = ${record.interestedColour ?? null},
+          location = ${record.location ?? null},
+          gender = ${record.gender ?? null},
+          test_ride_at = ${record.testRideAt ?? null},
+          driving_licence = ${record.drivingLicence ?? null},
+          pincode = ${record.pincode ?? null},
           updated_at = ${record.updatedAt},
           revision = ${record.revision},
           last_received_at = ${receivedAt},

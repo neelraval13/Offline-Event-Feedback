@@ -75,13 +75,24 @@ interface SeededRegistration {
   publicCode: string
 }
 
+/** The campaign answers a registration may carry. All optional. */
+interface CampaignSeed {
+  vehicle?: string
+  interestedColour?: string
+  location?: string
+  gender?: string
+  testRideAt?: string
+  drivingLicence?: string
+  pincode?: string
+}
+
 async function seedRegistration(
   overrides: {
     name?: string
     phone?: string
     email?: string
     createdAt?: string
-  } = {},
+  } & CampaignSeed = {},
 ): Promise<SeededRegistration> {
   codeSequence += 1
   const record = {
@@ -96,6 +107,8 @@ async function seedRegistration(
       record_id, participant_id, public_code,
       event_id, event_day, station_id, source_device_id,
       name, phone, email,
+      vehicle, interested_colour, location, gender,
+      test_ride_at, driving_licence, pincode,
       created_at, updated_at, revision,
       first_received_at, last_received_at, last_uploader_device_id,
       content_changed_at
@@ -105,6 +118,10 @@ async function seedRegistration(
       ${overrides.name ?? `Participant ${codeSequence}`},
       ${overrides.phone ?? `+91 98765 ${String(10000 + codeSequence)}`},
       ${overrides.email ?? `p${codeSequence}@example.com`},
+      ${overrides.vehicle ?? null}, ${overrides.interestedColour ?? null},
+      ${overrides.location ?? null}, ${overrides.gender ?? null},
+      ${overrides.testRideAt ?? null}, ${overrides.drivingLicence ?? null},
+      ${overrides.pincode ?? null},
       ${createdAt}, ${createdAt}, 1,
       now(), now(), ${DEVICE},
       now()
@@ -928,7 +945,18 @@ describeDb('reporting API', () => {
       const analytics = overview['analytics'] as unknown as Record<string, unknown>
       expect(analytics['analysedResponses']).toBe(1)
       expect(analytics['averageOverallRating']).toBe(5)
-      expect(analytics['unreadableFormVersions']).toBe(1)
+      /*
+       * The event-wide count of responses no analyser can read. Each analyser is
+       * now handed only its own questionnaire's responses, so the per-analyser
+       * counter is zero by construction and this is where an unknown version
+       * becomes visible.
+       */
+      expect(overview['unreadableResponses']).toBe(1)
+      expect(
+        (overview['responsesByFormVersion'] as unknown as Record<string, number>)[
+          'feedback-v2'
+        ],
+      ).toBe(1)
 
       // Registration summaries: the v2 participant gets no summary at all.
       const registrations = await json(
@@ -1041,6 +1069,328 @@ describeDb('reporting API', () => {
       expect(detail['overallRating']).toBeNull()
       expect(detail['experience']).toBeNull()
       expect(detail['recommend']).toBeNull()
+    })
+  })
+
+  /* ------------------------------------------------------------------ *
+   * Flying Flea campaign
+   * ------------------------------------------------------------------ */
+
+  describe('campaign registrations', () => {
+    const RIDER = {
+      vehicle: 'Vehicle 3',
+      interestedColour: 'Storm Black',
+      location: 'Prestige Tech Park',
+      gender: 'Female',
+      testRideAt: '2026-01-01T10:30',
+      drivingLicence: 'KA0120200001234',
+      pincode: '560048',
+    }
+
+    it('keeps the licence number out of the participant list', async () => {
+      await seedRegistration(RIDER)
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request('/v1/reporting/registrations/query', {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID }),
+        }),
+      )
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      const row = rows[0] as Record<string, unknown>
+
+      // The campaign fields a list is actually asked about are there...
+      expect(row['vehicle']).toBe(RIDER.vehicle)
+      expect(row['interestedColour']).toBe(RIDER.interestedColour)
+      expect(row['location']).toBe(RIDER.location)
+      expect(row['pincode']).toBe(RIDER.pincode)
+
+      /*
+       * ...and the licence number is not, anywhere in the payload. A list
+       * answers no question that needs it, and one screen holding every rider's
+       * licence is a different kind of exposure from one row holding one.
+       */
+      expect('drivingLicence' in row).toBe(false)
+      expect(JSON.stringify(body)).not.toContain(RIDER.drivingLicence)
+    })
+
+    it('shows the licence on the privileged detail view, labelled', async () => {
+      const registration = await seedRegistration(RIDER)
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/registrations/${registration.recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+      const detail = body['registration'] as unknown as Record<string, unknown>
+
+      expect(detail['drivingLicence']).toBe(RIDER.drivingLicence)
+      // The test-ride slot is a wall-clock time at a venue, stored as captured.
+      expect(detail['testRideAt']).toBe('2026-01-01T10:30')
+    })
+
+    it('leaves campaign fields null for a registration captured before them', async () => {
+      const registration = await seedRegistration()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/registrations/${registration.recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+      const detail = body['registration'] as unknown as Record<string, unknown>
+
+      // Null, never a default. The rider chose no vehicle because nobody asked.
+      expect(detail['vehicle']).toBeNull()
+      expect(detail['drivingLicence']).toBeNull()
+      expect(detail['name']).toBeDefined()
+    })
+
+    it('exports the campaign fields, blank where they were never captured', async () => {
+      await seedRegistration(RIDER)
+      await seedRegistration()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const csv = await (
+        await app.request(
+          `/v1/reporting/export/registrations.csv?eventId=${EVENT_ID}&runId=${runId}`,
+          { headers: AUTH },
+        )
+      ).text()
+      const [header, ...rows] = csv.trimEnd().split('\r\n')
+      const columns = (header ?? '').split(',')
+
+      for (const column of [
+        'vehicle',
+        'interested_colour',
+        'location',
+        'gender',
+        'test_ride_at',
+        'driving_licence',
+        'pincode',
+      ]) {
+        expect(columns).toContain(column)
+      }
+
+      expect(rows).toHaveLength(2)
+      expect(csv).toContain('Vehicle 3')
+      expect(csv).toContain('Storm Black')
+      expect(csv).toContain(RIDER.drivingLicence)
+    })
+  })
+
+  describe('campaign feedback', () => {
+    const CAMPAIGN_ANSWERS = {
+      testRideExperience: 7,
+      rotaryKnobUsage: 6,
+      rideModesExperience: 5,
+      overallExperienceRating: 7,
+      topThreeFeatures: 'Torque, brakes, the silence',
+      overallExperienceComments: 'Brilliant',
+    }
+
+    async function seedCampaignResponse(publicCode: string, participantId?: string) {
+      return seedFeedback({
+        publicCode,
+        ...(participantId === undefined ? {} : { participantId }),
+        formVersion: 'flying-flea-feedback-v1',
+        answers: CAMPAIGN_ANSWERS,
+      })
+    }
+
+    it('analyses the campaign questionnaire on its own scale', async () => {
+      const rider = await seedRegistration()
+      await seedCampaignResponse(rider.publicCode, rider.participantId)
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/overview?eventId=${EVENT_ID}`, {
+          headers: AUTH,
+        }),
+      )
+      const campaign = body['campaignAnalytics'] as unknown as Record<
+        string,
+        never
+      >
+      const ratings = campaign['ratings'] as unknown as Record<string, unknown>[]
+
+      expect(campaign['analysedResponses']).toBe(1)
+      expect(
+        ratings.find((rating) => rating['key'] === 'testRideExperience')?.[
+          'average'
+        ],
+      ).toBe(7)
+      // The question's own wording travels with its figures.
+      expect(
+        ratings.find((rating) => rating['key'] === 'rotaryKnobUsage')?.['prompt'],
+      ).toBe('How do you rate usage of the rotary knob for changing modes?')
+
+      // And the two questionnaires are reported separately, never merged.
+      const byVersion = body['responsesByFormVersion'] as unknown as Record<
+        string,
+        number
+      >
+      expect(byVersion['flying-flea-feedback-v1']).toBe(1)
+      expect(body['unreadableResponses']).toBe(0)
+    })
+
+    it('never mixes a 1-5 rating into a 1-7 average', async () => {
+      const campaignRider = await seedRegistration()
+      const legacyRider = await seedRegistration()
+      await seedCampaignResponse(campaignRider.publicCode, campaignRider.participantId)
+      await seedFeedback({
+        publicCode: legacyRider.publicCode,
+        answers: { overall_rating: 1, experience: 'very_poor', recommend: false },
+      })
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/overview?eventId=${EVENT_ID}`, {
+          headers: AUTH,
+        }),
+      )
+      const campaign = body['campaignAnalytics'] as unknown as Record<string, never>
+      const legacy = body['analytics'] as unknown as Record<string, never>
+      const ratings = campaign['ratings'] as unknown as Record<string, unknown>[]
+
+      expect(campaign['analysedResponses']).toBe(1)
+      expect(legacy['analysedResponses']).toBe(1)
+      // The legacy 1 does not touch the campaign's 7, and vice versa.
+      expect(
+        ratings.find((rating) => rating['key'] === 'overallExperienceRating')?.[
+          'average'
+        ],
+      ).toBe(7)
+      expect(legacy['averageOverallRating']).toBe(1)
+    })
+
+    it('carries a campaign summary on the participant detail view', async () => {
+      /*
+       * The registration detail lists a participant's responses, and each line
+       * summarises one. Without these fields the screen had nothing to show for
+       * a campaign response and told the operator the build could not read it.
+       */
+      const rider = await seedRegistration()
+      await seedCampaignResponse(rider.publicCode, rider.participantId)
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/registrations/${rider.recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+      const detail = body['registration'] as unknown as Record<string, unknown>
+      const responses = detail['feedback'] as unknown as Record<string, unknown>[]
+
+      expect(responses).toHaveLength(1)
+      expect(responses[0]?.['formVersion']).toBe('flying-flea-feedback-v1')
+      expect(responses[0]?.['campaignSummary']).toEqual({
+        testRideExperience: 7,
+        rotaryKnobUsage: 6,
+        rideModesExperience: 5,
+        overallExperienceRating: 7,
+      })
+      // The v1 summary fields stay empty: they belong to another questionnaire.
+      expect(responses[0]?.['overallRating']).toBeNull()
+    })
+
+    it('leaves the campaign summary null on a feedback-v1 response', async () => {
+      const rider = await seedRegistration()
+      await seedFeedback({ publicCode: rider.publicCode })
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/registrations/${rider.recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+      const detail = body['registration'] as unknown as Record<string, unknown>
+      const responses = detail['feedback'] as unknown as Record<string, unknown>[]
+
+      expect(responses[0]?.['campaignSummary']).toBeNull()
+      expect(responses[0]?.['overallRating']).toBe(4)
+    })
+
+    it('renders the campaign answers on the detail view', async () => {
+      const rider = await seedRegistration()
+      const recordId = await seedCampaignResponse(
+        rider.publicCode,
+        rider.participantId,
+      )
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/feedback/${recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+      const detail = body['feedback'] as unknown as Record<string, unknown>
+
+      expect(detail['formVersion']).toBe('flying-flea-feedback-v1')
+      expect(detail['answers']).toEqual(CAMPAIGN_ANSWERS)
+      // The v1 summary fields stay empty: they belong to another questionnaire.
+      expect(detail['overallRating']).toBeNull()
+      expect(detail['experience']).toBeNull()
+      expect(detail['recommend']).toBeNull()
+    })
+
+    it('exports campaign answers in their own columns', async () => {
+      const rider = await seedRegistration()
+      await seedCampaignResponse(rider.publicCode, rider.participantId)
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const csv = await (
+        await app.request(
+          `/v1/reporting/export/feedback.csv?eventId=${EVENT_ID}&runId=${runId}`,
+          { headers: AUTH },
+        )
+      ).text()
+      const [header, row] = csv.trimEnd().split('\r\n')
+      const columns = (header ?? '').split(',')
+      const values = (row ?? '').split(',')
+
+      const at = (name: string) => values[columns.indexOf(name)]
+
+      expect(at('test_ride_experience_rating')).toBe('7')
+      expect(at('rotary_knob_rating')).toBe('6')
+      expect(at('ride_modes_rating')).toBe('5')
+      expect(at('overall_experience_rating')).toBe('7')
+      expect(csv).toContain('Torque, brakes, the silence')
+      // The v1 columns stay blank on a campaign row.
+      expect(at('overall_rating')).toBe('')
+      expect(at('experience')).toBe('')
+    })
+
+    it('classifies campaign responses exactly like any other', async () => {
+      /*
+       * Reconciliation is questionnaire-agnostic and must stay that way: it
+       * matches on identity, not on what was asked. This is the regression that
+       * would catch form-specific logic creeping into Phase 7.
+       */
+      const matched = await seedRegistration()
+      const ambiguous = await seedRegistration()
+      await seedRegistration()
+
+      await seedCampaignResponse(matched.publicCode, matched.participantId)
+      await seedCampaignResponse(ambiguous.publicCode)
+      await seedCampaignResponse(ambiguous.publicCode)
+      await seedCampaignResponse('A1-B8EFD9-99999-X')
+
+      const { output } = await runReconciliation(sql, EVENT_ID)
+
+      expect(output.counts.matchedRegistrations).toBe(1)
+      expect(output.counts.registrationsWithMultipleFeedback).toBe(1)
+      expect(output.counts.registrationsWithoutFeedback).toBe(1)
+      expect(output.counts.feedbackWithoutRegistration).toBe(1)
+      expect(output.counts.feedbackInMultipleGroups).toBe(2)
     })
   })
 

@@ -33,6 +33,23 @@ export function toRegistrationWire(
     name: record.name,
     phone: record.phone,
     email: record.email,
+    /*
+     * Campaign fields, copied only when present. Spreading `undefined` into the
+     * object would put the key on the wire with a null value, and the schema
+     * rejects a present-but-empty optional — a record captured before the
+     * campaign would stop uploading.
+     */
+    ...(record.vehicle === undefined ? {} : { vehicle: record.vehicle }),
+    ...(record.interestedColour === undefined
+      ? {}
+      : { interestedColour: record.interestedColour }),
+    ...(record.location === undefined ? {} : { location: record.location }),
+    ...(record.gender === undefined ? {} : { gender: record.gender }),
+    ...(record.testRideAt === undefined ? {} : { testRideAt: record.testRideAt }),
+    ...(record.drivingLicence === undefined
+      ? {}
+      : { drivingLicence: record.drivingLicence }),
+    ...(record.pincode === undefined ? {} : { pincode: record.pincode }),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     revision: record.revision,

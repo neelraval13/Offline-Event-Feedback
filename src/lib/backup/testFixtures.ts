@@ -11,6 +11,7 @@ import {
   isoTimestamp,
   stationId,
   type DeviceId,
+  type FeedbackQuestionnairePayload,
   type FeedbackRecord,
   type RegistrationRecord,
 } from '../../types'
@@ -84,11 +85,42 @@ export function makeRegistration(
   }
 }
 
+/**
+ * `overrides` takes the questionnaire as a pair.
+ *
+ * `Partial<FeedbackRecord>` would let a caller override `formVersion` alone and
+ * leave the old questionnaire's answers behind it — the exact mismatch the
+ * discriminated payload exists to prevent, reintroduced in the fixtures.
+ */
+type FeedbackOverrides = Partial<Omit<FeedbackRecord, 'formVersion' | 'answers'>> &
+  Partial<FeedbackQuestionnairePayload>
+
 export function makeFeedback(
   registration: RegistrationRecord,
-  overrides: Partial<FeedbackRecord> = {},
+  overrides: FeedbackOverrides = {},
   device: DeviceId = SOURCE_DEVICE,
 ): FeedbackRecord {
+  /*
+   * Assembled from whichever half the caller supplied, then asserted once.
+   *
+   * The assertion is deliberate and is confined to fixtures: the validator
+   * suites exist to prove that a *hostile* file — including one whose answers do
+   * not match its declared version — is refused, and they cannot build such a
+   * file through a type that makes it impossible. Production code has no such
+   * escape hatch.
+   */
+  const questionnaire = {
+    formVersion: overrides.formVersion ?? 'feedback-v1',
+    answers: overrides.answers ?? {
+      overall_rating: 4,
+      experience: 'good',
+      recommend: true,
+      comments: 'Well organised',
+    },
+  } as FeedbackQuestionnairePayload
+
+  const { formVersion: _version, answers: _answers, ...rest } = overrides
+
   return {
     kind: 'feedback',
     recordId: newRecordId(),
@@ -103,14 +135,8 @@ export function makeFeedback(
     captureMethod: 'qr',
     publicCode: registration.publicCode,
     participantId: registration.participantId,
-    formVersion: 'feedback-v1',
-    answers: {
-      overall_rating: 4,
-      experience: 'good',
-      recommend: true,
-      comments: 'Well organised',
-    },
-    ...overrides,
+    ...questionnaire,
+    ...rest,
   }
 }
 

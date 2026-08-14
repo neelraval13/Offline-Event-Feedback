@@ -1,0 +1,70 @@
+/*
+ * Flying Flea design tokens.
+ *
+ * Every value here is taken from the campaign package's stylesheet
+ * (`google-hosted/Index.html`, `:root`) rather than sampled from a screenshot,
+ * so the field application and the campaign's own form agree exactly.
+ *
+ * This is the only place these values are written down. A component that wants
+ * the lime accent asks for `var(--ff-accent)`; nothing hardcodes `#D3FF00`,
+ * because a campaign that later ships a different accent should be one edit.
+ *
+ * Two accents, and they are not interchangeable — this is the part of the
+ * supplied design most easily got wrong:
+ *
+ *   --ff-accent (lime) is brand and display: eyebrows, step numbers, the last
+ *     word of a heading, a lit rating lamp.
+ *   --ff-interactive (teal) is everything you can operate: focus rings, the
+ *     submit pill, selected states, live badges.
+ */
+
+:root {
+  /* Surfaces */
+  --ff-bg: #0b0d0e;
+  --ff-surface: #101213;
+  --ff-surface-elevated: #17191b;
+  --ff-field: #14171a;
+  --ff-border: rgba(255, 255, 255, 0.1);
+  --ff-border-strong: rgba(255, 255, 255, 0.22);
+
+  /* Type */
+  --ff-text: #f2f3f4;
+  --ff-muted: #9ba1a6;
+
+  /* Accents */
+  --ff-accent: #d3ff00;
+  --ff-accent-glow: rgba(211, 255, 0, 0.45);
+  --ff-interactive: #3ac6be;
+  --ff-interactive-soft: rgba(58, 198, 190, 0.14);
+  --ff-interactive-line: rgba(58, 198, 190, 0.55);
+  --ff-on-interactive: #06211f;
+  --ff-error: #ff5a5a;
+  --ff-success: #3ac6be;
+
+  /* Shape */
+  --ff-radius-card: 22px;
+  --ff-radius-control: 12px;
+  --ff-radius-pill: 999px;
+
+  /*
+   * Type stack.
+   *
+   * The supplied design uses Anton for display and Inter for text, loaded from
+   * Google Fonts. The package ships no font files, and this application must
+   * work with no network, so the CDN link is deliberately NOT carried over.
+   * These stacks name the licensed families first — a device that already has
+   * them installed gets the intended type — and fall back to system faces with
+   * comparable proportions. See docs/flying-flea-campaign.md.
+   */
+  --ff-font-text:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --ff-font-display:
+    'Anton', 'Inter', 'Haettenschweiler', 'Arial Narrow Bold', Impact,
+    var(--ff-font-text);
+
+  /* Spacing rhythm used by the brand shell */
+  --ff-gap-tight: 8px;
+  --ff-gap: 14px;
+  --ff-gap-section: 26px;
+}

@@ -1,4 +1,5 @@
-import type { FeedbackAnswers, FeedbackFormVersion } from './feedback'
+import type { FlyingFleaRegistrationFields } from './campaign'
+import type { FeedbackQuestionnairePayload } from './feedback'
 import type {
   DeviceId,
   EventDay,
@@ -63,8 +64,21 @@ export type RecordContext = Pick<
 /**
  * A registration captured at Point A. This is the only record kind that holds
  * PII (see the privacy boundary in docs/architecture.md).
+ *
+ * The campaign fields are mixed in as optional members rather than nested under
+ * a `campaign` key. Two reasons, both about what reads this later: every
+ * consumer — the wire contract, the central table, the CSV — wants them flat,
+ * and optionality is what lets a device that has held records since Phase 1
+ * keep reading its own history after this build lands.
+ *
+ * Which of them may change after issue is a decision recorded in
+ * `docs/flying-flea-campaign.md`: identity is immutable, contact and campaign
+ * details are correctable, and a correction is a new revision of the same
+ * record rather than a new participant.
  */
-export interface RegistrationRecord extends OfflineRecordMetadata {
+export interface RegistrationRecord
+  extends OfflineRecordMetadata,
+    FlyingFleaRegistrationFields {
   readonly kind: 'registration'
   readonly participantId: ParticipantId
   readonly publicCode: PublicParticipantCode
@@ -96,26 +110,26 @@ export type CapturedParticipantIdentity =
       readonly publicCode: PublicParticipantCode
     }
 
-/**
- * A feedback submission captured at Point B.
- *
+/*
  * Identity fields are stored flat rather than nested so IndexedDB can index
  * them directly. `participantId` is absent — not null — when staff typed the
  * fallback code, which keeps it out of the sparse IndexedDB index.
  */
-export interface FeedbackRecord extends OfflineRecordMetadata {
-  readonly kind: 'feedback'
-  readonly captureMethod: IdentityCaptureMethod
-  readonly publicCode: PublicParticipantCode
-  readonly participantId?: ParticipantId
-  /**
-   * Which questionnaire produced `answers`. Persisted so that changing the
-   * questions later leaves already-collected responses interpretable rather
-   * than ambiguous.
-   */
-  readonly formVersion: FeedbackFormVersion
-  readonly answers: FeedbackAnswers
-}
+/**
+ * A feedback submission captured at Point B.
+ *
+ * `formVersion` and `answers` arrive together as a
+ * {@link FeedbackQuestionnairePayload}: the questionnaire a record declares and
+ * the answers it carries are one fact, and a type that let them be set
+ * independently let them disagree.
+ */
+export type FeedbackRecord = OfflineRecordMetadata &
+  FeedbackQuestionnairePayload & {
+    readonly kind: 'feedback'
+    readonly captureMethod: IdentityCaptureMethod
+    readonly publicCode: PublicParticipantCode
+    readonly participantId?: ParticipantId
+  }
 
 /** Any record produced in the field and awaiting synchronisation. */
 export type OfflineRecord = RegistrationRecord | FeedbackRecord

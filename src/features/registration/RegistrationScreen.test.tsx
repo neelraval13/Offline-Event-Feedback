@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RegistrationScreen } from './RegistrationScreen'
+import { fillCampaignRegistration } from '../campaign/flying-flea/testSupport'
 import { db } from '../../lib/storage'
 import {
   countRegistrations,
@@ -36,7 +37,7 @@ function normalizeSvg(svg: string): string {
 
 const PARTICIPANT = {
   name: 'Ada Lovelace',
-  phone: '+44 20 7946 0958',
+  phone: '9876543210',
   email: 'ada@example.com',
 }
 
@@ -57,10 +58,7 @@ afterEach(() => {
 
 async function fillForm(values = PARTICIPANT) {
   const user = userEvent.setup()
-  await user.clear(screen.getByLabelText('Name'))
-  await user.type(screen.getByLabelText('Name'), values.name)
-  await user.type(screen.getByLabelText('Phone number'), values.phone)
-  await user.type(screen.getByLabelText('Email address'), values.email)
+  await fillCampaignRegistration(user, values)
   return user
 }
 
@@ -82,7 +80,7 @@ describe('form behaviour', () => {
   it('focuses Name when the screen opens', async () => {
     render(<RegistrationScreen />)
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByLabelText('Name')),
+      expect(document.activeElement).toBe(screen.getByLabelText(/^Name/)),
     )
   })
 
@@ -92,7 +90,9 @@ describe('form behaviour', () => {
 
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
-    expect(await screen.findAllByRole('alert')).toHaveLength(3)
+    // The campaign's five required fields: vehicle, name, email, location and
+    // phone. Nothing is saved and no identity is issued.
+    expect(await screen.findAllByRole('alert')).toHaveLength(5)
     expect(screen.queryByTestId('sticker')).toBeNull()
     expect(await countRegistrations(db)).toBe(0)
   })
@@ -102,7 +102,9 @@ describe('form behaviour', () => {
     const user = await fillForm({ ...PARTICIPANT, phone: '12' })
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
-    expect(await screen.findByText(/Phone number must have between/)).toBeDefined()
+    expect(
+      await screen.findByText('Enter a valid 10-digit mobile number.'),
+    ).toBeDefined()
     expect(await countRegistrations(db)).toBe(0)
   })
 
@@ -121,10 +123,10 @@ describe('form behaviour', () => {
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
     await screen.findByText('Enter a valid email address.')
-    expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Ada Lovelace')
-    expect(screen.getByLabelText('Phone number')).toHaveProperty(
+    expect(screen.getByLabelText(/^Name/)).toHaveProperty('value', 'Ada Lovelace')
+    expect(screen.getByLabelText(/^Phone Number/)).toHaveProperty(
       'value',
-      '+44 20 7946 0958',
+      PARTICIPANT.phone,
     )
   })
 
@@ -132,13 +134,15 @@ describe('form behaviour', () => {
     render(<RegistrationScreen />)
     await registerParticipant({
       name: '  Ada Lovelace  ',
-      phone: ' +44 20 7946 0958 ',
+      // The campaign stores a bare 10-digit mobile: spaces and dashes are how
+      // people type a number, not part of it.
+      phone: ' 98765 43210 ',
       email: '  ada@example.com  ',
     })
 
     const record = await onlyRecord()
     expect(record.name).toBe('Ada Lovelace')
-    expect(record.phone).toBe('+44 20 7946 0958')
+    expect(record.phone).toBe('9876543210')
     expect(record.email).toBe('ada@example.com')
   })
 
@@ -146,7 +150,7 @@ describe('form behaviour', () => {
     render(<RegistrationScreen />)
     const user = await fillForm()
 
-    await user.type(screen.getByLabelText('Email address'), '{Enter}')
+    await user.type(screen.getByLabelText(/^Email ID/), '{Enter}')
 
     await screen.findByTestId('sticker')
     expect(await countRegistrations(db)).toBe(1)
@@ -263,7 +267,7 @@ describe('identity comes from the saved record', () => {
     const user = await registerParticipant()
     const first = await onlyRecord()
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     expect(await getRegistrationByRecordId(db, first.recordId)).toEqual(first)
     expect(await countRegistrations(db)).toBe(1)
@@ -273,11 +277,11 @@ describe('identity comes from the saved record', () => {
     render(<RegistrationScreen />)
     const user = await registerParticipant()
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
-    const name = await screen.findByLabelText('Name')
+    const name = await screen.findByLabelText(/^Name/)
     expect(name).toHaveProperty('value', '')
-    expect(screen.getByLabelText('Email address')).toHaveProperty('value', '')
+    expect(screen.getByLabelText(/^Email ID/)).toHaveProperty('value', '')
     await waitFor(() => expect(document.activeElement).toBe(name))
   })
 
@@ -286,7 +290,7 @@ describe('identity comes from the saved record', () => {
     const user = await registerParticipant()
     const first = await onlyRecord()
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
     await registerParticipant({ ...PARTICIPANT, name: 'Grace Hopper' })
 
     const records = await listRecentRegistrations(db, 10)
@@ -443,9 +447,9 @@ describe('correcting contact details', () => {
     await user.click(screen.getByRole('button', { name: 'Correct details' }))
 
     const correction = screen.getByRole('region', {
-      name: 'Correct contact details',
+      name: 'Correct rider details',
     })
-    const email = within(correction).getByLabelText('Email address')
+    const email = within(correction).getByLabelText(/^Email ID/)
     await user.clear(email)
     await user.type(email, 'ada.corrected@example.com')
     await user.click(
@@ -475,9 +479,9 @@ describe('correcting contact details', () => {
 
     await user.click(screen.getByRole('button', { name: 'Correct details' }))
     const correction = screen.getByRole('region', {
-      name: 'Correct contact details',
+      name: 'Correct rider details',
     })
-    const name = within(correction).getByLabelText('Name')
+    const name = within(correction).getByLabelText(/^Name/)
     await user.clear(name)
     await user.type(name, 'Augusta Ada King')
     await user.click(
@@ -562,7 +566,7 @@ describe('recovery after a page refresh', () => {
   it('lists newest first and shows no participant names', async () => {
     render(<RegistrationScreen />)
     const user = await registerParticipant()
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
     await registerParticipant({ ...PARTICIPANT, name: 'Grace Hopper' })
 
     const recent = await screen.findByRole('region', {

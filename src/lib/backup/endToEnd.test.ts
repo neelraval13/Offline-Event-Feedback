@@ -337,3 +337,110 @@ describe('snapshot consistency', () => {
     )
   })
 })
+
+describe('campaign records survive a backup and restore', () => {
+  const RIDER = {
+    vehicle: 'Vehicle 2',
+    interestedColour: 'Storm Black' as const,
+    location: 'Prestige Tech Park',
+    gender: 'Female' as const,
+    testRideAt: '2026-01-01T10:30',
+    drivingLicence: 'KA0120200001234',
+    pincode: '560048',
+  }
+
+  const CAMPAIGN_ANSWERS = {
+    testRideExperience: 7,
+    rotaryKnobUsage: 6,
+    rideModesExperience: 5,
+    overallExperienceRating: 7,
+    topThreeFeatures: 'Torque, brakes, the silence',
+    overallExperienceComments: 'Brilliant',
+  } as const
+
+  it('carries every campaign field and answer to a replacement device', async () => {
+    /*
+     * The recovery this protects: a tablet dies mid-event and the replacement
+     * must hold the same registrations, campaign answers included. A restore
+     * that dropped the vehicle would leave the event with riders it cannot tell
+     * apart by bike.
+     */
+    await seedDatabase(database, { registrations: 0 })
+    const registration = makeRegistration(1, RIDER)
+    const feedback = makeFeedback(registration, {
+      formVersion: 'flying-flea-feedback-v1',
+      answers: CAMPAIGN_ANSWERS,
+    })
+    await database.registrations.add(registration)
+    await database.feedback.add(feedback)
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    expect(file.ok).toBe(true)
+    if (!file.ok) {
+      return
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      // Verified first, exactly as an operator would: the file is decrypted and
+      // validated before a single record is written.
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      expect(verified.ok).toBe(true)
+      if (!verified.ok) {
+        return
+      }
+
+      const result = await restoreBackup(replacement, verified.payload)
+      expect(result.ok).toBe(true)
+
+      const restored = await replacement.registrations.get(registration.recordId)
+      expect(restored).toMatchObject(RIDER)
+
+      const restoredFeedback = await replacement.feedback.get(feedback.recordId)
+      expect(restoredFeedback?.formVersion).toBe('flying-flea-feedback-v1')
+      expect(restoredFeedback?.answers).toEqual(CAMPAIGN_ANSWERS)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+
+  it('restores a file holding both questionnaires', async () => {
+    // A device that worked a generic event and then the campaign holds records
+    // of each. A restore that validated everything against one shape would
+    // reject a perfectly good backup.
+    await seedDatabase(database, { registrations: 0 })
+    const first = makeRegistration(1, RIDER)
+    const second = makeRegistration(2)
+    const legacy = makeFeedback(first)
+    const campaign = makeFeedback(second, {
+      formVersion: 'flying-flea-feedback-v1',
+      answers: CAMPAIGN_ANSWERS,
+    })
+    await database.registrations.bulkAdd([first, second])
+    await database.feedback.bulkAdd([legacy, campaign])
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    expect(file.ok).toBe(true)
+    if (!file.ok) {
+      return
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      expect(verified.ok).toBe(true)
+      if (!verified.ok) {
+        return
+      }
+
+      const result = await restoreBackup(replacement, verified.payload)
+
+      expect(result.ok).toBe(true)
+      expect(await replacement.feedback.count()).toBe(2)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+})

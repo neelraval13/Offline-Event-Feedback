@@ -17,7 +17,10 @@ import type {
   SyncBatchResponse,
   SyncRecordResult,
 } from '../../shared/sync/protocol'
-import { MAX_BATCH_RECORDS } from '../../shared/sync/protocol'
+import {
+  MAX_BATCH_RECORDS,
+  SYNC_PROTOCOL_VERSION,
+} from '../../shared/sync/protocol'
 
 const ENROLLMENT_SECRET = 'a-shared-enrolment-code'
 const ORIGIN = 'http://localhost:5173'
@@ -604,5 +607,224 @@ describe('responses carry no participant data', () => {
     ]) {
       expect(text).not.toContain(secret)
     }
+  })
+})
+
+describe('campaign fields on the wire', () => {
+  const CAMPAIGN = {
+    vehicle: 'Vehicle 2',
+    interestedColour: 'Storm Black' as const,
+    location: 'Prestige Tech Park',
+    gender: 'Female' as const,
+    testRideAt: '2026-01-01T10:30',
+    drivingLicence: 'KA0120200001234',
+    pincode: '560048',
+  }
+
+  it('accepts a registration carrying them', async () => {
+    const token = await enrolledToken()
+    const record = registration(CAMPAIGN)
+
+    const { body } = await postBatch(token, batch([record]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.registrations.get(record.recordId)).toMatchObject(CAMPAIGN)
+  })
+
+  it('still accepts a registration without them', async () => {
+    /*
+     * A device that has not been updated, or a record captured before the
+     * campaign existed and only now reaching the server. Making the fields
+     * required would have stranded exactly those records.
+     */
+    const token = await enrolledToken()
+    const record = registration()
+
+    const { body } = await postBatch(token, batch([record]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.registrations.get(record.recordId)?.vehicle).toBeUndefined()
+  })
+
+  it('applies a correction to them at a higher revision', async () => {
+    const token = await enrolledToken()
+    const record = registration({ ...CAMPAIGN, vehicle: 'Vehicle 1' })
+    await postBatch(token, batch([record]))
+
+    const corrected = {
+      ...record,
+      vehicle: 'Vehicle 4',
+      pincode: '560103',
+      revision: 2,
+      updatedAt: '2026-01-01T09:30:00.000Z',
+    }
+    const { body } = await postBatch(token, batch([corrected]))
+
+    expect(statusOf(body, record.recordId)).toMatchObject({
+      status: 'accepted',
+      serverRevision: 2,
+    })
+    expect(store.registrations.get(record.recordId)).toMatchObject({
+      vehicle: 'Vehicle 4',
+      pincode: '560103',
+    })
+  })
+
+  it('treats a campaign field changed at the same revision as a conflict', async () => {
+    // Two devices holding the same revision but disagreeing about what was
+    // captured. Accepting whichever arrived last would lose an edit silently.
+    const token = await enrolledToken()
+    const record = registration(CAMPAIGN)
+    await postBatch(token, batch([record]))
+
+    const { body } = await postBatch(
+      token,
+      batch([{ ...record, vehicle: 'Vehicle 4' }]),
+    )
+
+    expect(statusOf(body, record.recordId).status).toBe('conflict')
+    expect(store.registrations.get(record.recordId)?.vehicle).toBe(
+      CAMPAIGN.vehicle,
+    )
+  })
+
+  it('rejects a test-ride time that is not a local date and time', async () => {
+    const token = await enrolledToken()
+    const record = registration({ testRideAt: '2026-01-01T10:30:00.000Z' })
+
+    const { status } = await postBatch(token, batch([record]))
+
+    // The schema takes the wall-clock form the campaign control produces; an
+    // instant would mean the venue slot had been silently timezone-shifted.
+    expect(status).toBe(400)
+  })
+})
+
+describe('campaign feedback on the wire', () => {
+  const CAMPAIGN_ANSWERS = {
+    testRideExperience: 7,
+    rotaryKnobUsage: 6,
+    rideModesExperience: 5,
+    overallExperienceRating: 7,
+    topThreeFeatures: 'Torque',
+    overallExperienceComments: 'Brilliant',
+  } as const
+
+  it('accepts a campaign response with its version and answers intact', async () => {
+    const token = await enrolledToken()
+    const record = feedback({
+      formVersion: 'flying-flea-feedback-v1',
+      answers: CAMPAIGN_ANSWERS,
+    })
+
+    const { body } = await postBatch(token, batch([record]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.feedback.get(record.recordId)).toMatchObject({
+      formVersion: 'flying-flea-feedback-v1',
+      answers: CAMPAIGN_ANSWERS,
+    })
+  })
+
+  it('still accepts a feedback-v1 response', async () => {
+    const token = await enrolledToken()
+    const record = feedback()
+
+    const { body } = await postBatch(token, batch([record]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.feedback.get(record.recordId)?.formVersion).toBe('feedback-v1')
+  })
+
+  it('refuses a record whose declared version and answers disagree', async () => {
+    /*
+     * The failure this closes: a record declaring the campaign questionnaire
+     * while carrying the old one's answers parses cleanly if the two are
+     * validated independently, and lands as a campaign response with no
+     * campaign answers in it.
+     */
+    const token = await enrolledToken()
+    const mismatched = feedback({ formVersion: 'flying-flea-feedback-v1' })
+
+    const { status } = await postBatch(token, batch([mismatched]))
+
+    expect(status).toBe(400)
+    expect(store.feedback.size).toBe(0)
+  })
+
+  it('refuses a campaign rating outside 1-7', async () => {
+    const token = await enrolledToken()
+    const record = feedback({
+      formVersion: 'flying-flea-feedback-v1',
+      // Cast: the point of the test is that the runtime schema refuses it, and
+      // the compile-time type is what stops it being written by accident.
+      answers: { ...CAMPAIGN_ANSWERS, testRideExperience: 9 } as never,
+    })
+
+    const { status } = await postBatch(token, batch([record]))
+
+    expect(status).toBe(400)
+  })
+})
+
+describe('protocol v1 across mixed builds', () => {
+  /*
+   * Phase 9 added optional registration fields and a second questionnaire
+   * without changing `SYNC_PROTOCOL_VERSION`. These tests are the evidence for
+   * that decision — and for the one direction that is NOT supported, which is
+   * documented in docs/flying-flea-campaign.md as a deployment gate.
+   */
+
+  it('accepts a pre-Phase-9 record from an older client', async () => {
+    // The supported direction: old client, new server. A tablet that has not
+    // been updated keeps working, including one carrying records captured
+    // before the campaign existed.
+    const token = await enrolledToken()
+    const oldRegistration = registration()
+    const oldFeedback = feedback()
+
+    const { body } = await postBatch(
+      token,
+      batch([oldRegistration, oldFeedback]),
+    )
+
+    expect(statusOf(body, oldRegistration.recordId).status).toBe('accepted')
+    expect(statusOf(body, oldFeedback.recordId).status).toBe('accepted')
+  })
+
+  it('accepts both builds in one batch', async () => {
+    // An event mid-rollout: some tablets updated, some not, one operator
+    // uploading from a device that restored a backup from each.
+    const token = await enrolledToken()
+    const old = registration()
+    const current = registration({
+      // A distinct public code: two registrations are two people.
+      publicCode: publicCodeFor(2),
+      vehicle: 'Vehicle 1',
+      interestedColour: 'Flea Green' as const,
+      location: 'Prestige Shantiniketan',
+    })
+
+    const { body } = await postBatch(token, batch([old, current]))
+
+    expect(statusOf(body, old.recordId).status).toBe('accepted')
+    expect(statusOf(body, current.recordId).status).toBe('accepted')
+    expect(store.registrations.get(old.recordId)?.vehicle).toBeUndefined()
+    expect(store.registrations.get(current.recordId)?.vehicle).toBe('Vehicle 1')
+  })
+
+  it('states the version it speaks, unchanged', () => {
+    /*
+     * Deliberately still 1. The changes were additive: optional fields a new
+     * server ignores when absent, and a second `formVersion` an old server has
+     * never seen. Bumping would have forced every device to be updated before
+     * any could sync, mid-campaign, for no gain in either direction.
+     *
+     * The unsupported direction — a Phase 9 client against a pre-Phase 9 server
+     * — cannot be prevented by a version number either: that server would
+     * reject campaign feedback as an unknown form version and strand it on the
+     * device. It is a deployment ordering rule, and it is written down.
+     */
+    expect(SYNC_PROTOCOL_VERSION).toBe(1)
   })
 })

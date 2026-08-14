@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { FeedbackScreen } from './FeedbackScreen'
 import { FakeScanner } from './testScanner'
 import { EVENT_CONFIG } from '../../config/event'
+import {
+  answerCampaignFeedback,
+} from '../campaign/flying-flea/testSupport'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { db } from '../../lib/storage'
 import { countFeedback } from '../../lib/storage/feedback'
 import { OfflineEventDb } from '../../lib/storage/db'
@@ -85,14 +89,12 @@ function emit(text: string) {
 }
 
 async function answerAll(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: '4' }))
-  await user.click(screen.getByRole('button', { name: 'Good' }))
-  await user.click(screen.getByRole('button', { name: 'Yes' }))
+  await answerCampaignFeedback(user)
 }
 
 async function submitFeedback(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
-  await screen.findByText('Feedback recorded.')
+  await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+  await screen.findByText(FLYING_FLEA_CAMPAIGN.thanks)
 }
 
 /**
@@ -126,7 +128,7 @@ describe('scanning a valid sticker', () => {
       'textContent',
       sticker.publicCode,
     )
-    expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Submit Feedback' })).toBeDefined()
   })
 
   it('stops decoding once an identity is accepted', async () => {
@@ -154,7 +156,7 @@ describe('scanning a valid sticker', () => {
 
     await screen.findByTestId('participant-code')
     expect(screen.getAllByTestId('participant-code')).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: 'Submit feedback' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Submit Feedback' })).toHaveLength(1)
 
     await answerAll(user)
     await submitFeedback(user)
@@ -214,7 +216,7 @@ describe('rejecting a QR that is not a participant sticker', () => {
 
     expect(await screen.findByRole('alert')).toBeDefined()
     expect(screen.queryByTestId('participant-code')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Submit feedback' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Submit Feedback' })).toBeNull()
     expect(await countFeedback(db)).toBe(0)
   })
 
@@ -348,11 +350,12 @@ describe('questionnaire', () => {
     emit(makeSticker().qr)
     await screen.findByTestId('participant-code')
 
-    await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
 
-    expect(await screen.findAllByRole('alert')).toHaveLength(3)
+    // One per unanswered rating question: the campaign has four.
+    expect(await screen.findAllByRole('alert')).toHaveLength(4)
     expect(await countFeedback(db)).toBe(0)
-    expect(screen.queryByText('Feedback recorded.')).toBeNull()
+    expect(screen.queryByText(FLYING_FLEA_CAMPAIGN.thanks)).toBeNull()
   })
 
   it('treats comments as optional', async () => {
@@ -365,7 +368,8 @@ describe('questionnaire', () => {
     await submitFeedback(user)
 
     const record = await onlyRecord()
-    expect('comments' in record.answers).toBe(false)
+    expect('topThreeFeatures' in record.answers).toBe(false)
+    expect('overallExperienceComments' in record.answers).toBe(false)
   })
 
   it('persists canonical values and the questionnaire version', async () => {
@@ -374,22 +378,23 @@ describe('questionnaire', () => {
     emit(makeSticker().qr)
     await screen.findByTestId('participant-code')
 
-    await user.click(screen.getByRole('button', { name: '2' }))
-    await user.click(screen.getByRole('button', { name: 'Very Poor' }))
-    await user.click(screen.getByRole('button', { name: 'No' }))
+    await answerCampaignFeedback(user, [2, 3, 5, 7])
     await user.type(
-      screen.getByLabelText('Any comments?'),
+      screen.getByLabelText(
+        FLYING_FLEA_CAMPAIGN.textQuestions[1]?.prompt ?? '',
+      ),
       '  Queue was long.  ',
     )
     await submitFeedback(user)
 
     const record = await onlyRecord()
-    expect(record.formVersion).toBe('feedback-v1')
+    expect(record.formVersion).toBe('flying-flea-feedback-v1')
     expect(record.answers).toEqual({
-      overall_rating: 2,
-      experience: 'very_poor',
-      recommend: false,
-      comments: 'Queue was long.',
+      testRideExperience: 2,
+      rotaryKnobUsage: 3,
+      rideModesExperience: 5,
+      overallExperienceRating: 7,
+      overallExperienceComments: 'Queue was long.',
     })
   })
 })
@@ -472,10 +477,10 @@ describe('persistence', () => {
     await screen.findByTestId('participant-code')
     await answerAll(user)
 
-    const submit = screen.getByRole('button', { name: 'Submit feedback' })
+    const submit = screen.getByRole('button', { name: 'Submit Feedback' })
     await Promise.all([user.click(submit), user.click(submit), user.click(submit)])
 
-    await screen.findByText('Feedback recorded.')
+    await screen.findByText(FLYING_FLEA_CAMPAIGN.thanks)
     expect(await countFeedback(db)).toBe(1)
   })
 })
@@ -492,13 +497,13 @@ describe('same-device duplicate', () => {
     await submitFeedback(user)
     const first = await onlyRecord()
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
     emit(sticker.qr)
 
     expect(
       await screen.findByText('Feedback already recorded on this device'),
     ).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Submit feedback' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Submit Feedback' })).toBeNull()
     expect(await onlyRecord()).toEqual(first)
   })
 
@@ -518,7 +523,7 @@ describe('same-device duplicate', () => {
         await screen.findByTestId('participant-code')
         await answerAll(user)
         await submitFeedback(user)
-        await user.click(screen.getByRole('button', { name: 'Next participant' }))
+        await user.click(screen.getByRole('button', { name: 'Next rider' }))
       }
     }
 
@@ -536,7 +541,7 @@ describe('same-device duplicate', () => {
     await screen.findByTestId('participant-code')
     await answerAll(user)
     await submitFeedback(user)
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     emit(sticker.qr)
     await screen.findByText('Feedback already recorded on this device')
@@ -557,20 +562,19 @@ describe('storage failure', () => {
     emit(makeSticker().qr)
     await screen.findByTestId('participant-code')
     await answerAll(user)
-    await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
 
     await findSaveError()
-    expect(screen.queryByText('Feedback recorded.')).toBeNull()
+    expect(screen.queryByText(FLYING_FLEA_CAMPAIGN.thanks)).toBeNull()
     expect(await countFeedback(db)).toBe(0)
 
     // Every answer is still selected, and the form is still here.
     expect(
-      screen.getByRole('button', { name: '4' }).getAttribute('aria-pressed'),
+      screen
+        .getAllByRole('radio', { name: 'Rate 4 out of 7' })[0]
+        ?.getAttribute('aria-checked'),
     ).toBe('true')
-    expect(
-      screen.getByRole('button', { name: 'Good' }).getAttribute('aria-pressed'),
-    ).toBe('true')
-    expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Submit Feedback' })).toBeDefined()
   })
 
   it('does not resume the scanner', async () => {
@@ -581,7 +585,7 @@ describe('storage failure', () => {
     emit(makeSticker().qr)
     await screen.findByTestId('participant-code')
     await answerAll(user)
-    await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
     await findSaveError()
 
     expect(scanner.paused).toBe(true)
@@ -598,7 +602,7 @@ describe('storage failure', () => {
     emit(sticker.qr)
     await screen.findByTestId('participant-code')
     await answerAll(user)
-    await user.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
     await findSaveError()
 
     add.mockRestore()
@@ -619,7 +623,7 @@ describe('next participant', () => {
     await answerAll(user)
     await submitFeedback(user)
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     await screen.findByText(/Point the camera/)
     expect(scanner.paused).toBe(false)
@@ -635,15 +639,19 @@ describe('next participant', () => {
     await screen.findByTestId('participant-code')
     await answerAll(user)
     await submitFeedback(user)
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     emit(makeSticker(2).qr)
     await screen.findByTestId('participant-code')
 
     expect(
-      screen.getByRole('button', { name: '4' }).getAttribute('aria-pressed'),
+      screen
+        .getAllByRole('radio', { name: 'Rate 4 out of 7' })[0]
+        ?.getAttribute('aria-checked'),
     ).toBe('false')
-    expect(screen.getByLabelText('Any comments?')).toHaveProperty('value', '')
+    expect(
+      screen.getByLabelText(FLYING_FLEA_CAMPAIGN.textQuestions[0]?.prompt ?? ''),
+    ).toHaveProperty('value', '')
   })
 
   it('keeps every earlier record', async () => {
@@ -655,7 +663,7 @@ describe('next participant', () => {
       await screen.findByTestId('participant-code')
       await answerAll(user)
       await submitFeedback(user)
-      await user.click(screen.getByRole('button', { name: 'Next participant' }))
+      await user.click(screen.getByRole('button', { name: 'Next rider' }))
     }
 
     expect(await countFeedback(db)).toBe(3)

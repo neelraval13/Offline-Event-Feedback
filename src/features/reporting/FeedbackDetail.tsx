@@ -7,6 +7,7 @@ import type {
   FeedbackDetail as Detail,
   FeedbackReconciliationStatus,
 } from '../../lib/reporting/types'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { useReportingSession } from './session'
 
 /*
@@ -31,6 +32,19 @@ const STATUS_LABELS: Record<FeedbackReconciliationStatus, string> = {
 }
 
 const SUPPORTED_FORM_VERSION = 'feedback-v1'
+const CAMPAIGN_FORM_VERSION = FLYING_FLEA_CAMPAIGN.formVersion
+
+/**
+ * The wording each stored answer key belongs to.
+ *
+ * A report that showed `rotaryKnobUsage: 6` would be asking its reader to
+ * remember what question that was. The campaign config is the authority on the
+ * wording, so the two can never drift apart.
+ */
+const CAMPAIGN_QUESTIONS = [
+  ...FLYING_FLEA_CAMPAIGN.ratingQuestions,
+  ...FLYING_FLEA_CAMPAIGN.textQuestions,
+]
 
 interface FeedbackDetailProps {
   readonly eventId: string
@@ -146,7 +160,8 @@ export function FeedbackDetail({
               <dt>Questionnaire</dt>
               <dd>
                 {detail.formVersion}
-                {detail.formVersion === SUPPORTED_FORM_VERSION
+                {detail.formVersion === SUPPORTED_FORM_VERSION ||
+                detail.formVersion === CAMPAIGN_FORM_VERSION
                   ? ''
                   : ' — not readable by this build'}
               </dd>
@@ -189,11 +204,28 @@ export function FeedbackDetail({
 
           <h4 className="section-title">Answers as recorded</h4>
 
-          {detail.formVersion !== SUPPORTED_FORM_VERSION && (
+          {/*
+            The campaign's own questions, in its own words. Rendered from the
+            campaign config rather than from the stored keys, so a reader sees
+            what the rider was asked rather than what the database calls it.
+          */}
+          {detail.formVersion === CAMPAIGN_FORM_VERSION && (
+            <dl className="station-badge">
+              {CAMPAIGN_QUESTIONS.map((question) => (
+                <div key={question.key}>
+                  <dt>{question.prompt}</dt>
+                  <dd>{renderAnswer(detail.answers[question.key])}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {detail.formVersion !== SUPPORTED_FORM_VERSION &&
+            detail.formVersion !== CAMPAIGN_FORM_VERSION && (
             <p className="notice" role="status">
               This response was captured under questionnaire{' '}
-              <strong>{detail.formVersion}</strong>. This build only interprets{' '}
-              {SUPPORTED_FORM_VERSION}, so the answers are shown exactly as
+              <strong>{detail.formVersion}</strong>, which this build does not
+              know. The answers are shown exactly as
               stored and are excluded from every rating, experience and
               recommendation figure. A later questionnaire may reuse a field name
               for a different question, and reading it as if it were the same
@@ -201,14 +233,20 @@ export function FeedbackDetail({
             </p>
           )}
 
-          <dl className="station-badge">
-            {Object.entries(detail.answers).map(([question, answer]) => (
-              <div key={question}>
-                <dt>{question.replace(/_/g, ' ')}</dt>
-                <dd>{renderAnswer(answer)}</dd>
-              </div>
-            ))}
-          </dl>
+          {/*
+            The raw fallback, for `feedback-v1` and for any questionnaire this
+            build does not know. Nothing is hidden and nothing is relabelled.
+          */}
+          {detail.formVersion !== CAMPAIGN_FORM_VERSION && (
+            <dl className="station-badge">
+              {Object.entries(detail.answers).map(([question, answer]) => (
+                <div key={question}>
+                  <dt>{question.replace(/_/g, ' ')}</dt>
+                  <dd>{renderAnswer(answer)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
           {detail.diagnostics !== null && (
             <>

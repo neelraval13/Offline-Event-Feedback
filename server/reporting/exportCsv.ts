@@ -76,6 +76,15 @@ export const REGISTRATION_CSV_HEADER = [
   'name',
   'phone',
   'email',
+  // Campaign fields. Blank for a registration captured before the campaign,
+  // never defaulted: an empty cell is the truth about what was captured.
+  'vehicle',
+  'interested_colour',
+  'location',
+  'gender',
+  'test_ride_at',
+  'driving_licence',
+  'pincode',
   'registration_created_at',
   'revision',
   'reconciliation_status',
@@ -104,6 +113,13 @@ export function registrationsCsv(
       row.name,
       row.phone,
       row.email,
+      row.vehicle,
+      row.interestedColour,
+      row.location,
+      row.gender,
+      row.testRideAt,
+      row.drivingLicence,
+      row.pincode,
       row.createdAt,
       row.revision,
       row.status,
@@ -137,10 +153,20 @@ export const FEEDBACK_CSV_HEADER = [
   'registration_name',
   'registration_phone',
   'registration_email',
+  // `feedback-v1` answers.
   'overall_rating',
   'experience',
   'recommend',
   'comments',
+  // `flying-flea-feedback-v1` answers. Both questionnaires keep their own
+  // columns rather than sharing a generic pair: a 1-5 rating and a 1-7 rating
+  // in one column would be silently unusable.
+  'test_ride_experience_rating',
+  'rotary_knob_rating',
+  'ride_modes_rating',
+  'overall_experience_rating',
+  'top_three_features',
+  'overall_experience_comments',
 ] as const
 
 export function feedbackCsv(
@@ -169,6 +195,12 @@ export function feedbackCsv(
       row.experience,
       row.recommend,
       row.comments,
+      row.testRideExperienceRating,
+      row.rotaryKnobRating,
+      row.rideModesRating,
+      row.overallExperienceRating,
+      row.topThreeFeatures,
+      row.overallExperienceComments,
     ]),
   )
 }

@@ -22,12 +22,9 @@ import {
   captureIdentityFromQr,
 } from './identityCapture'
 import {
-  EMPTY_DRAFT,
-  FEEDBACK_FORM_VERSION,
-  validateFeedbackDraft,
-  type FeedbackDraft,
-  type FeedbackFieldErrors,
-} from './questionnaire'
+  FLYING_FLEA_FORM_VERSION,
+  type FlyingFleaFeedbackV1Answers,
+} from '../../types'
 
 /*
  * Point B's workflow, as one explicit state machine.
@@ -88,8 +85,6 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
   const createScanner = options.createScanner ?? createZxingScanner
 
   const [state, setState] = useState<PointBState>({ status: 'idle' })
-  const [draft, setDraft] = useState<FeedbackDraft>(EMPTY_DRAFT)
-  const [errors, setErrors] = useState<FeedbackFieldErrors>({})
   const [savedCount, setSavedCount] = useState(0)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -159,8 +154,6 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
         return
       }
 
-      setDraft(EMPTY_DRAFT)
-      setErrors({})
       setState({ status: 'feedback', identity, saveError: null })
     },
     [],
@@ -264,8 +257,6 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
 
   /** Returns to the camera, or to the start screen if it was never running. */
   const returnToScanner = useCallback(() => {
-    setDraft(EMPTY_DRAFT)
-    setErrors({})
     lastRejectedRef.current = null
 
     if (scannerRunningRef.current) {
@@ -280,25 +271,23 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     setState({ status: 'idle' })
   }, [])
 
-  const updateDraft = useCallback((patch: Partial<FeedbackDraft>) => {
-    setDraft((current) => ({ ...current, ...patch }))
-  }, [])
-
-  const submitFeedback = useCallback(async () => {
-    if (state.status !== 'feedback' || submittingRef.current) {
-      return
-    }
-
-    const validation = validateFeedbackDraft(draft)
-    if (!validation.ok) {
-      setErrors(validation.errors)
-      return
-    }
+  /*
+   * Takes the answers rather than owning a draft.
+   *
+   * The questionnaire is the campaign's business and it validates its own
+   * answers; this hook's business is identity capture, the save, and the
+   * duplicate guard. Keeping a `feedback-v1` draft here was what made the old
+   * questionnaire structurally hard to replace.
+   */
+  const submitFeedback = useCallback(
+    async (answers: FlyingFleaFeedbackV1Answers) => {
+      if (state.status !== 'feedback' || submittingRef.current) {
+        return
+      }
 
     // Synchronous guard: a double tap lands both events before React re-renders,
     // and the database deliberately permits repeated public codes.
     submittingRef.current = true
-    setErrors({})
 
     const { identity } = state
     setState({ status: 'saving', identity })
@@ -308,8 +297,8 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
       await createFeedback(db, {
         ...recordContextFor('feedback', deviceId),
         identity,
-        formVersion: FEEDBACK_FORM_VERSION,
-        answers: validation.answers,
+        formVersion: FLYING_FLEA_FORM_VERSION,
+        answers,
       })
     } catch (error) {
       // Nothing committed. Stay on the form with every answer intact.
@@ -320,25 +309,24 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
       return
     }
 
-    submittingRef.current = false
+      submittingRef.current = false
 
-    if (mountedRef.current) {
-      setState({ status: 'success' })
-    }
-    await refreshCount()
-  }, [draft, refreshCount, state])
+      if (mountedRef.current) {
+        setState({ status: 'success' })
+      }
+      await refreshCount()
+    },
+    [refreshCount, state],
+  )
 
   return {
     state,
-    draft,
-    errors,
     savedCount,
     videoRef,
     startScanner,
     openManualEntry,
     submitManualCode,
     returnToScanner,
-    updateDraft,
     submitFeedback,
   }
 }

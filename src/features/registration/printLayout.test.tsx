@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { readFileSync } from 'node:fs'
 import { RegistrationScreen } from './RegistrationScreen'
 import { PRINT_ROOT_ID } from './PrintableSticker'
+import { fillCampaignRegistration } from '../campaign/flying-flea/testSupport'
 import { db } from '../../lib/storage'
 
 /*
@@ -32,7 +33,7 @@ function printBlock(): string {
 
 const PARTICIPANT = {
   name: 'Ada Lovelace',
-  phone: '+44 20 7946 0958',
+  phone: '9876543210',
   email: 'ada@example.com',
 }
 
@@ -50,9 +51,7 @@ afterEach(() => {
 
 async function registerParticipant() {
   const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Name'), PARTICIPANT.name)
-  await user.type(screen.getByLabelText('Phone number'), PARTICIPANT.phone)
-  await user.type(screen.getByLabelText('Email address'), PARTICIPANT.email)
+  await fillCampaignRegistration(user, PARTICIPANT)
   await user.click(screen.getByRole('button', { name: 'Register & Print' }))
   await screen.findByTestId('sticker-print')
   return user
@@ -155,7 +154,7 @@ describe('print DOM structure', () => {
     render(<RegistrationScreen />)
     const user = await registerParticipant()
 
-    await user.click(screen.getByRole('button', { name: 'Next participant' }))
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     expect(
       document.getElementById(PRINT_ROOT_ID)?.querySelectorAll('.sticker'),

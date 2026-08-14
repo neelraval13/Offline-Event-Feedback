@@ -1,5 +1,12 @@
 import type { Sql } from 'postgres'
-import { computeAnalytics, computeCoverage, SUPPORTED_FORM_VERSION } from './analytics'
+import {
+  computeAnalytics,
+  computeCampaignAnalytics,
+  computeCoverage,
+  READABLE_FORM_VERSIONS,
+  SUPPORTED_FORM_VERSION,
+} from './analytics'
+import { FLYING_FLEA_FORM_VERSION, FLYING_FLEA_QUESTIONS } from './campaign'
 import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
@@ -232,17 +239,44 @@ export async function buildOverview(
     WHERE r.run_id = ${run.runId} AND r.status = 'matched'
   `
 
+  const responses = analysable.map((row) => ({
+    formVersion: String(row['form_version']),
+    answers: (row['answers'] ?? {}) as Record<string, unknown>,
+  }))
+
+  /*
+   * Each questionnaire is analysed over its own responses, and the two sets are
+   * never mixed. An event that ran the generic form in the morning and the
+   * campaign form in the afternoon produces two honest sets of figures; one
+   * combined average over a 1-5 and a 1-7 scale would be a number with no
+   * meaning that nothing on the screen would reveal as wrong.
+   */
+  const responsesByFormVersion: Record<string, number> = {}
+  for (const response of responses) {
+    responsesByFormVersion[response.formVersion] =
+      (responsesByFormVersion[response.formVersion] ?? 0) + 1
+  }
+
   return {
     eventId,
     run,
     isHistoricalRun: latest !== null && latest.runId !== run.runId,
     freshness,
     analytics: computeAnalytics(
-      analysable.map((row) => ({
-        formVersion: String(row['form_version']),
-        answers: (row['answers'] ?? {}) as Record<string, unknown>,
-      })),
+      responses.filter(
+        (response) => response.formVersion === SUPPORTED_FORM_VERSION,
+      ),
     ),
+    campaignAnalytics: computeCampaignAnalytics(
+      responses.filter(
+        (response) => response.formVersion === FLYING_FLEA_FORM_VERSION,
+      ),
+      FLYING_FLEA_QUESTIONS,
+    ),
+    responsesByFormVersion,
+    unreadableResponses: responses.filter(
+      (response) => !READABLE_FORM_VERSIONS.includes(response.formVersion),
+    ).length,
     coverage: computeCoverage(run),
   }
 }
@@ -367,6 +401,14 @@ function mapRegistrationRow(row: Row): RegistrationRow {
     email: String(row['email']),
     createdAt: toIso(row['created_at']),
     revision: Number(row['revision']),
+    // Campaign fields. Null means the registration predates the campaign, and
+    // the screens render that as blank rather than as an answer.
+    vehicle: toStringOrNull(row['vehicle']),
+    interestedColour: toStringOrNull(row['interested_colour']),
+    location: toStringOrNull(row['location']),
+    gender: toStringOrNull(row['gender']),
+    testRideAt: toStringOrNull(row['test_ride_at']),
+    pincode: toStringOrNull(row['pincode']),
     reconciliationStatus: status,
     validFeedbackCount: Number(row['valid_feedback_count'] ?? 0),
     potentialDuplicate: row['potential_duplicate'] === true,
@@ -419,6 +461,8 @@ export async function queryRegistrations(
     -- classified, and nothing that arrived afterwards.
     SELECT reg.record_id, reg.participant_id, reg.public_code,
            reg.name, reg.phone, reg.email,
+           reg.vehicle, reg.interested_colour, reg.location, reg.gender,
+           reg.test_ride_at, reg.pincode,
            reg.created_at, reg.revision,
            res.status, res.valid_feedback_count,
            (dup.record_id IS NOT NULL) AS potential_duplicate,
@@ -503,6 +547,20 @@ function mapFeedbackRow(row: Row): FeedbackRow {
       row['recommend'] === null || row['recommend'] === undefined
         ? null
         : row['recommend'] === true || row['recommend'] === 'true',
+    /*
+     * Populated only where the SQL guarded on the campaign's own version, so a
+     * future questionnaire that happens to use `overallExperienceRating` for a
+     * ten-point scale contributes nothing here.
+     */
+    campaignSummary:
+      String(row['form_version']) === FLYING_FLEA_FORM_VERSION
+        ? {
+            testRideExperience: toNumberOrNull(row['ff_test_ride']),
+            rotaryKnobUsage: toNumberOrNull(row['ff_rotary']),
+            rideModesExperience: toNumberOrNull(row['ff_modes']),
+            overallExperienceRating: toNumberOrNull(row['ff_overall']),
+          }
+        : null,
     linkedRegistration:
       linkedId === null || linkedId === undefined
         ? null
@@ -533,6 +591,14 @@ export async function queryFeedback(
                 THEN fb.answers ->> 'experience' END     AS experience,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers -> 'recommend' END       AS recommend,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'testRideExperience' END AS ff_test_ride,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rotaryKnobUsage' END AS ff_rotary,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rideModesExperience' END AS ff_modes,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'overallExperienceRating' END AS ff_overall,
            res.status, res.match_method,
            reg.record_id  AS linked_record_id,
            reg.public_code AS linked_public_code,
@@ -628,6 +694,14 @@ export async function getRegistrationDetail(
                 THEN fb.answers ->> 'experience' END     AS experience,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers -> 'recommend' END       AS recommend,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'testRideExperience' END AS ff_test_ride,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rotaryKnobUsage' END AS ff_rotary,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rideModesExperience' END AS ff_modes,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'overallExperienceRating' END AS ff_overall,
            res.status, res.match_method,
            NULL AS linked_record_id, NULL AS linked_public_code, NULL AS linked_name
     FROM reconciliation_feedback_results res
@@ -640,6 +714,13 @@ export async function getRegistrationDetail(
 
   return {
     ...base,
+    /*
+     * The licence number appears on the detail view and nowhere else: it is the
+     * most sensitive field the campaign captures, and a list that carried it
+     * would put every rider's licence on one screen to answer a question no
+     * list is asked.
+     */
+    drivingLicence: toStringOrNull(row['driving_licence']),
     eventId: String(row['event_id']),
     eventDay: toIso(row['event_day']).slice(0, 10),
     stationId: String(row['station_id']),
@@ -712,11 +793,20 @@ export async function getFeedbackDetail(
    * else entirely, and quietly reading it as a 1-5 score would invent data.
    */
   const isSupportedVersion = String(row['form_version']) === SUPPORTED_FORM_VERSION
+  const isCampaignVersion = String(row['form_version']) === FLYING_FLEA_FORM_VERSION
+
+  const campaignAnswer = (key: string): unknown =>
+    isCampaignVersion ? (answers[key] ?? null) : null
+
   const base = mapFeedbackRow({
     ...row,
     overall_rating: isSupportedVersion ? (answers['overall_rating'] ?? null) : null,
     experience: isSupportedVersion ? (answers['experience'] ?? null) : null,
     recommend: isSupportedVersion ? (answers['recommend'] ?? null) : null,
+    ff_test_ride: campaignAnswer('testRideExperience'),
+    ff_rotary: campaignAnswer('rotaryKnobUsage'),
+    ff_modes: campaignAnswer('rideModesExperience'),
+    ff_overall: campaignAnswer('overallExperienceRating'),
   })
 
   /*
@@ -816,6 +906,14 @@ export interface RegistrationExportRow {
   readonly name: string
   readonly phone: string
   readonly email: string
+  /* Campaign fields, blank for a registration captured before the campaign. */
+  readonly vehicle: string | null
+  readonly interestedColour: string | null
+  readonly location: string | null
+  readonly gender: string | null
+  readonly testRideAt: string | null
+  readonly drivingLicence: string | null
+  readonly pincode: string | null
   readonly createdAt: string
   readonly revision: number
   readonly status: string
@@ -861,7 +959,10 @@ export async function exportRegistrationRows(
     -- Exactly one row per registration the run classified, so the file's row
     -- count equals the run's own registration count.
     SELECT reg.record_id, reg.participant_id, reg.public_code,
-           reg.name, reg.phone, reg.email, reg.created_at, reg.revision,
+           reg.name, reg.phone, reg.email,
+           reg.vehicle, reg.interested_colour, reg.location, reg.gender,
+           reg.test_ride_at, reg.driving_licence, reg.pincode,
+           reg.created_at, reg.revision,
            res.status, res.valid_feedback_count,
            (dup.record_id IS NOT NULL) AS potential_duplicate,
            mf.feedback_record_id, mf.capture_method,
@@ -884,6 +985,13 @@ export async function exportRegistrationRows(
       name: String(row['name']),
       phone: String(row['phone']),
       email: String(row['email']),
+      vehicle: toStringOrNull(row['vehicle']),
+      interestedColour: toStringOrNull(row['interested_colour']),
+      location: toStringOrNull(row['location']),
+      gender: toStringOrNull(row['gender']),
+      testRideAt: toStringOrNull(row['test_ride_at']),
+      drivingLicence: toStringOrNull(row['driving_licence']),
+      pincode: toStringOrNull(row['pincode']),
       createdAt: toIso(row['created_at']),
       revision: Number(row['revision']),
       status: String(row['status']),
@@ -917,10 +1025,18 @@ export interface FeedbackExportRow {
   readonly registrationName: string | null
   readonly registrationPhone: string | null
   readonly registrationEmail: string | null
+  /* `feedback-v1` answers. Blank for any other questionnaire. */
   readonly overallRating: string | null
   readonly experience: string | null
   readonly recommend: string | null
   readonly comments: string | null
+  /* `flying-flea-feedback-v1` answers. Blank for any other questionnaire. */
+  readonly testRideExperienceRating: string | null
+  readonly rotaryKnobRating: string | null
+  readonly rideModesRating: string | null
+  readonly overallExperienceRating: string | null
+  readonly topThreeFeatures: string | null
+  readonly overallExperienceComments: string | null
 }
 
 export async function exportFeedbackRows(
@@ -941,6 +1057,20 @@ export async function exportFeedbackRows(
                 THEN fb.answers -> 'recommend' END       AS recommend,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'comments' END       AS comments,
+           -- The campaign's answers, guarded on its own version for exactly the
+           -- same reason: a later questionnaire may reuse these key names.
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'testRideExperience' END AS ff_test_ride,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rotaryKnobUsage' END AS ff_rotary,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'rideModesExperience' END AS ff_modes,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'overallExperienceRating' END AS ff_overall,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'topThreeFeatures' END AS ff_features,
+           CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
+                THEN fb.answers ->> 'overallExperienceComments' END AS ff_comments,
            res.status, res.match_method,
            reg.record_id AS reg_id, reg.public_code AS reg_code,
            reg.name AS reg_name, reg.phone AS reg_phone, reg.email AS reg_email
@@ -970,6 +1100,12 @@ export async function exportFeedbackRows(
     experience: toStringOrNull(row['experience']),
     recommend: toStringOrNull(row['recommend']),
     comments: toStringOrNull(row['comments']),
+    testRideExperienceRating: toStringOrNull(row['ff_test_ride']),
+    rotaryKnobRating: toStringOrNull(row['ff_rotary']),
+    rideModesRating: toStringOrNull(row['ff_modes']),
+    overallExperienceRating: toStringOrNull(row['ff_overall']),
+    topThreeFeatures: toStringOrNull(row['ff_features']),
+    overallExperienceComments: toStringOrNull(row['ff_comments']),
   }))
 }
 
@@ -983,4 +1119,13 @@ export async function exportDuplicateCandidateRows(
 
 function toStringOrNull(value: unknown): string | null {
   return value === null || value === undefined ? null : String(value)
+}
+
+/** JSONB numbers arrive as text through `->>`; a missing answer stays null. */
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }

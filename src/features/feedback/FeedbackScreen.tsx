@@ -1,7 +1,10 @@
-import { StationBadge } from '../../components/StationBadge'
+import { BrandButton } from '../../components/brand/BrandButton'
+import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHeader'
 import { stationFor } from '../../config/event'
 import type { QrScannerFactory } from '../../lib/scanner'
-import { FeedbackForm } from './FeedbackForm'
+import { CampaignFeedbackForm } from '../campaign/flying-flea/components/CampaignFeedbackForm'
+import { CampaignSuccessPanel } from '../campaign/flying-flea/components/CampaignSuccessPanel'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { ManualCodeEntry } from './ManualCodeEntry'
 import { usePointBTerminal } from './usePointBTerminal'
 
@@ -21,15 +24,12 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
   const station = stationFor('feedback')
   const {
     state,
-    draft,
-    errors,
     savedCount,
     videoRef,
     startScanner,
     openManualEntry,
     submitManualCode,
     returnToScanner,
-    updateDraft,
     submitFeedback,
   } = usePointBTerminal(
     createScanner === undefined ? {} : { createScanner },
@@ -42,8 +42,17 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
 
   return (
     <article className="screen">
-      <h1>Point B — Feedback</h1>
-      <StationBadge station={station} />
+      <FlyingFleaBrandHeader
+        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
+      />
+
+      <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>
+      <h1 className="ff-display ff-heading">
+        Test Ride <span className="ff-heading__accent">Feedback</span>
+      </h1>
+      <p className="ff-sub">
+        {station.label} · {station.stationId}
+      </p>
 
       {/* The preview element must exist before the camera starts, so it is
           always mounted and only shown while scanning. */}
@@ -157,12 +166,9 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
             </p>
           )}
 
-          <FeedbackForm
-            draft={draft}
-            errors={errors}
+          <CampaignFeedbackForm
             busy={state.status === 'saving'}
-            onChange={updateDraft}
-            onSubmit={() => void submitFeedback()}
+            onSubmit={(answers) => void submitFeedback(answers)}
           />
         </section>
       )}
@@ -193,20 +199,14 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
 
       {state.status === 'success' && (
         <section aria-labelledby="success-heading">
-          <h2 id="success-heading" className="section-title">
-            Thank you
+          <h2 id="success-heading" className="visually-hidden">
+            Feedback submitted
           </h2>
-          <p className="notice notice--success" role="status">
-            Feedback recorded.
-          </p>
+          <CampaignSuccessPanel detail="Saved on this device. Nothing further is needed from the rider." />
           <div className="button-row">
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={returnToScanner}
-            >
-              Next participant
-            </button>
+            <BrandButton type="button" onClick={returnToScanner}>
+              Next rider
+            </BrandButton>
           </div>
         </section>
       )}

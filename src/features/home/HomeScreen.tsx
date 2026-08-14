@@ -1,5 +1,7 @@
+import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHeader'
 import { EVENT_CONFIG } from '../../config/event'
 import { hrefFor, type RoutePath } from '../../lib/routing/hashRoute'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 
 interface SurfaceLink {
   readonly path: RoutePath
@@ -11,12 +13,13 @@ const SURFACES: readonly SurfaceLink[] = [
   {
     path: '/a',
     title: 'Point A — Registration',
-    description: 'Capture participant details and print the QR sticker.',
+    description: 'Register a rider, then print the QR sticker.',
   },
   {
     path: '/b',
     title: 'Point B — Feedback',
-    description: 'Scan the sticker, or type the fallback code, and collect feedback.',
+    description:
+      'Scan the sticker, or type the fallback code, and collect the test-ride feedback.',
   },
   {
     path: '/admin',
@@ -47,29 +50,45 @@ const CENTRAL: readonly SurfaceLink[] = [
 export function HomeScreen() {
   return (
     <article className="screen">
-      <h1>Offline Event Feedback</h1>
-      <p className="screen__lede">
+      <FlyingFleaBrandHeader
+        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
+      />
+
+      <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>
+      <h1 className="ff-display ff-heading">
+        Test Ride <span className="ff-heading__accent">Stations</span>
+      </h1>
+      <p className="ff-sub">
         {EVENT_CONFIG.eventName} — {EVENT_CONFIG.eventDay}. Offline-first
-        registration and feedback for a single event day.
+        registration and feedback for the {FLYING_FLEA_CAMPAIGN.name} campaign.
       </p>
-      <ul className="surface-list">
+
+      {/*
+        Still a field application, not a landing page: the two things staff open
+        at a desk are the two largest targets on the screen, and everything else
+        is deliberately quieter.
+      */}
+      <ul className="ff-home__surfaces">
         {SURFACES.map((surface) => (
           <li key={surface.path}>
-            <a className="surface-list__link" href={hrefFor(surface.path)}>
-              {surface.title}
+            <a className="ff-home__link" href={hrefFor(surface.path)}>
+              <span className="ff-home__title">{surface.title}</span>
+              <p className="ff-home__desc">{surface.description}</p>
             </a>
-            <p className="surface-list__description">{surface.description}</p>
           </li>
         ))}
       </ul>
-      <h2 className="section-title">Central reporting</h2>
-      <ul className="surface-list">
+
+      <h2 className="ff-display ff-heading" style={{ fontSize: '20px' }}>
+        Central reporting
+      </h2>
+      <ul className="ff-home__surfaces">
         {CENTRAL.map((surface) => (
           <li key={surface.path}>
-            <a className="surface-list__link" href={hrefFor(surface.path)}>
-              {surface.title}
+            <a className="ff-home__link" href={hrefFor(surface.path)}>
+              <span className="ff-home__title">{surface.title}</span>
+              <p className="ff-home__desc">{surface.description}</p>
             </a>
-            <p className="surface-list__description">{surface.description}</p>
           </li>
         ))}
       </ul>

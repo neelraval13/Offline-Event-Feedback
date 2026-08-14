@@ -470,3 +470,117 @@ describe('payload validation', () => {
     expect(result.ok && result.value.sourceDeviceId).toBe(SOURCE_DEVICE)
   })
 })
+
+describe('campaign registration validation', () => {
+
+  describe('campaign registration fields', () => {
+    const RIDER = {
+      vehicle: 'Vehicle 2',
+      interestedColour: 'Storm Black',
+      location: 'Prestige Tech Park',
+      gender: 'Female',
+      testRideAt: '2026-01-01T10:30',
+      drivingLicence: 'KA0120200001234',
+      pincode: '560048',
+    }
+
+    function payloadWith(overrides: Record<string, unknown>) {
+      return makePayload({
+        registrations: [
+          { ...makeRegistration(1), ...overrides } as never,
+        ],
+        feedback: [],
+      })
+    }
+
+    it('accepts a complete campaign registration', () => {
+      expect(validatePayload(payloadWith(RIDER)).ok).toBe(true)
+    })
+
+    it('accepts a registration with none of them', () => {
+      // Captured before the campaign existed. A restore that refused it would
+      // refuse the device's own history.
+      expect(validatePayload(payloadWith({})).ok).toBe(true)
+    })
+
+    it('rejects a wrong type in any campaign field', () => {
+      for (const field of Object.keys(RIDER)) {
+        const result = validatePayload(payloadWith({ ...RIDER, [field]: 42 }))
+
+        expect(result.ok).toBe(false)
+        expect(!result.ok && result.issues.join(' ')).toContain(
+          `invalid ${field}`,
+        )
+      }
+    })
+
+    it('rejects a colour the campaign does not offer', () => {
+      const result = validatePayload(
+        payloadWith({ ...RIDER, interestedColour: 'Racing Red' }),
+      )
+
+      expect(result.ok).toBe(false)
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'invalid interestedColour',
+      )
+    })
+
+    it('rejects a gender the campaign does not offer', () => {
+      const result = validatePayload(
+        payloadWith({ ...RIDER, gender: 'Unspecified' }),
+      )
+
+      expect(result.ok).toBe(false)
+      expect(!result.ok && result.issues.join(' ')).toContain('invalid gender')
+    })
+
+    it('rejects a malformed or impossible test-ride time', () => {
+      for (const value of [
+        '2026-01-01',
+        '2026-01-01T10:30:00.000Z',
+        '2026-02-31T10:30',
+        '2026-01-01T25:00',
+      ]) {
+        const result = validatePayload(
+          payloadWith({ ...RIDER, testRideAt: value }),
+        )
+        expect(result.ok).toBe(false)
+      }
+    })
+
+    it('rejects an overlong licence, and never prints it', () => {
+      const licence = 'K'.repeat(200)
+      const result = validatePayload(
+        payloadWith({ ...RIDER, drivingLicence: licence }),
+      )
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        const message = result.issues.join(' ')
+        expect(message).toContain('invalid drivingLicence')
+        // A validation message is read on screen and pasted into support notes.
+        expect(message).not.toContain(licence)
+      }
+    })
+
+    it('rejects a malformed pincode', () => {
+      for (const value of ['5600', '5600481', 'ABC123', '']) {
+        expect(validatePayload(payloadWith({ ...RIDER, pincode: value })).ok).toBe(
+          false,
+        )
+      }
+    })
+
+    it('names the field and the index, never the value', () => {
+      const result = validatePayload(
+        payloadWith({ ...RIDER, vehicle: '', pincode: '560' }),
+      )
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.issues).toContain('registrations[0]: invalid vehicle')
+        expect(result.issues.join(' ')).not.toContain('560')
+      }
+    })
+  })
+})
