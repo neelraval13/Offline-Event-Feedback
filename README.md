@@ -24,10 +24,42 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 6 — central server and idempotent synchronisation.**
+**Phase 7 — central reconciliation.**
 
-Records captured offline can now be consolidated into a central Postgres
-database, whenever a connection happens to exist. **No event operation depends
+Once records reach the server, reconciliation asks what they mean together:
+which feedback belongs to which registration, which registrations never got a
+response, and which records might describe the same person.
+
+```
+central registrations + feedback  ->  reconciliation run  ->  derived results
+```
+
+- **Derived data, never a rewrite.** The raw central tables are evidence.
+  Reconciliation writes its conclusions to separate tables and never edits,
+  merges or deletes a captured record.
+- **A run is a snapshot.** Feedback that is `without_registration` today and
+  `matched` tomorrow produces two correct snapshots, not a correction. Runs
+  accumulate; nothing is overwritten.
+- **It classifies; it never resolves.** Two responses for one participant, or
+  two registrations that may be one person, are reported as ambiguous. No winner
+  is chosen and nothing is merged — there is no honest basis for either.
+- **Exact matching only.** Duplicate candidates come from exactly equal
+  normalised phone or email. No fuzzy names, no inferred country codes, no
+  provider-specific email rules.
+- **Counts only.** No participant data is copied into a reconciliation table,
+  printed by the CLI, or logged.
+
+```bash
+pnpm server:reconcile -- --event evt-dev-001
+```
+
+See [docs/reconciliation-test.md](docs/reconciliation-test.md) for the
+real-Postgres pass.
+
+### Central sync
+
+Records captured offline are consolidated into a central Postgres database,
+whenever a connection happens to exist. **No event operation depends
 on it**: with the server switched off, every earlier phase behaves exactly as
 before.
 
@@ -177,8 +209,8 @@ Beneath the UI:
 - **QR payload contract** — a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
-Reconciliation of duplicate or conflicting records, central reporting and any
-read API are **not implemented yet** — see the deferred list in
+Merging duplicates, choosing between conflicting feedback, central reporting and
+any read API are **not implemented yet** — see the deferred list in
 [docs/architecture.md](docs/architecture.md).
 
 > The field deployment must be served over **HTTPS**. Both the service worker
@@ -233,6 +265,7 @@ pnpm icons       # regenerate the temporary PWA icons
 cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
 pnpm server:migrate    # apply the schema, deliberately — never on startup
 pnpm server:start      # serve the ingest API
+pnpm server:reconcile -- --event evt-dev-001   # classify central data
 pnpm server:typecheck
 pnpm server:test
 ```
@@ -270,7 +303,7 @@ src/
     sync/       (seam) upload to the central server — not implemented
   test/         Test database helpers and the fake-indexeddb setup
   types/        Domain types: IDs, records, sync status
-server/           Central sync API (Hono + Postgres), migrations, tests
+server/           Central sync API and reconciliation engine (Hono + Postgres)
 shared/           The wire protocol, shared by client and server
 docs/
   architecture.md
@@ -278,6 +311,7 @@ docs/
   offline-cold-start-test.md
   point-a-physical-test.md
   point-b-physical-test.md
+  reconciliation-test.md
   sync-test.md
 scripts/
   generate-icons.mjs      Temporary PWA icons
@@ -294,8 +328,9 @@ scripts/
 | 3 | Point B scanning, manual fallback entry, feedback questionnaire — done |
 | 4 | Offline application shell / installable PWA — done |
 | 5 | Local counts, encrypted backup and restore — done |
-| 6 | Central server, device enrolment, idempotent sync *(current)* |
-| 7 | Reconciliation, central reporting |
+| 6 | Central server, device enrolment, idempotent sync — done |
+| 7 | Central reconciliation engine *(current)* |
+| 8 | Reconciliation review and reporting |
 
 Phase boundaries are indicative; the ordering constraint that matters is that
 nothing prints a sticker before persistence exists, and nothing depends on

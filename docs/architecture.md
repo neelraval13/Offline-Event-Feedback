@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 6 — central server and idempotent synchronisation.** This document
+Status: **Phase 7 — central reconciliation.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -1415,6 +1415,158 @@ delivery. Comparing transport state during a merge reported conflicts for
 records that were identical in every meaningful sense — see the regression note
 below.
 
+## Central reconciliation
+
+Phase 6 got records to the server. Phase 7 asks what they mean together: which
+feedback belongs to which registration, which registrations never got a
+response, and which records look like they might describe the same person.
+
+### Derived data, not a rewrite
+
+`registrations`, `feedback`, `sync_devices` and `sync_batches` are **evidence**
+— the account of what devices actually captured. Reconciliation never edits,
+merges or deletes any of them. Conclusions go into separate
+`reconciliation_*` tables.
+
+That separation is what makes a wrong conclusion survivable. Rules change;
+`reconciliation-v1` is stamped on every run precisely so that changing them
+later cannot silently alter the meaning of runs already recorded. If the
+evidence had been rewritten to match a conclusion, there would be nothing left
+to re-derive from.
+
+### A run is a snapshot
+
+Reconciliation describes central data at one point in time. More records sync
+afterwards, and that is ordinary:
+
+```
+run 1:  feedback → without_registration     (Point A had not synced yet)
+        ...Point A syncs...
+run 2:  same feedback → matched
+```
+
+Both runs are correct. Run 1 is not a mistake to be fixed — it is what was true
+when it ran. Runs are kept, never overwritten.
+
+The read and the write happen inside **one `REPEATABLE READ` transaction**.
+Reading registrations and feedback separately would let a sync land between them
+and produce a run describing a state that never existed. A failure anywhere
+rolls back the run row along with its results, so a half-written run can never
+be mistaken for a finished one.
+
+### Matching
+
+Registration `participantId` and `publicCode` are each unique within an event,
+so both resolve through a hash map. Nothing compares every feedback record
+against every registration.
+
+**QR feedback** carries two independent identifiers that the contract says
+describe one person:
+
+| Participant resolves | Code resolves | Outcome |
+| --- | --- | --- |
+| Registration X | Registration X | `matched`, `qr_identity` |
+| Registration X | Registration Y | `identity_conflict` |
+| Registration X | nothing | `identity_conflict` |
+| nothing | Registration X | `identity_conflict` |
+| nothing | nothing | `without_registration` |
+
+Neither identifier is preferred when they disagree. Silently trusting
+`participantId` would bury the evidence that something upstream produced an
+inconsistent sticker or an inconsistent record — the disagreement *is* the
+finding.
+
+**Manual feedback** has no participant ID by design, and none is fabricated. Its
+public code either resolves — `matched`, `manual_public_code` — or it does not.
+The raw feedback row is never updated to add the participant ID reconciliation
+discovered; the relationship lives in the derived result.
+
+### Registration status
+
+Counting only *valid* links — identity conflicts are not links to anything:
+
+| Valid feedback | Status |
+| --- | --- |
+| 0 | `without_feedback` |
+| 1 | `matched` |
+| 2 or more | `multiple_feedback` |
+
+`without_feedback` is not an error. A participant may simply not have reached
+Point B, or that device may not have synced.
+
+### Multiple feedback: reported, never resolved
+
+When two valid responses resolve to one registration, the registration and
+**both** responses are flagged. Nothing is deleted, nothing is overwritten, and
+no winner is chosen.
+
+There is no honest basis for choosing one. Device clocks are never corrected
+while offline, so `createdAt` orders records within a device and only
+approximately across devices. `first_received_at` records when a device found a
+connection, not when a participant answered. Neither is authority, so the engine
+reports the ambiguity and stops.
+
+### Duplicate registration candidates
+
+The same human may register twice, producing two records with entirely distinct
+`recordId`, `participantId` and `publicCode` — all correct, all real captures.
+
+Candidates come from exactly equal normalised contact values, grouped rather
+than compared pairwise:
+
+| Match | Basis |
+| --- | --- |
+| Same normalised phone **and** email | `phone_and_email` |
+| Same normalised phone only | `phone_only` |
+| Same normalised email only | `email_only` |
+
+A pair matching on both emits **only** the stronger basis — a reviewer should
+see one candidate, not three — and is stored once in canonical order, so A/B and
+B/A cannot both appear.
+
+**Normalisation is deliberately minimal:**
+
+- **Phone:** digits only. A missing country code is *not* inferred, so
+  `+91 98765 43210` and `9876543210` do not match. They may belong to different
+  countries entirely, and this engine cannot know which.
+- **Email:** trimmed and lower-cased. No Gmail dot-stripping, no `+tag`
+  removal. Those rules hold at some providers and not others; applying them
+  universally would merge people who merely look similar.
+- **Names are not a matching key at all.** Too many people share one.
+
+Every "clever" rule here is a guess about a person, and a wrong guess proposes
+that two humans are one. Names may appear in a protected review UI later; they
+are not evidence for a match.
+
+**Nothing is ever merged automatically.** Families share phone numbers and
+couples share email accounts. A candidate means *may be the same person*, and
+Phase 7 provides no mechanism to act on it.
+
+### Privacy
+
+Reconciliation reads phone numbers and email addresses in order to group
+duplicate candidates, which makes it the component most able to leak them. It
+does not: the values exist only in memory during a run, and the derived tables
+hold record IDs, statuses, counts and match bases. A schema test asserts no
+`name`, `phone`, `email`, `answers` or `comments` column exists anywhere under
+`reconciliation_*`. The CLI prints counts and identifiers only.
+
+### Invoked deliberately
+
+```bash
+pnpm server:reconcile -- --event evt-dev-001
+```
+
+Never run after a sync batch. Ingest is a hot path a device is waiting on;
+reconciliation is a whole-event analysis that grows with the event, and coupling
+them would make every upload pay for it. It requires an explicit event —
+reconciling the wrong one silently would be worse than not reconciling at all —
+and is safe to re-run at any time.
+
+`reconciliation_latest_runs` exposes the most recent **completed** run per
+event, which is the data source Phase 8 will read. Incomplete runs are excluded
+by construction.
+
 ## Why Point B works without Point A
 
 Point B needs three things to record attributable feedback, and has all three
@@ -1432,7 +1584,7 @@ blocked by Point A being restarted, replaced or absent. Re-joining a
 manual-entry record to a participant ID is the central server's job after
 synchronisation.
 
-## What exists after Phase 6
+## What exists after Phase 7
 
 - Vite + React + TypeScript project with strict compiler settings
 - hash-based client-only routing (`#/a`, `#/b`, `#/admin`)
@@ -1451,6 +1603,9 @@ synchronisation.
   verify-before-trust, and a non-destructive merge onto a replacement device
 - **Central synchronisation**: device enrolment, an idempotent batched ingest
   API over Postgres, and a client outbox that survives lost responses
+- **Central reconciliation**: a deterministic, versioned engine that classifies
+  registration/feedback relationships and proposes duplicate candidates without
+  ever altering the raw records
 - local record counts, sync status and device diagnostics on Admin
 - unit and integration tests for all of the above, against a real IndexedDB
   implementation
@@ -1462,7 +1617,8 @@ None of the following exists yet:
 - cross-device duplicate detection and reconciliation
 - background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
-- central record browsing or reporting
+- automatic merging of duplicates or selection of a winning feedback record
+- central record browsing, reporting or export
 - reconciliation and dashboards
 - authentication
 

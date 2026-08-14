@@ -135,12 +135,24 @@ describeBuild('production PWA artifacts', () => {
       'github.com',
     ])
 
+    const bundles = assets()
+      .filter((asset) => asset.endsWith('.js'))
+      .map((name) => readFileSync(join(DIST, 'assets', name), 'utf8'))
+      .join('')
+
     const hosts = new Set<string>()
-    for (const name of assets().filter((asset) => asset.endsWith('.js'))) {
-      const source = readFileSync(join(DIST, 'assets', name), 'utf8')
-      for (const match of source.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {
-        hosts.add((match[1] ?? '').toLowerCase())
-      }
+    for (const match of bundles.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {
+      hosts.add((match[1] ?? '').toLowerCase())
+    }
+
+    /*
+     * The sync API is a deliberate dependency when one is configured at build
+     * time, so its host is expected rather than a surprise. `verify-pwa-build`
+     * separately fails a production build that points at plain HTTP.
+     */
+    const syncUrl = /VITE_SYNC_API_BASE_URL:\s*`([^`]+)`/.exec(bundles)?.[1]
+    if (syncUrl !== undefined) {
+      hosts.delete(new URL(syncUrl).hostname.toLowerCase())
     }
 
     expect([...hosts].filter((host) => !allowed.has(host))).toEqual([])

@@ -16,7 +16,8 @@
     "server:start": "tsx server/index.ts",
     "server:migrate": "tsx server/migrate.ts",
     "server:typecheck": "tsc -p server/tsconfig.json",
-    "server:test": "vitest run --config server/vitest.config.ts"
+    "server:test": "vitest run --config server/vitest.config.ts",
+    "server:reconcile": "tsx server/reconcile.ts"
   },
   "dependencies": {
     "@zxing/browser": "^0.2.1",

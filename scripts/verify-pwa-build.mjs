@@ -152,6 +152,40 @@ for (const file of [...javascript.map((n) => join(DIST, 'assets', n)), serviceWo
 }
 
 /*
+ * The sync API is a deliberate runtime dependency, baked in at build time. Its
+ * host is expected — but a production build carrying a `localhost` or plain
+ * HTTP endpoint is a misconfiguration worth failing loudly on, because the
+ * symptom in the field is a device that silently never syncs.
+ */
+const syncUrl = /VITE_SYNC_API_BASE_URL:\s*`([^`]+)`/.exec(
+  javascript.map((n) => readFileSync(join(DIST, 'assets', n), 'utf8')).join(''),
+)?.[1]
+
+if (syncUrl !== undefined) {
+  let syncHost = ''
+  try {
+    const parsed = new URL(syncUrl)
+    syncHost = parsed.hostname.toLowerCase()
+    externalHosts.delete(syncHost)
+
+    const local = syncHost === 'localhost' || syncHost === '127.0.0.1'
+    check(
+      parsed.protocol === 'https:' || local,
+      `the sync API is configured over plain HTTP (${parsed.protocol}//${syncHost}) — registrations carry participant contact details`,
+    )
+    if (local) {
+      notes.push(
+        `sync API points at ${syncUrl} — a development endpoint. Rebuild with VITE_SYNC_API_BASE_URL unset or set to the production https URL before shipping.`,
+      )
+    } else {
+      notes.push(`sync API configured: ${parsed.origin}`)
+    }
+  } catch {
+    check(false, `VITE_SYNC_API_BASE_URL is not a valid URL`)
+  }
+}
+
+/*
  * XML namespaces and documentation links appear as string literals but are
  * never fetched. Anything else is a real runtime dependency and a bug.
  */
