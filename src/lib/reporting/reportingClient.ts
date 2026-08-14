@@ -41,7 +41,7 @@ import type {
  * path (`/api` in production), and `new URL('/api')` needs a base to resolve
  * against and would throw. Appending keeps `/api` → `/api/v1/reporting` and
  * `https://api.example.com` → `https://api.example.com/v1/reporting`, and the
- * browser resolves the relative form against the page's own origin — which is
+ * browser resolves the relative form against the page's own origin, which is
  * exactly the same origin the app was served from.
  */
 export const REPORTING_API_BASE_URL: string | null =
@@ -156,7 +156,7 @@ async function request(
     /*
      * 404 is overloaded: the server says `no_completed_run` when the event has
      * never been reconciled and `not_found` for an unknown record. The screens
-     * need to tell those apart — one is "press Run reconciliation", the other
+     * need to tell those apart: one is "press Run reconciliation", the other
      * is "that record is not here".
      */
     if (response.status === 404) {
@@ -281,7 +281,7 @@ export function fetchDuplicateCandidates(
  * Asks the server to run reconciliation now.
  *
  * The one action in reporting that writes anything, and it writes only a new
- * derived run — the Phase 7 engine, called unchanged. It is never automatic:
+ * derived run: the Phase 7 engine, called unchanged. It is never automatic:
  * an operator triggers it after seeing that the data has moved.
  */
 export function requestReconciliation(
@@ -305,7 +305,7 @@ export interface DownloadedExport {
  * Downloads an export.
  *
  * Fetched rather than linked: a plain `<a href>` cannot carry the Authorization
- * header, and the alternative — a token in the URL — would put the credential
+ * header, and the alternative (a token in the URL) would put the credential
  * into browser history and the server's access log.
  *
  * The filename comes from the server's `Content-Disposition`, which by

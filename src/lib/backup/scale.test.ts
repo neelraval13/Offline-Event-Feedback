@@ -11,8 +11,8 @@ import { deriveIssuerCode } from '../identity/issuerCode'
 /*
  * The design target: roughly 10,000 participants.
  *
- * The expensive part of a real backup is PBKDF2, and that cost is fixed — one
- * derivation regardless of dataset size — so it is measured once in
+ * The expensive part of a real backup is PBKDF2, and that cost is fixed, one
+ * derivation regardless of dataset size, so it is measured once in
  * crypto.test.ts rather than repeated here. What scales with the data is
  * snapshotting, validating, serialising and merging, and that is what this
  * measures.
@@ -127,8 +127,8 @@ describe(`a full event of ${PARTICIPANTS.toLocaleString()} participants`, () => 
     )
 
     /*
-     * Generous ceilings. These are a guard against an accidental quadratic —
-     * the kind that passes on ten records and takes minutes on ten thousand —
+     * Generous ceilings. These are a guard against an accidental quadratic,
+     * the kind that passes on ten records and takes minutes on ten thousand,
      * not a performance budget to optimise against.
      */
     expect(snapshotMs).toBeLessThan(15_000)

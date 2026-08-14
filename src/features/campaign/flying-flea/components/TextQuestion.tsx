@@ -4,7 +4,7 @@ import { MAX_CAMPAIGN_TEXT_LENGTH } from '../../../../types'
 /*
  * One campaign free-text question.
  *
- * The wording is rendered exactly as the campaign asks it — this component
+ * The wording is rendered exactly as the campaign asks it; this component
  * never abbreviates a prompt to fit a layout. The character limit is a storage
  * bound rather than part of the question, so it is shown as a quiet hint and
  * enforced by `maxLength`, not by refusing a submission.

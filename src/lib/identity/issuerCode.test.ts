@@ -67,7 +67,7 @@ describe('deriveIssuerCode', () => {
 
   it('disperses across the space at the rate a uniform hash would', () => {
     // 20,000 random device IDs into 2^24 buckets: the birthday expectation is
-    // ~12 collisions. The bound is deliberately loose — this detects a broken
+    // ~12 collisions. The bound is deliberately loose; this detects a broken
     // derivation (clustering, truncation to too few bits), not statistical
     // noise.
     const codes = new Set<string>()

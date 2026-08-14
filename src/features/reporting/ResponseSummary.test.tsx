@@ -103,7 +103,7 @@ describe('flying-flea-feedback-v1', () => {
       />,
     )
 
-    expect(document.body.textContent).toContain('Rotary knob —')
+    expect(document.body.textContent).toContain('Rotary knob not rated')
     expect(document.body.textContent).toContain('Overall 7/7')
   })
 })
@@ -143,7 +143,7 @@ describe('a participant with several responses', () => {
   it('summarises each one without electing one of them', () => {
     /*
      * Both are rendered, each on its own terms. Nothing marks either as the
-     * participant's answer — the reconciliation run chose no winner, and a list
+     * participant's answer: the reconciliation run chose no winner, and a list
      * that summarised only one would quietly overrule it.
      */
     const first = campaignRow({ recordId: 'first' })

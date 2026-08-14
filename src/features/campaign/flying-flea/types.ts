@@ -2,7 +2,7 @@
  * Campaign types, re-exported for the campaign module's own consumers.
  *
  * The definitions live in `src/types/campaign.ts` with the rest of the persisted
- * domain model, because a stored answer outlives the screen that captured it —
+ * domain model, because a stored answer outlives the screen that captured it:
  * the central server, an export and a restore all read these shapes without
  * ever importing a component. This module exists so campaign code can say where
  * it thinks its types come from without the domain layer having to depend on a

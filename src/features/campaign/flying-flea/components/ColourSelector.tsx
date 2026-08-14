@@ -5,7 +5,7 @@ import { COLOUR_SWATCHES, FLYING_FLEA_CAMPAIGN } from '../config'
  * Which colour the rider is interested in.
  *
  * Single-select, because the supplied control is a two-position toggle that
- * always holds exactly one colour — it cannot express "both" or "neither", and
+ * always holds exactly one colour; it cannot express "both" or "neither", and
  * turning it into a multi-select here would produce answers the campaign's own
  * form could never produce.
  *

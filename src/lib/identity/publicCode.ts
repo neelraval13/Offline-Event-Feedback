@@ -19,12 +19,12 @@ import { ISSUER_CODE_PATTERN } from './issuerCode'
  * Properties this format is required to have:
  *
  * - unique across every device at the event, without any coordination between
- *   them — the issuer segment is what makes device-local counters safe
+ *   them: the issuer segment is what makes device-local counters safe
  * - readable and dictatable by staff under event conditions
  * - case-insensitive on entry, with one canonical stored form
  * - a check character that catches ordinary transcription slips
  * - validated deterministically and entirely offline (invariant 2)
- * - free of PII (invariant E) — it carries a station, a device namespace and a
+ * - free of PII (invariant E); it carries a station, a device namespace and a
  *   counter, nothing else
  *
  * The check character is emphatically NOT a signature. It detects typing
@@ -37,7 +37,7 @@ const MODULUS = 37
 
 /**
  * The check value that has no printable character. Sequences that produce it
- * are skipped at issue time rather than printed — see {@link isIssuableSequence}.
+ * are skipped at issue time rather than printed; see {@link isIssuableSequence}.
  */
 const UNPRINTABLE_CHECK_VALUE = 36
 
@@ -47,7 +47,7 @@ export const SEQUENCE_PAD_WIDTH = 5
 /** Sequences are 1-based; 0 is not a valid registration number. */
 export const MIN_SEQUENCE = 1
 
-/** Twelve digits — far beyond V1's ~10,000, and still comfortably readable. */
+/** Twelve digits: far beyond V1's ~10,000, and still comfortably readable. */
 export const MAX_SEQUENCE = 999_999_999_999
 
 const STATION_PATTERN = /^[0-9A-Z]{1,8}$/
@@ -60,7 +60,7 @@ export interface CodeIssuer {
 }
 
 /**
- * ISO 7064 MOD 37-2 — the pure check-character system with prime modulus 37,
+ * ISO 7064 MOD 37-2: the pure check-character system with prime modulus 37,
  * computed over the alphabet 0-9A-Z.
  *
  *   P = 0
@@ -73,7 +73,7 @@ export interface CodeIssuer {
  * - Damm and Verhoeff are defined for decimal input; our payload contains the
  *   station and issuer characters, so they do not apply without mangling the
  *   format.
- * - The obvious alternative, ISO 7064 MOD 37,36 (hybrid), needs no skipping —
+ * - The obvious alternative, ISO 7064 MOD 37,36 (hybrid), needs no skipping,
  *   but measurement showed it misses a small class of adjacent transpositions,
  *   those where the two characters differ by exactly 1 in value. In a
  *   zero-padded numeric sequence that class is dominated by `0`<->`1` swaps,
@@ -83,7 +83,7 @@ export interface CodeIssuer {
  *   substitution, every adjacent transposition and every jump transposition is
  *   caught. The price is that 1 in 37 payloads yields check value 36, which has
  *   no character in a 36-symbol alphabet. Those sequence numbers are skipped at
- *   issue time (~2.8% of the counter), which costs nothing — the sequence is a
+ *   issue time (~2.8% of the counter), which costs nothing: the sequence is a
  *   counter, not a census.
  *
  * These properties are pinned by exhaustive tests in `publicCode.test.ts`

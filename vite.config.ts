@@ -11,7 +11,7 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf8')) as {
  * Build identity.
  *
  * Injected at build time so a device can answer "what version am I running?"
- * with no network access — the operator reads it off the Admin screen and
+ * with no network access: the operator reads it off the Admin screen and
  * compares it with another terminal. Deliberately just a version and a
  * timestamp: no commit hashes, no branch names, nothing about the machine that
  * produced the build.
@@ -29,7 +29,7 @@ export default defineConfig({
        * shell, and that is exactly what the generated worker does. There is no
        * custom service-worker logic to write: no background sync, no runtime
        * API caching, no push. `injectManifest` would mean owning a
-       * service-worker source file — more to get wrong, and nothing gained
+       * service-worker source file, more to get wrong, and nothing gained
        * until there is a server to sync with.
        */
       strategies: 'generateSW',
@@ -57,7 +57,7 @@ export default defineConfig({
         /*
          * Precache everything needed for a cold start. The ZXing scanner alone
          * is ~495 kB of the main bundle, and the default 2 MiB ceiling would
-         * silently drop it — leaving a device that looks ready and then cannot
+         * silently drop it, leaving a device that looks ready and then cannot
          * scan once the network is gone.
          */
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
@@ -100,13 +100,13 @@ export default defineConfig({
         orientation: 'portrait',
         /*
          * The neutral home screen, not a station. A device is not permanently
-         * Point A or Point B — staff picks the station after launch, and
+         * Point A or Point B, staff picks the station after launch, and
          * baking one in would make an installed terminal awkward to repurpose
          * mid-event.
          */
         start_url: './#/',
         scope: './',
-        /* The campaign's own surfaces — see src/styles/tokens.css. */
+        /* The campaign's own surfaces; see src/styles/tokens.css. */
         background_color: '#0b0d0e',
         theme_color: '#0b0d0e',
         icons: [
@@ -144,7 +144,7 @@ export default defineConfig({
      * One eager bundle for everything a station needs, deliberately.
      *
      * The ZXing scanner is ~495 kB of the total, and code-splitting it would be
-     * the obvious move — except a lazily-fetched chunk needs the network at the
+     * the obvious move, except a lazily-fetched chunk needs the network at the
      * moment staff press "Start scanner". The service worker precaches every
      * emitted chunk, so splitting would now be safe, but a single bundle keeps
      * "is the scanner cached?" impossible to get wrong.

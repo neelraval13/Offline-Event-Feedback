@@ -9,7 +9,7 @@ import { RATINGS_1_TO_7, type Rating1To7 } from '../../../../types'
  * question that quietly offers six lamps is a question whose answers cannot be
  * compared with the others.
  *
- * The headlamps light cumulatively — tapping 5 lights 1 through 5 — which is the
+ * The headlamps light cumulatively, tapping 5 lights 1 through 5, which is the
  * supplied behaviour and the one riders expect from a rating.
  *
  * Accessibility is the reason this is a `radiogroup` of real buttons rather than
@@ -22,7 +22,7 @@ import { RATINGS_1_TO_7, type Rating1To7 } from '../../../../types'
 interface SevenPointRatingProps {
   readonly value: Rating1To7 | null
   readonly onChange: (rating: Rating1To7) => void
-  /** Id of the element labelling this scale — usually the question prompt. */
+  /** Id of the element labelling this scale: usually the question prompt. */
   readonly labelledBy: string
   readonly disabled?: boolean
 }

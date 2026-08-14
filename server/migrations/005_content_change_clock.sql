@@ -1,7 +1,7 @@
--- Offline Event Feedback — content-change clock correction, migration 005.
+-- Offline Event Feedback: content-change clock correction, migration 005.
 --
 -- Migration 004 introduced `content_changed_at`, and the ingest writes filled it
--- from `receivedAt` — a timestamp produced by the API process. Reporting compares
+-- from `receivedAt`: a timestamp produced by the API process. Reporting compares
 -- it against `reconciliation_runs.completed_at`, which Postgres writes with its
 -- own clock. Two clocks, one comparison.
 --
@@ -14,14 +14,14 @@
 --
 -- If the API clock ran BEHIND the database, an existing value is stamped earlier
 -- than the truth. That understates staleness only until the operator runs
--- reconciliation again — the new run's `completed_at` is later than every one of
+-- reconciliation again: the new run's `completed_at` is later than every one of
 -- those values, and from then on the comparison is correct. Nothing to fix.
 --
 -- If the API clock ran AHEAD, a value can sit in the future relative to the
 -- database. That does not self-heal: every subsequent run completes *before* the
 -- stamp, so freshness reports the run stale, the operator reconciles, and it
 -- reports stale again. The warning that is meant to mean "reconcile" becomes a
--- warning that reconciling does not clear — which is how a real staleness warning
+-- warning that reconciling does not clear, which is how a real staleness warning
 -- stops being read.
 --
 -- ## What this does

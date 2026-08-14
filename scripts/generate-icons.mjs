@@ -3,7 +3,7 @@
  *
  * These are placeholders: a flat blue tile with a plain "EF" mark. There is no
  * final branding yet, and none is being invented here. Replacing them later is
- * a matter of dropping new PNGs into `public/icons/` — nothing in the
+ * a matter of dropping new PNGs into `public/icons/`; nothing in the
  * application architecture depends on what they look like.
  *
  * Written as a script rather than committed-and-forgotten binaries so the

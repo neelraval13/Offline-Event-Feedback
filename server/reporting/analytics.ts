@@ -17,8 +17,8 @@ import type {
  *
  * Two different questions, deliberately kept apart:
  *
- *   analytics  — what did unambiguous responses say?
- *   coverage   — how many participants gave us anything at all?
+ *   analytics: what did unambiguous responses say?
+ *   coverage:  how many participants gave us anything at all?
  *
  * Conflating them is the easy mistake. A participant with two conflicting
  * responses counts towards coverage (they did respond) but contributes to no
@@ -28,7 +28,7 @@ import type {
 /**
  * The questionnaires this build can read.
  *
- * `SUPPORTED_FORM_VERSION` keeps its name and its meaning — it is the version
+ * `SUPPORTED_FORM_VERSION` keeps its name and its meaning; it is the version
  * the original `feedback-v1` figures are computed from, and the SQL that
  * extracts `overall_rating` and friends guards on exactly it. The campaign
  * questionnaire is a separate version with separate figures, never folded into
@@ -60,8 +60,8 @@ const EXPERIENCES = [
 /**
  * Computes analytics from responses that reconciliation classified `matched`.
  *
- * The caller is responsible for that filter — it is a SQL join on
- * `reconciliation_feedback_results.status = 'matched'` — because doing it here
+ * The caller is responsible for that filter, it is a SQL join on
+ * `reconciliation_feedback_results.status = 'matched'`, because doing it here
  * would mean loading every response into memory to throw most of them away.
  *
  * A response whose `form_version` this build does not understand is counted and
@@ -101,7 +101,7 @@ export function computeAnalytics(
      * answer to that question, so it is not counted: `String(2.5)` is not a key
      * of `ratingCounts`, and without the integer check it would silently create
      * one while still moving the average. Malformed input is excluded, not
-     * rounded — rounding would invent an answer nobody gave.
+     * rounded, rounding would invent an answer nobody gave.
      */
     const rating = response.answers['overall_rating']
     if (
@@ -155,7 +155,7 @@ export function computeAnalytics(
 /**
  * Response coverage: participants who gave any valid response.
  *
- * Includes registrations with several responses — the participant did answer,
+ * Includes registrations with several responses: the participant did answer,
  * even though the run cannot say which answer is theirs. This is why coverage
  * is usually a larger number than the analytics sample, and why the two are
  * reported separately rather than as one "response rate".
@@ -199,7 +199,7 @@ function emptyRatingSummary(key: string, prompt: string): CampaignRatingSummary 
  * be part of what riders said.
  *
  * A response whose `form_version` is not the campaign's is counted as
- * unreadable and skipped, never coerced — a later questionnaire may reuse
+ * unreadable and skipped, never coerced: a later questionnaire may reuse
  * `overallExperienceRating` for a ten-point scale.
  */
 export function computeCampaignAnalytics(

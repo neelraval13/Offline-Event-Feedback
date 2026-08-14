@@ -2,7 +2,7 @@
  * Reporting DTOs.
  *
  * Shared in spirit with the client, which keeps its own mirrored types in
- * `src/lib/reporting/types.ts`. These are not part of the sync wire contract —
+ * `src/lib/reporting/types.ts`. These are not part of the sync wire contract;
  * that one is versioned because devices in the field may lag a deployment.
  * Reporting is a browser talking to the server it was served from, so the two
  * always move together.
@@ -73,7 +73,7 @@ export interface FeedbackAnalytics {
  * Coverage is a different question from analytics.
  *
  * Analytics asks "what did unambiguous responses say?"; coverage asks "how many
- * participants gave us anything at all?" — which legitimately includes the
+ * participants gave us anything at all?", which legitimately includes the
  * ambiguous ones.
  */
 export interface ResponseCoverage {
@@ -94,7 +94,7 @@ export interface FreshnessReport {
   readonly registrationsAddedSinceRun: number
   readonly feedbackAddedSinceRun: number
   /**
-   * Server time at which content was last accepted for this event — an insert or
+   * Server time at which content was last accepted for this event: an insert or
    * an accepted revision. Never moved by an already-current retry.
    */
   readonly latestContentChangeAt: string | null
@@ -118,7 +118,7 @@ export interface CampaignRatingSummary {
  *
  * Separate from {@link FeedbackAnalytics} rather than merged into it. The two
  * questionnaires measure different things on different scales, and a single
- * shape would force one of them to report meaningless nulls — which reads as a
+ * shape would force one of them to report meaningless nulls, which reads as a
  * result rather than as an absence.
  */
 export interface CampaignAnalytics {
@@ -206,7 +206,7 @@ export interface RegistrationRow extends CampaignRegistrationFields {
  * The campaign ratings, for a compact summary.
  *
  * Present only on a `flying-flea-feedback-v1` response, and null on every other
- * questionnaire — including a future one, whose identically-named key would mean
+ * questionnaire, including a future one, whose identically-named key would mean
  * something else. A row that is summarised at all is summarised on its own
  * scale.
  */

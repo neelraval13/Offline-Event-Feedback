@@ -10,8 +10,8 @@ import { formatSummary } from './reconciliation/summary'
  * Never run automatically after a sync batch. Ingest is a hot path that a
  * device is waiting on; reconciliation is a whole-event analysis that gets
  * slower as the event grows, and coupling them would make every upload pay for
- * it. It is safe to run repeatedly — during QA, after devices sync, after the
- * event closes, before reporting — and each run is its own snapshot.
+ * it. It is safe to run repeatedly, during QA, after devices sync, after the
+ * event closes, before reporting, and each run is its own snapshot.
  */
 
 function argument(name: string): string | null {
@@ -56,8 +56,8 @@ async function main(): Promise<void> {
 main()
   .catch((error: unknown) => {
     /*
-     * The message only. A failed run has already rolled back — the raw records
-     * are untouched and no partial run is recorded — so there is nothing to
+     * The message only. A failed run has already rolled back, the raw records
+     * are untouched and no partial run is recorded, so there is nothing to
      * clean up and nothing about a participant worth printing.
      */
     console.error(

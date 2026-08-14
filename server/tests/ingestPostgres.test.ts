@@ -18,15 +18,15 @@ import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures'
  * Ingest against a real Postgres.
  *
  * `api.test.ts` proves the merge semantics exhaustively against an in-memory
- * store, which is fast and complete about the rules — and cannot prove a single
+ * store, which is fast and complete about the rules, and cannot prove a single
  * line of SQL. This suite exists for the things only a database can answer:
  * that a column holds what we think it holds, and that a record read back out of
  * it compares equal to the one that went in.
  *
  * The specific failure it was written for: `mapFeedback` hardcoded
  * `formVersion: 'feedback-v1'`. Every campaign response therefore read back as
- * the wrong questionnaire, so an identical re-delivery — the most ordinary event
- * in this system — compared as a content change and came back `conflict`. The
+ * the wrong questionnaire, so an identical re-delivery, the most ordinary event
+ * in this system, compared as a content change and came back `conflict`. The
  * device would have retried it forever. Nothing in the memory-store suite could
  * see it, because the memory store never round-trips through a column.
  *
@@ -155,7 +155,7 @@ describeDb('ingest against Postgres', () => {
       /*
        * The regression. Reading the row back with the wrong questionnaire made
        * the stored record compare unequal to the one being re-sent, which ingest
-       * correctly called a conflict — for a record that had not changed at all.
+       * correctly called a conflict, for a record that had not changed at all.
        */
       const token = await enrolledToken()
       const record = feedback({
@@ -175,7 +175,7 @@ describeDb('ingest against Postgres', () => {
 
     it('survives the lost-response shape', async () => {
       /*
-       * The batch commits, the reply never reaches the tablet — a dropped
+       * The batch commits, the reply never reaches the tablet: a dropped
        * connection, a tab closed, a device carried out of range. The record is
        * still `pending` locally, so the outbox sends it again. That retry must
        * be recognised, not fought.
@@ -285,7 +285,7 @@ describeDb('ingest against Postgres', () => {
       /*
        * An operator deleted the pincode and saved. The correction is a new
        * revision carrying no pincode at all, and the central column must end up
-       * NULL — not still holding the old value, which would make the report and
+       * NULL, not still holding the old value, which would make the report and
        * the device disagree about what the rider gave.
        */
       const token = await enrolledToken()

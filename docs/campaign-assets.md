@@ -5,7 +5,7 @@ and its photography from Royal Enfield's CDN; this application must render both
 at a venue with no Wi-Fi, so everything ships in the repository and is precached
 with the shell.
 
-## Photography — `public/assets/flying-flea/`
+## Photography: `public/assets/flying-flea/`
 
 Declared in `src/features/campaign/flying-flea/assets.ts` as plain constants.
 These files are part of the application: a build without them is broken, not
@@ -18,8 +18,8 @@ degraded, so nothing probes for their existence at runtime.
 | `registration-header.webp` | 2400 × 1274 | 229 KB | Banner on Point A and Point B |
 
 Both motorcycles carry a real alpha channel, so they sit on the dark card with no
-plate behind them. The preview stage is `aspect-ratio: 940 / 593` — matched to
-the wider of the two — so switching colour cannot resize the frame, and
+plate behind them. The preview stage is `aspect-ratio: 940 / 593`, matched to
+the wider of the two, and so switching colour cannot resize the frame, and
 `object-fit: contain` keeps the whole motorcycle visible at every width.
 
 ### Masters
@@ -35,7 +35,7 @@ magick design/assets/flying-flea/registration-header-master.webp \
   public/assets/flying-flea/registration-header.webp
 ```
 
-## Fonts — `public/fonts/`
+## Fonts: `public/fonts/`
 
 | File | Role | Token |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ magick design/assets/flying-flea/registration-header-master.webp \
 | `Inter_18pt-Bold.ttf` | The same, bold | `--ff-font-ui` |
 
 `@font-face` rules are in `src/styles/fonts.css`; nothing else names a family.
-`Inter-Medium.otf` from the supplied archive is deliberately not installed — it
+`Inter-Medium.otf` from the supplied archive is deliberately not installed; it
 duplicates the Medium role, and pairing it with the 18pt Bold would mix two
 optical sizes in one interface.
 
@@ -53,7 +53,7 @@ The printed sticker deliberately uses a system and monospace stack. A label is
 printed and scanned, and it must render identically whether or not a web font
 loaded.
 
-## Favicon — `public/`
+## Favicon: `public/`
 
 `favicon.svg`, `favicon.png` (67 × 67) and `apple-touch-icon.png` (512 × 512),
 taken from the campaign package's own `custom-domain/` assets and linked from

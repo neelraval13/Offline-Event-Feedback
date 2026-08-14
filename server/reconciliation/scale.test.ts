@@ -151,7 +151,7 @@ describe(`a full event of ${REGISTRATIONS.toLocaleString()} registrations`, () =
   it('scales roughly linearly rather than quadratically', () => {
     /*
      * Doubling the input should roughly double the work. A quadratic algorithm
-     * would roughly quadruple it — the ratio below would exceed 3 long before
+     * would roughly quadruple it: the ratio below would exceed 3 long before
      * it became slow enough for a wall-clock ceiling to notice.
      */
     const measure = (registrations: number, feedback: number): number => {

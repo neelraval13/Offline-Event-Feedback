@@ -8,7 +8,7 @@ import { issuerCode, type DeviceId, type IssuerCode } from '../../types'
  * between devices during the event. Two installations working station A1 would
  * each start their counter at 1 and print `A1-00001-O` for two different
  * participants. Since the public code is the manual fallback identity, that
- * collision is silent and unrecoverable — Point B cannot tell the two apart,
+ * collision is silent and unrecoverable. Point B cannot tell the two apart,
  * and neither can the server afterwards. Namespacing the counter per device
  * removes the possibility rather than making it unlikely.
  *
@@ -20,7 +20,7 @@ import { issuerCode, type DeviceId, type IssuerCode } from '../../types'
  *   device that reloads keeps the same issuer forever.
  * - **Hexadecimal**, not base36. `0-9A-F` contains neither `O` nor `I`, so
  *   adding six characters to a code staff types by hand introduces no new
- *   glyph ambiguity — which matters given `O`/`0` and `I`/`1` are already a
+ *   glyph ambiguity, which matters given `O`/`0` and `I`/`1` are already a
  *   known concern for the check character.
  * - **24 bits** (~16.7 million values). For the ~10 devices an event of this
  *   size runs, the probability that any two share an issuer code is around
@@ -33,7 +33,7 @@ import { issuerCode, type DeviceId, type IssuerCode } from '../../types'
  * The hash is FNV-1a (32-bit) followed by the MurmurHash3 `fmix32` finalizer,
  * both standard published algorithms, both synchronous. A cryptographic digest
  * would be the reflex choice, but `crypto.subtle` is restricted to secure
- * contexts — the same trap that rules out `crypto.randomUUID()` here — and this
+ * contexts, the same trap that rules out `crypto.randomUUID()` here, and this
  * needs dispersion, not preimage resistance. Nothing about the issuer code is
  * a security control; it is a namespace.
  */
@@ -41,7 +41,7 @@ import { issuerCode, type DeviceId, type IssuerCode } from '../../types'
 /** Characters in the issuer segment. */
 export const ISSUER_CODE_LENGTH = 6
 
-/** Bits of the hash kept — exactly what {@link ISSUER_CODE_LENGTH} hex digits hold. */
+/** Bits of the hash kept: exactly what {@link ISSUER_CODE_LENGTH} hex digits hold. */
 const ISSUER_CODE_MASK = 0xffffff
 
 export const ISSUER_CODE_PATTERN = /^[0-9A-F]{6}$/
@@ -61,7 +61,7 @@ function fnv1a32(input: string): number {
 /**
  * MurmurHash3's 32-bit finalizer.
  *
- * FNV-1a alone already disperses random UUIDs well — measurement put it within
+ * FNV-1a alone already disperses random UUIDs well; measurement put it within
  * noise of uniform. This runs anyway so the result does not depend on the input
  * being random: FNV's low bits mix weakly, and a future device ID that is
  * structured rather than random would otherwise cluster.

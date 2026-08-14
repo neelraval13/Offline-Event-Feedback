@@ -20,7 +20,7 @@ import {
  * about sync at all: a failed upload is not a reason to interrupt somebody
  * registering a participant, and the records are safe locally either way.
  *
- * The device token is never displayed, and neither is the enrolment code — it
+ * The device token is never displayed, and neither is the enrolment code; it
  * is cleared from component state the moment the attempt finishes.
  */
 
@@ -81,7 +81,7 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
       setOutcome(result)
 
       if (result.transportFailure !== undefined) {
-        // Never "sync failed" — the records are safe, they simply have not
+        // Never "sync failed": the records are safe, they simply have not
         // been delivered yet.
         setMessage(
           FAILURE_MESSAGES[result.transportFailure] ??
@@ -105,8 +105,8 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
 
   /*
    * Opportunistic attempts: once after the screen opens, and when the browser
-   * says connectivity returned. `navigator.onLine` is only a hint — it reports
-   * a link, not a reachable server — so a failure here is silent.
+   * says connectivity returned. `navigator.onLine` is only a hint: it reports
+   * a link, not a reachable server, so a failure here is silent.
    */
   useEffect(() => {
     if (credentialPresent !== true || openedRef.current) {
@@ -210,7 +210,7 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
           <dt>Sync errors</dt>
           <dd data-testid="sync-errors">
             {counts === null
-              ? '—'
+              ? 'Counting…'
               : (counts.registrations.error + counts.feedback.error).toLocaleString()}
           </dd>
         </div>

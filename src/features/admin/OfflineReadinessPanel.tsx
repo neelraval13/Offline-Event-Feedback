@@ -11,7 +11,7 @@ import {
  * there a newer build waiting?
  *
  * This is the only place in the application that mentions updates. Point A and
- * Point B never do — an operator mid-registration must not be offered a button
+ * Point B never do: an operator mid-registration must not be offered a button
  * that reloads the page.
  */
 export function OfflineReadinessPanel() {
@@ -65,7 +65,7 @@ export function OfflineReadinessPanel() {
           <p>
             <strong>Application update available.</strong> The running version
             keeps working until you apply it. Apply it between participants, or
-            before a shift — applying reloads this terminal.
+            before a shift. Applying it reloads this terminal.
           </p>
           <button
             type="button"

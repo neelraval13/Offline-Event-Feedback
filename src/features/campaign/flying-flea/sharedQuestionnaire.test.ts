@@ -12,7 +12,7 @@ import { RATING_QUESTIONS, TEXT_QUESTIONS } from './feedbackForm'
  * One questionnaire, one definition.
  *
  * These tests deliberately do NOT compare two hardcoded copies of the six
- * prompts against each other — that would pass happily while both copies drifted
+ * prompts against each other; that would pass happily while both copies drifted
  * away from what the campaign actually asked. They assert identity: the objects
  * the browser renders are the objects `shared/campaign/flyingFlea.ts` exports,
  * so a copy cannot exist to drift.

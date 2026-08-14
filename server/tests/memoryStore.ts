@@ -15,8 +15,8 @@ import type {
  *
  * Every write here is synchronous and therefore indivisible, which is exactly
  * what `INSERT ... ON CONFLICT DO NOTHING` and a revision-conditional `UPDATE`
- * give in Postgres. That lets the merge semantics — including two devices
- * uploading the same record at once — be exercised exhaustively without a
+ * give in Postgres. That lets the merge semantics, including two devices
+ * uploading the same record at once, be exercised exhaustively without a
  * database.
  *
  * What it cannot prove is that the SQL is written correctly. That is what the
@@ -116,7 +116,7 @@ export function createMemoryStore(): MemoryStore {
        * Every mutable field, spread from the incoming record rather than listed
        * one by one. The listed version silently dropped the campaign fields when
        * they were added, which made a correction look accepted and change
-       * nothing — exactly the class of bug this fake exists to not have.
+       * nothing: exactly the class of bug this fake exists to not have.
        */
       registrations.set(record.recordId, {
         ...existing,

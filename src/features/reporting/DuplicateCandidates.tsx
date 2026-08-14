@@ -9,7 +9,7 @@ import { useReportingSession } from './session'
 /*
  * Registrations that might be the same person.
  *
- * Candidates, deliberately — matched on exact normalised phone or email, never
+ * Candidates, deliberately, matched on exact normalised phone or email, never
  * on a name. Two people at one event share a phone number often enough
  * (a couple, a parent and child, a company mobile) that treating a match as
  * proof would corrupt the participant list.
@@ -98,7 +98,7 @@ export function DuplicateCandidates({
         <p className="notice" role="status">
           Showing {candidates.length.toLocaleString()} of{' '}
           {total.toLocaleString()} pairs this run found. Export the duplicate
-          candidates CSV for the complete list — it is never truncated.
+          candidates CSV for the complete list; it is never truncated.
         </p>
       )}
 

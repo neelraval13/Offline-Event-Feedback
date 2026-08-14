@@ -3,7 +3,7 @@ import type { OfflineEventDb } from '../storage'
 /*
  * Backup bookkeeping for this installation.
  *
- * Stored in `deviceConfig`, which restore deliberately never imports — so
+ * Stored in `deviceConfig`, which restore deliberately never imports, so
  * these dates always describe the device in front of the operator, and a
  * restored backup can never make a fresh machine claim it was backed up last
  * Tuesday.

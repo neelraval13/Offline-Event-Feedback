@@ -210,8 +210,8 @@ export async function runSync(options: RunSyncOptions = {}): Promise<SyncOutcome
 
     if (!response.ok) {
       /*
-       * No server answer. Every record in this batch — and every batch after
-       * it — stays pending. Nothing is marked in error, because nothing is
+       * No server answer. Every record in this batch, and every batch after
+       * it, stays pending. Nothing is marked in error, because nothing is
        * known to be wrong with the records themselves.
        */
       await recordSyncActivity({ error: response.failure }, database)

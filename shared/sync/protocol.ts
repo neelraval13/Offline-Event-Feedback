@@ -16,7 +16,7 @@ import {
  * Shared by the client and the server so there is exactly one definition of
  * what may cross the network. Two independently written validators drift, and
  * the drift shows up as records that upload from one build and are rejected by
- * another — at an event, with no way to diagnose it.
+ * another, at an event, with no way to diagnose it.
  *
  * The server treats every request as untrusted regardless: TypeScript types do
  * not survive an HTTP boundary, so these schemas are parsed at runtime on the
@@ -36,7 +36,7 @@ const uuid = z
     'must be a UUID',
   )
 
-/** `A1-B8EFD9-00001-X` — station, device issuer, sequence, check character. */
+/** `A1-B8EFD9-00001-X`: station, device issuer, sequence, check character. */
 const publicCode = z
   .string()
   .regex(/^[0-9A-Z]{1,8}-[0-9A-F]{6}-\d{1,12}-[0-9A-Z]$/, 'must be a public code')
@@ -57,8 +57,8 @@ const revision = z.number().int().min(1)
 /*
  * Registration.
  *
- * PII travels here deliberately — consolidating it centrally is the entire
- * point of synchronisation — and therefore only ever over HTTPS in production.
+ * PII travels here deliberately, consolidating it centrally is the entire
+ * point of synchronisation, and therefore only ever over HTTPS in production.
  */
 export const registrationWireSchema = z.object({
   kind: z.literal('registration'),
@@ -93,7 +93,7 @@ export const registrationWireSchema = z.object({
   vehicle: z.string().min(1).max(MAX_VEHICLE_LENGTH).optional(),
   /*
    * Closed sets, from the shared campaign definition. A colour is a stored
-   * answer to a question, so an unrecognised one is not a long string — it is a
+   * answer to a question, so an unrecognised one is not a long string; it is a
    * value no rider could have chosen.
    */
   interestedColour: z.enum(FLYING_FLEA_COLOURS).optional(),
@@ -212,7 +212,7 @@ function checkCaptureIdentity(
  *
  * Without this, `answers` being a union means a `flying-flea-feedback-v1`
  * record carrying `feedback-v1` answers parses cleanly and lands in the
- * database as a campaign response with no campaign answers in it — invisible
+ * database as a campaign response with no campaign answers in it, invisible
  * until an analyst notices the averages are computed from fewer records than
  * the count says.
  */

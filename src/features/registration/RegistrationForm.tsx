@@ -29,8 +29,8 @@ interface RegistrationFormProps {
  * them: Name is focused on arrival, tab order runs straight down the fields to
  * the button, and Enter from any field submits. The mouse is optional.
  *
- * Validation runs on submit rather than on every keystroke — errors that appear
- * while someone is still typing their address are noise — and a failed
+ * Validation runs on submit rather than on every keystroke, errors that appear
+ * while someone is still typing their address are noise, and a failed
  * submission never clears the other fields.
  */
 export function RegistrationForm({

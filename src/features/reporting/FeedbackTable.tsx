@@ -166,10 +166,10 @@ export function FeedbackTable({
                 <span className="recent__code">{row.publicCode}</span>
               </td>
               <td>{row.captureMethod === 'qr' ? 'Scanned' : 'Typed'}</td>
-              <td>{row.linkedRegistration?.name ?? '—'}</td>
+              <td>{row.linkedRegistration?.name ?? 'None'}</td>
               {/* Always a status: a run contains exactly what it classified. */}
               <td>{STATUS_LABELS[row.reconciliationStatus]}</td>
-              <td>{row.overallRating ?? '—'}</td>
+              <td>{row.overallRating ?? 'None'}</td>
               <td>
                 <button
                   type="button"

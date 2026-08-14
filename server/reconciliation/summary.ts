@@ -5,7 +5,7 @@ import type { ReconciliationCounts } from './types'
  *
  * Reconciliation reads names, phone numbers and email addresses in order to
  * group duplicate candidates, so it is precisely the component most able to
- * leak them. Nothing but identifiers and totals is ever printed — a terminal
+ * leak them. Nothing but identifiers and totals is ever printed: a terminal
  * scrollback and a CI log are not places for participant data.
  */
 

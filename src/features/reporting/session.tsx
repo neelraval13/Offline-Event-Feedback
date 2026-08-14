@@ -12,7 +12,7 @@ import type { ReportingResult } from '../../lib/reporting/reportingClient'
  *
  * **It ends the session on a 401.** A rejected credential is not a per-panel
  * error message. The secret has been rotated, revoked or mistyped, so it is no
- * longer a credential — every panel's data is now unauthorised, and leaving names
+ * longer a credential: every panel's data is now unauthorised, and leaving names
  * and phone numbers on screen behind a "secret rejected" notice would be a
  * privileged view of an event with nothing authorising it. The session is torn
  * down, the data unmounts with it, and the operator is asked to sign in again.

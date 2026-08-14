@@ -20,7 +20,7 @@ import type {
  *
  * The split is the privacy boundary. Anyone holding the file without the
  * passphrase learns that it is a backup of this application and nothing
- * further — no event, no device, no counts, and above all no participant.
+ * further: no event, no device, no counts, and above all no participant.
  */
 
 export const BACKUP_FORMAT = 'offline-event-feedback-backup'
@@ -87,7 +87,7 @@ export interface BackupPayloadV1 {
   readonly feedback: readonly FeedbackRecord[]
   readonly sequences: readonly SequenceRow[]
   /**
-   * Captured for diagnostics. **No key from here is ever imported** — see the
+   * Captured for diagnostics. **No key from here is ever imported**. See the
    * device identity rules in restore.ts.
    */
   readonly deviceConfig: readonly DeviceConfigRow[]
@@ -127,7 +127,7 @@ export function summarise(payload: BackupPayloadV1): BackupSummary {
 /**
  * Filename for a generated backup.
  *
- * Carries a timestamp and nothing else. No participant name, no event detail —
+ * Carries a timestamp and nothing else. No participant name, no event detail:
  * a filename is visible in a file manager, an email client and a backup log,
  * long before anyone types a passphrase.
  */

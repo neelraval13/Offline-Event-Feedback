@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 /*
  * Device credentials.
  *
- * A single API secret baked into the PWA would not be a secret — the bundle is
+ * A single API secret baked into the PWA would not be a secret: the bundle is
  * readable by anyone who visits. Instead an operator types a short-lived
  * enrolment code once, on a device that has Internet, and the device receives
  * its own long random token in exchange.
@@ -46,7 +46,7 @@ export function enrollmentSecretMatches(
   expected: string,
 ): boolean {
   // Hashed first so the comparison is over fixed-length buffers regardless of
-  // what was submitted — otherwise length alone leaks through timing.
+  // what was submitted, otherwise length alone leaks through timing.
   return tokensMatch(hashDeviceToken(provided), hashDeviceToken(expected))
 }
 

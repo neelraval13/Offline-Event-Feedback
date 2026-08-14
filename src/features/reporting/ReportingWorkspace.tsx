@@ -15,8 +15,8 @@ import { useReportingSession } from './session'
  * The signed-in reporting screen.
  *
  * Separate from `ReportingScreen` so that everything holding central data lives
- * inside the session provider: when the session ends — Sign out, or a 401 from
- * any request — this whole subtree unmounts and the participants on screen go
+ * inside the session provider: when the session ends (Sign out, or a 401 from
+ * any request), this whole subtree unmounts and the participants on screen go
  * with it. There is no path where the data outlives the credential.
  *
  * The overview is fetched here rather than inside the Overview tab, because the
@@ -83,11 +83,12 @@ export function ReportingWorkspace({
   }, [loadOverview, refreshToken])
 
   return (
-    <article className="screen">
+    /* Wider than a station form: this screen is tables, read on a laptop. */
+    <article className="screen screen--wide">
       <h1>Central reporting</h1>
       <div className="button-row">
         <span className="screen__note">
-          {eventName} — {eventId}
+          {eventName} ({eventId})
         </span>
         <button type="button" className="button button--small" onClick={onSignOut}>
           Sign out

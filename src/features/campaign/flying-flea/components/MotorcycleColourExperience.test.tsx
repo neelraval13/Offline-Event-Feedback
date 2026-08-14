@@ -11,7 +11,7 @@ import { MotorcycleColourExperience } from './MotorcycleColourExperience'
  *
  * The property under test is that there is one source of truth: the colour the
  * registration will persist. A preview that kept its own state would be a second
- * one, and the two would eventually disagree — a rider shown a green bike whose
+ * one, and the two would eventually disagree: a rider shown a green bike whose
  * record says Storm Black.
  */
 
@@ -145,7 +145,7 @@ describe('the images are local', () => {
   it('keeps both photographs mounted so a switch needs no network', () => {
     /*
      * The tablet is routinely offline. Mounting an image only when its colour
-     * is chosen would mean the first switch waits on a decode — and, on a build
+     * is chosen would mean the first switch waits on a decode and, on a build
      * where precaching had regressed, on a request.
      */
     render(<Harness />)

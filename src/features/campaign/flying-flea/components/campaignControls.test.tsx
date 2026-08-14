@@ -179,7 +179,7 @@ describe('ColourSelector', () => {
   it('is single-select: one colour is always chosen and only one', async () => {
     /*
      * The supplied control is a two-position toggle. It cannot express "both"
-     * or "neither", so neither can this — a multi-select here would produce
+     * or "neither", so neither can this: a multi-select here would produce
      * answers the campaign's own form could not.
      */
     const onChange = vi.fn()

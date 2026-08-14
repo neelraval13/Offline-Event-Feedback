@@ -20,8 +20,8 @@ import { BACKUP_FORMAT_VERSION, type BackupPayloadV1 } from './format'
 /*
  * Fixtures for the backup suites.
  *
- * Records are built to look exactly like the ones Point A and Point B produce —
- * real UUIDs, real public codes with valid check characters — because the
+ * Records are built to look exactly like the ones Point A and Point B produce:
+ * real UUIDs, real public codes with valid check characters, because the
  * validator checks all of that and a fixture that cheats would test nothing.
  */
 
@@ -39,7 +39,7 @@ const B1 = stationId('B1')
  * Roughly one sequence number in 37 has no printable check character and is
  * skipped by the real allocator, so a fixture that formatted raw counters would
  * throw on those. Walking the same path keeps fixture codes both valid and
- * distinct — which the unique indexes require.
+ * distinct, which the unique indexes require.
  */
 const issuableCache = new Map<string, number[]>()
 
@@ -89,7 +89,7 @@ export function makeRegistration(
  * `overrides` takes the questionnaire as a pair.
  *
  * `Partial<FeedbackRecord>` would let a caller override `formVersion` alone and
- * leave the old questionnaire's answers behind it — the exact mismatch the
+ * leave the old questionnaire's answers behind it: the exact mismatch the
  * discriminated payload exists to prevent, reintroduced in the fixtures.
  */
 type FeedbackOverrides = Partial<Omit<FeedbackRecord, 'formVersion' | 'answers'>> &
@@ -104,8 +104,8 @@ export function makeFeedback(
    * Assembled from whichever half the caller supplied, then asserted once.
    *
    * The assertion is deliberate and is confined to fixtures: the validator
-   * suites exist to prove that a *hostile* file — including one whose answers do
-   * not match its declared version — is refused, and they cannot build such a
+   * suites exist to prove that a *hostile* file, including one whose answers do
+   * not match its declared version, is refused, and they cannot build such a
    * file through a type that makes it impossible. Production code has no such
    * escape hatch.
    */

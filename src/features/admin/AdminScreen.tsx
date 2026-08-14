@@ -46,7 +46,7 @@ export function AdminScreen() {
                 ? 'Checking…'
                 : database === null
                   ? 'Unknown'
-                  : `${database.name} v${database.openVersion ?? database.expectedVersion} — ${database.state}`}
+                  : `${database.name} v${database.openVersion ?? database.expectedVersion}: ${database.state}`}
             </dd>
           </div>
         </dl>

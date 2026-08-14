@@ -3,7 +3,7 @@
  *
  * A thin re-export of `shared/campaign/flyingFlea.ts`. The wording used to be
  * written out again here, which meant a report could quote a prompt that no
- * longer matched the one on the tablet — invisibly, because nothing compares
+ * longer matched the one on the tablet, invisibly, because nothing compares
  * them at runtime. There is now exactly one definition and both sides import it.
  *
  * Reporting-specific helpers that are genuinely not part of the questionnaire's

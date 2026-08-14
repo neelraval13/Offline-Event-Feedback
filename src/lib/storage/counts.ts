@@ -5,7 +5,7 @@ import type { OfflineEventDb } from './db'
  * Operational counts for the Admin screen.
  *
  * Counts and nothing else. Admin never shows a participant's name, phone,
- * email or comment — an operator supporting a station needs to know how much
+ * email or comment: an operator supporting a station needs to know how much
  * data is on the device and how much of it is unsynchronised, not who is in it.
  */
 

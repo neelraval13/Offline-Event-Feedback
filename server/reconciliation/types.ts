@@ -12,7 +12,7 @@
 export const RECONCILIATION_ENGINE_VERSION = 'reconciliation-v1'
 
 /* ------------------------------------------------------------------ *
- * Input — the central snapshot
+ * Input: the central snapshot
  * ------------------------------------------------------------------ */
 
 /**
@@ -44,20 +44,20 @@ export interface ReconciliationInput {
 }
 
 /* ------------------------------------------------------------------ *
- * Output — classifications
+ * Output: classifications
  * ------------------------------------------------------------------ */
 
 export type RegistrationStatus =
   /** Exactly one valid feedback record resolves here. */
   | 'matched'
-  /** No valid feedback resolves here — not necessarily an error. */
+  /** No valid feedback resolves here, not necessarily an error. */
   | 'without_feedback'
   /** Two or more valid feedback records resolve here. */
   | 'multiple_feedback'
 
 export type FeedbackStatus =
   | 'matched'
-  /** No registration resolves — the Point A device may simply not have synced. */
+  /** No registration resolves: the Point A device may simply not have synced. */
   | 'without_registration'
   /** The QR's two identifiers disagree. Evidence of an inconsistency. */
   | 'identity_conflict'

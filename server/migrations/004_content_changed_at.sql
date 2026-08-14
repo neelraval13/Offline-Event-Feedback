@@ -1,4 +1,4 @@
--- Offline Event Feedback — content-change timestamps, migration 004.
+-- Offline Event Feedback: content-change timestamps, migration 004.
 --
 -- One column per canonical table, recording the server time at which the server
 -- last accepted **new content** for that row.
@@ -12,8 +12,8 @@
 -- diagnosing a sync problem.
 --
 -- The consequence is that an offline tablet reconnecting and re-uploading a batch
--- it had already delivered — the single most ordinary thing that happens in this
--- system — moved `last_received_at` on every record in it, and reporting called
+-- it had already delivered, the single most ordinary thing that happens in this
+-- system, moved `last_received_at` on every record in it, and reporting called
 -- a perfectly current run stale. An operator who is told the data has changed
 -- when it has not either reconciles pointlessly or, worse, stops believing the
 -- warning by the time it is true.
@@ -25,8 +25,8 @@
 --   revision-conditional UPDATE (accepted)  -> set
 --   idempotent touch (already_current)      -> NOT set
 --
--- Combined with run membership — a record the run never classified is a record
--- that arrived afterwards — this gives reporting both halves of staleness:
+-- Combined with run membership, a record the run never classified is a record
+-- that arrived afterwards, this gives reporting both halves of staleness:
 -- something new arrived, or something existing was revised.
 --
 -- ## Backfill

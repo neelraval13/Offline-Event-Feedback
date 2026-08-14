@@ -2,8 +2,8 @@
  * The Flying Flea campaign's data model.
  *
  * These are persisted values, not UI state. Everything here is what a reader of
- * a record — the central server, an export, a build of this app three months
- * from now — needs in order to know what was captured, without consulting the
+ * a record (the central server, an export, a build of this app three months
+ * from now) needs in order to know what was captured, without consulting the
  * screen that captured it.
  *
  * Wording lives in `config.ts`; meaning lives here. That separation is what
@@ -80,9 +80,9 @@ export interface FlyingFleaRegistrationFields {
  *
  * Three states, and the middle one is the whole point:
  *
- *   absent  — not part of this correction; leave whatever is stored
- *   null    — the operator cleared it; the record must stop carrying a value
- *   value   — set it to this
+ *   absent: not part of this correction; leave whatever is stored
+ *   null:   the operator cleared it; the record must stop carrying a value
+ *   value:  set it to this
  *
  * Without the null, "unchanged" and "deleted" are the same input, and a rider
  * who asked for their pincode to be removed keeps it: the form sends nothing,
@@ -90,7 +90,7 @@ export interface FlyingFleaRegistrationFields {
  * appeared to succeed. `undefined` cannot mean both.
  *
  * Cleared fields are removed from the record rather than stored as empty
- * strings — an empty string is a value someone typed, and this is the absence
+ * strings: an empty string is a value someone typed, and this is the absence
  * of one.
  */
 export type CampaignFieldCorrections = {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * The value is read at module scope from `import.meta.env`, so each case stubs
  * the environment and re-imports. That is deliberate: it is exactly how the real
- * build behaves — the endpoint is baked in at build time and cannot change while
+ * build behaves: the endpoint is baked in at build time and cannot change while
  * the app is running.
  */
 

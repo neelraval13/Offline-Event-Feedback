@@ -12,7 +12,7 @@ import { useReportingSession } from './session'
  * changed" and "the number was wrong".
  *
  * Latest is the default, and it is resolved by the server rather than pinned
- * here — the client should not have to know which run is current.
+ * here: the client should not have to know which run is current.
  */
 
 interface RunSelectorProps {
@@ -82,7 +82,7 @@ export function RunSelector({
         <option value="">Latest ({runs.length} run(s) recorded)</option>
         {runs.map((run) => (
           <option key={run.runId} value={run.runId}>
-            {new Date(run.completedAt).toLocaleString()} —{' '}
+            {new Date(run.completedAt).toLocaleString()} ·{' '}
             {run.counts.registrationCount.toLocaleString()} registrations,{' '}
             {run.counts.feedbackCount.toLocaleString()} responses
           </option>

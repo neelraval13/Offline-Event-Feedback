@@ -16,7 +16,7 @@ interface AppShellProps {
 /**
  * Frame shared by every surface: event context on top, navigation, content.
  *
- * The event/day banner is not decoration — staff running a station needs to be
+ * The event/day banner is not decoration: staff running a station needs to be
  * able to confirm at a glance which event and day this device is stamping onto
  * the records it captures.
  */

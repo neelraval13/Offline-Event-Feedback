@@ -1,13 +1,13 @@
 /*
- * `flying-flea-feedback-v1` — the questionnaire itself.
+ * `flying-flea-feedback-v1`: the questionnaire itself.
  *
  * This module owns everything about the campaign questionnaire that must mean
  * the same thing on a tablet, on the server and in an export: the version
  * string, the stable answer keys, the exact question wording, and the scale.
  *
  * It lives in `shared/` for the same reason the sync protocol does. The wording
- * was previously written out twice — once in the client's campaign config and
- * once in the server's reporting module — and two copies of a question is one
+ * was previously written out twice, once in the client's campaign config and
+ * once in the server's reporting module, and two copies of a question is one
  * question that will eventually disagree with itself. When that happens the
  * disagreement is invisible: a report quotes a prompt the rider never saw, and
  * nothing fails.
@@ -26,8 +26,8 @@
  *
  * ## Versioning rule
  *
- * If a question's meaning changes — or its canonical wording has to change after
- * answers have been collected — that is a **new form version**, not an edit
+ * If a question's meaning changes, or its canonical wording has to change after
+ * answers have been collected, that is a **new form version**: not an edit
  * here. A stored `flying-flea-feedback-v1` answer means what the prompt below
  * says it means, permanently. Rewriting this file would silently rewrite the
  * meaning of every response already in the database.
@@ -175,8 +175,8 @@ export function isFlyingFleaGender(value: unknown): value is FlyingFleaGender {
 /* ------------------------------------------------------------------ *
  * Campaign registration field constraints
  *
- * Shared because three independent readers enforce them — the campaign form, the
- * sync wire schema and the backup validator — and a bound that disagrees between
+ * Shared because three independent readers enforce them (the campaign form, the
+ * sync wire schema and the backup validator), and a bound that disagrees between
  * them is a record one layer accepts and another refuses.
  * ------------------------------------------------------------------ */
 

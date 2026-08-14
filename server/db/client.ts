@@ -40,7 +40,7 @@ export function createDatabaseClient({ url, runtime }: DatabaseClientOptions): S
    * so the pooling that matters happens there rather than here.
    *
    * If production load testing shows requests queueing on the connection rather
-   * than on the database, this is the number to raise — with the pooler's own
+   * than on the database, this is the number to raise, with the pooler's own
    * limits in view, not in isolation.
    *
    * `idle_timeout` returns a connection Neon's pooler can hand to someone else
@@ -50,7 +50,7 @@ export function createDatabaseClient({ url, runtime }: DatabaseClientOptions): S
    *
    * `prepare: false` is a conservative choice, not a compatibility requirement.
    * Neon's pooled endpoint does support protocol-level prepared statements, so
-   * this could be left on — but nothing in this application depends on
+   * this could be left on, but nothing in this application depends on
    * prepared-statement reuse: the queries are per-request and short, and the
    * saving would be invisible next to a network round trip to the database.
    * Turning it off removes a class of pooled-connection surprise for no

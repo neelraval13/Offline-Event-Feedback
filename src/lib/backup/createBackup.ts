@@ -54,7 +54,7 @@ export async function createEncryptedBackup(
     /*
      * A backup of data that fails its own validation is worse than no backup:
      * it cannot be restored, and it makes the operator believe the device is
-     * protected. The issues are structural — field names and indices — so
+     * protected. The issues are structural, field names and indices, so
      * nothing about a participant is exposed by showing them.
      */
     return {

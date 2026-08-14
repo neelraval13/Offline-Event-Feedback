@@ -179,7 +179,7 @@ export function useRegistrationTerminal() {
   }, [phase, renderStickerFor])
 
   /**
-   * Brings an earlier record back as the active sticker — the recovery path
+   * Brings an earlier record back as the active sticker: the recovery path
    * after a refresh, and the reprint path for a jam noticed later.
    *
    * Re-renders the QR from the stored record, so the symbol is identical to

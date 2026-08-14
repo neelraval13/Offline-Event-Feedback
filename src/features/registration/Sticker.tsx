@@ -16,8 +16,8 @@ interface StickerProps {
  * The printable sticker: a QR code and the public code beneath it.
  *
  * This component is the whole privacy boundary for the printed artefact. It
- * accepts a public code and pre-rendered QR markup — **not** a registration
- * record — so there is no name, phone or email in scope to leak onto a label
+ * accepts a public code and pre-rendered QR markup, **not** a registration
+ * record, so there is no name, phone or email in scope to leak onto a label
  * even by accident. A sticker is worn in public by someone who cannot see what
  * it says about them; it says nothing about them.
  *
@@ -25,7 +25,7 @@ interface StickerProps {
  * state and then printed blank. Callers render this only once the QR exists.
  *
  * Sized in millimetres rather than pixels because the output is physical. The
- * same element is what the browser prints, at 1:1 — see the `@media print`
+ * same element is what the browser prints, at 1:1. See the `@media print`
  * rules in styles.css.
  */
 export function Sticker({
@@ -38,7 +38,7 @@ export function Sticker({
       <div
         className="sticker__qr"
         // The SVG comes from the local QR library, given a payload this app
-        // built from its own saved record — never from user input, never from
+        // built from its own saved record, never from user input, never from
         // the network.
         dangerouslySetInnerHTML={{ __html: qrSvg }}
         aria-hidden="true"

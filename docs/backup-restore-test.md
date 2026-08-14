@@ -1,4 +1,4 @@
-# Backup and restore — recovery drill
+# Backup and restore: a recovery drill
 
 A real drill, not a smoke test. The question it answers is the one that matters
 after a laptop is dropped, stolen or simply refuses to boot:
@@ -17,7 +17,7 @@ random bytes.
 
 **A generated backup is not a verified backup.** The browser cannot tell whether
 a download was kept, where it went, or whether it is readable. Only step C
-proves you have something recoverable — do not consider a device protected until
+proves you have something recoverable, do not consider a device protected until
 it passes.
 
 You will need: the app on two separate browser profiles (or two machines), some
@@ -25,13 +25,13 @@ real Point A stickers, and somewhere to keep the file.
 
 ---
 
-## A. Source device — capture some data
+## A. Source device: capture some data
 
 On the device that will "fail":
 
 1. Register **several participants** at `#/a`, printing stickers.
 2. Record **several QR feedback records** at `#/b`.
-3. Record **one manual-entry feedback record** — type the printed code instead
+3. Record **one manual-entry feedback record**: type the printed code instead
    of scanning. This one has no `participantId` by design, and the drill should
    prove it survives that way.
 
@@ -47,7 +47,7 @@ Open `#/admin` and write down:
 
 ## B. Create the backup
 
-Still on the source device, ideally with **Wi-Fi off and the server stopped** —
+Still on the source device, ideally with **Wi-Fi off and the server stopped**,
 backup must work from the cached shell with no network at all.
 
 1. `#/admin` → **Create encrypted backup**
@@ -70,9 +70,9 @@ Open the `.oefbackup` in a text editor. You should see only:
 
 Search it for a participant's name, an email address, a phone number and a
 feedback comment. **None may appear.** Neither should the event ID or the record
-counts — an unopened file says nothing about whose data it holds.
+counts: an unopened file says nothing about whose data it holds.
 
-## C. Verify the backup — the step that counts
+## C. Verify the backup: the step that counts
 
 1. `#/admin` → **Verify backup file**
 2. Choose the downloaded file, enter the **correct** passphrase.
@@ -84,7 +84,7 @@ Now the negative case:
 
 3. Repeat with a **wrong passphrase**.
 
-Expected: *"This backup could not be unlocked or verified…"* — one message, no
+Expected: *"This backup could not be unlocked or verified…"*. One message, no
 cryptographic detail, and **Last backup verified** unchanged.
 
 ## D. Tamper test
@@ -92,7 +92,7 @@ cryptographic detail, and **Last backup verified** unchanged.
 Copy the backup file twice and damage each copy:
 
 - **Flip a character** in the middle of the long `ciphertext` string.
-- **Truncate** the file — delete the second half and save.
+- **Truncate** the file: delete the second half and save.
 
 Verify each with the correct passphrase.
 
@@ -101,7 +101,7 @@ encrypts, so a damaged file cannot decrypt into plausible-looking records.
 
 ## E. Fresh replacement installation
 
-Use a **separate Chrome profile** (not a second tab — profiles have separate
+Use a **separate Chrome profile** (not a second tab: profiles have separate
 IndexedDB) or a different machine.
 
 1. Prepare the PWA as in [the cold-start guide](offline-cold-start-test.md) so
@@ -124,7 +124,7 @@ data** counts updating to match.
 
 Then confirm, in DevTools → IndexedDB:
 
-- restored registrations still carry the **source** `deviceId` — provenance is
+- restored registrations still carry the **source** `deviceId`: provenance is
   preserved
 - `deviceConfig.deviceId` is still the **replacement's** ID from step E.2
 
@@ -144,7 +144,7 @@ Compare the reprinted sticker with the original from step A:
 - same QR symbol
 
 Scan the **original printed sticker** at `#/b` on the replacement device. It must
-be recognised. The stickers participants are already wearing remain valid — that
+be recognised. The stickers participants are already wearing remain valid; that
 is what makes recovery possible at all.
 
 ## G. New registration after restore
@@ -152,7 +152,7 @@ is what makes recovery possible at all.
 Register a new participant on the replacement device.
 
 Expected: the new record carries the **replacement's** `deviceId`, and its public
-code uses the **replacement's issuer segment** — a different six-character block
+code uses the **replacement's issuer segment**: a different six-character block
 from the restored records:
 
 ```
@@ -191,7 +191,7 @@ Everything must work. No backup or recovery operation touches the network.
 ## Conflict behaviour (optional but informative)
 
 To see the safety net work, edit a restored registration's contact details on the
-replacement device (`#/a` → **Correct details**) — this raises its `revision` —
+replacement device (`#/a` → **Correct details**), this raises its `revision`,
 then restore the same backup again.
 
 Expected: the local, higher-revision record is kept and reported as *unchanged*.
@@ -201,16 +201,16 @@ The backup does not roll it back.
 
 | Step | Result | Time |
 | --- | --- | --- |
-| B — create backup | | |
-| C — verify (correct passphrase) | | |
-| C — verify (wrong passphrase) | fails | |
-| D — tampered / truncated | both fail | |
-| E — restore onto replacement | | |
-| E — destination device ID unchanged | | |
-| F — reprint matches original sticker | | |
-| G — new code uses replacement issuer | | |
-| H — second restore idempotent | | |
-| I — everything works offline | | |
+| B: create backup | | |
+| C: verify (correct passphrase) | | |
+| C: verify (wrong passphrase) | fails | |
+| D: tampered / truncated | both fail | |
+| E: restore onto replacement | | |
+| E: destination device ID unchanged | | |
+| F: reprint matches original sticker | | |
+| G: new code uses replacement issuer | | |
+| H: second restore idempotent | | |
+| I: everything works offline | | |
 
 ## Cautions
 
@@ -225,4 +225,4 @@ The backup does not roll it back.
 - There is no cross-device duplicate detection yet. Restoring several devices'
   backups into one database will preserve every record, including two feedback
   responses for the same participant from different terminals. That is
-  deliberate — reconciliation is a later phase.
+  deliberate: reconciliation is a later phase.

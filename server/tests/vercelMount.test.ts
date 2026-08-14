@@ -11,7 +11,7 @@ import type { Sql } from 'postgres'
  * The API as it is mounted for Vercel, tested without deploying anything.
  *
  * The deployment mounts the central app under `/api`, because that is where
- * Vercel routes a function — and mounting is the part most likely to be got
+ * Vercel routes a function, and mounting is the part most likely to be got
  * wrong in a way nothing local would notice: routes that answer on the developer
  * machine and 404 in production, or a double prefix that turns
  * `/api/v1/reporting` into `/api/api/v1/reporting`.
@@ -28,7 +28,7 @@ const REPORTING_SECRET = randomBytes(32).toString('hex')
  * A database handle that refuses to be used.
  *
  * Reporting is only mounted when the app is given one, so the mount test needs
- * something to pass — and a stub that throws proves the other half of what these
+ * something to pass, and a stub that throws proves the other half of what these
  * tests are for: an unauthenticated reporting request is refused before anything
  * reaches the database.
  */
@@ -153,8 +153,8 @@ describe('the production URL shape', () => {
 
   it('refuses reporting without the credential, before touching the database', async () => {
     /*
-     * The reporting router is reachable at the production path — a 404 here
-     * would mean the mount had lost it — and it answers 401 without the database
+     * The reporting router is reachable at the production path, a 404 here
+     * would mean the mount had lost it, and it answers 401 without the database
      * handle being used at all, which the stub would otherwise throw on.
      */
     const response = await mounted.request(
@@ -187,7 +187,7 @@ describe('same-origin production, with nothing allow-listed', () => {
     /*
      * A same-origin fetch sends no `Origin` on a simple GET, and never needs a
      * preflight. This is why production does not depend on generated Vercel
-     * hostnames being added to `SYNC_ALLOWED_ORIGINS` — there is nothing
+     * hostnames being added to `SYNC_ALLOWED_ORIGINS`; there is nothing
      * cross-origin about it.
      */
     const response = await mounted.request('/api/health')
@@ -238,7 +238,7 @@ describe('the function contract', () => {
   it('is a request handler, not a server', async () => {
     /*
      * A Vercel function is handed a Request and returns a Response. The whole
-     * app is reachable through `fetch` alone — no port, no listener, nothing to
+     * app is reachable through `fetch` alone: no port, no listener, nothing to
      * keep alive between invocations.
      */
     const response = await mounted.fetch(
@@ -262,7 +262,7 @@ describe('the function contract', () => {
  * the module Vercel will actually import, through the surface Vercel actually
  * uses: the default export's `fetch`.
  *
- * The database is deliberately unreachable — port 1, refused immediately — so
+ * The database is deliberately unreachable (port 1, refused immediately) so
  * these prove routing and nothing else. Every assertion below is on a path that
  * answers before any query runs: an unauthenticated reporting request, a wrong
  * enrolment code, a malformed batch, and a health check whose database probe is
@@ -412,7 +412,7 @@ describe('the exported Vercel entry point', () => {
     /*
      * A deployment with no `DATABASE_URL`. The instance must not crash on
      * import: a crashed function tells an operator only that something failed,
-     * while this tells them which variable to set — and never its value.
+     * while this tells them which variable to set, and never its value.
      */
     const entry = await importEntrypoint({
       DATABASE_URL: '',

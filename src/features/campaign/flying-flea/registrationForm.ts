@@ -52,7 +52,7 @@ export type CampaignFieldErrors = Partial<
  * What a validated campaign form yields.
  *
  * Optional fields come back as `null` when the operator left them blank, not
- * omitted. On a new registration that is the same thing — the store skips nulls.
+ * omitted. On a new registration that is the same thing: the store skips nulls.
  * On a correction it is the difference between "unchanged" and "cleared", and
  * omitting it would make a deletion silently do nothing.
  */
@@ -76,7 +76,7 @@ const INDIAN_MOBILE = /^[6-9]\d{9}$/
  *   098765 43210      eleven digits beginning 0   -> the trunk prefix is dropped
  *
  * Anything else over-long is NOT trimmed to fit. Taking the tail of an arbitrary
- * number — `123456789012345` becoming `6789012345` — would invent a plausible
+ * number, `123456789012345` becoming `6789012345`, would invent a plausible
  * ten-digit number that nobody typed, and it would pass validation. Those are
  * truncated from the front instead, exactly as typing into a full field behaves,
  * so what is left either is the number or is visibly rejected by the rule above.

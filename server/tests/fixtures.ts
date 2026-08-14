@@ -17,7 +17,7 @@ export const DEVICE_B = '99999999-8888-4777-8666-555555555555'
 /*
  * Public codes must satisfy the shared schema's shape: station, six hex
  * characters of device issuer, sequence, check character. The check character
- * is not recomputed here — the server validates shape, and the identity layer
+ * is not recomputed here: the server validates shape, and the identity layer
  * on the client is what guarantees the arithmetic.
  */
 export function publicCodeFor(sequence: number, issuer = 'B8EFD9'): string {

@@ -90,7 +90,7 @@ describe('QR feedback matching', () => {
   it('flags a conflict when the two identifiers point at different registrations', () => {
     /*
      * The QR contract says both identifiers describe one person. When they
-     * disagree, neither is preferred — the disagreement is the finding.
+     * disagree, neither is preferred: the disagreement is the finding.
      */
     const alice = registration()
     const bob = registration()
@@ -338,7 +338,7 @@ describe('determinism', () => {
 describe('out-of-order arrival', () => {
   it('resolves on a later run once the registration arrives', () => {
     /*
-     * Two legitimate historical snapshots. The first is not wrong — at that
+     * Two legitimate historical snapshots. The first is not wrong, at that
      * moment the Point A device genuinely had not synced.
      */
     const target = registration()

@@ -1,4 +1,4 @@
--- Offline Event Feedback — campaign registration fields, migration 007.
+-- Offline Event Feedback: campaign registration fields, migration 007.
 --
 -- The Flying Flea test-ride campaign captures seven things at Point A that the
 -- generic registration form never did. They land here as explicit, nullable
@@ -10,8 +10,8 @@
 -- and would have been the wrong trade. These are first-class reporting fields:
 -- an operator filters participants by vehicle, an export has a `location`
 -- column, and an analyst asks how many riders chose Storm Black. Every one of
--- those becomes a JSON path expression with no type, no constraint and no index
--- — and a typo in a key silently returns nothing rather than failing.
+-- those becomes a JSON path expression with no type, no constraint and no index,
+-- and a typo in a key silently returns nothing rather than failing.
 --
 -- The set is also stable. It is a campaign's registration form, not
 -- user-defined data: it changes when a campaign changes, which is exactly when a

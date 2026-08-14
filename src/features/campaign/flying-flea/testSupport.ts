@@ -7,7 +7,7 @@ import { FLYING_FLEA_CAMPAIGN } from './config'
  * registered rider before it can test something else.
  *
  * Point A's regression suites care about identity allocation, sticker rendering
- * and print layout — not about which fields the campaign asks for. Keeping the
+ * and print layout, not about which fields the campaign asks for. Keeping the
  * form-filling here means the next campaign changes one helper rather than
  * every test that happens to need a participant.
  */

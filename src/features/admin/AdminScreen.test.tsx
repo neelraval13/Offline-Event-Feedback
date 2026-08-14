@@ -22,7 +22,7 @@ describe('AdminScreen diagnostics', () => {
     render(<AdminScreen />)
 
     expect(
-      await screen.findByText(/offline-event-feedback v1 — ready/),
+      await screen.findByText(/offline-event-feedback v1: ready/),
     ).toBeDefined()
   })
 

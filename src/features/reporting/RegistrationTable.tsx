@@ -194,7 +194,7 @@ export function RegistrationTable({
                   would present a guess as the participant's answer.
                 */}
                 {row.feedbackSummary !== null &&
-                  ` — rated ${row.feedbackSummary.overallRating ?? '—'}`}
+                  `, rated ${row.feedbackSummary.overallRating ?? 'none'}`}
               </td>
               <td>
                 <button

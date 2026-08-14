@@ -29,7 +29,7 @@ export const DEVICE_ID_KEY = 'deviceId'
  * Get-or-create runs inside a single readwrite transaction. IndexedDB
  * serialises readwrite transactions with overlapping scopes, so two tabs
  * racing on first launch cannot both observe an empty store and mint competing
- * identities — the second transaction sees the first one's committed write.
+ * identities: the second transaction sees the first one's committed write.
  */
 export async function getOrCreateDeviceId(
   database: OfflineEventDb,

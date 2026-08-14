@@ -9,8 +9,8 @@ export const PRINT_ROOT_ID = 'print-root'
 /**
  * Finds the print container, creating it if the host page has none.
  *
- * The application's own `index.html` provides it. Tests — and any future host
- * that renders this app into an arbitrary page — get one made for them, so the
+ * The application's own `index.html` provides it. Tests, and any future host
+ * that renders this app into an arbitrary page, get one made for them, so the
  * component never silently fails to produce a printable label.
  */
 function usePrintRoot(): HTMLElement | null {
@@ -44,7 +44,7 @@ interface PrintableStickerProps {
  *
  * The sticker sits several levels deep inside the app. Hiding its ancestors
  * with `visibility: hidden` leaves them occupying layout, so the document stays
- * as tall as the registration screen — six pages at a 40 mm page height — and
+ * as tall as the registration screen, six pages at a 40 mm page height, and
  * anchoring the label with `position: fixed` then repeats it on every one of
  * them. That is precisely the six-identical-pages defect from physical QA.
  *

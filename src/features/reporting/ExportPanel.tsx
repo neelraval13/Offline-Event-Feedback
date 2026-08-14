@@ -12,8 +12,8 @@ import { useReportingSession } from './session'
  *
  * Each file is fetched with the reporting credential in an Authorization
  * header, turned into a blob and handed to the browser. Deliberately not a
- * plain link: a link cannot carry a header, and the usual workaround — a token
- * in the query string — would write the credential into browser history, the
+ * plain link: a link cannot carry a header, and the usual workaround (a token
+ * in the query string) would write the credential into browser history, the
  * server's access log and any proxy in between.
  *
  * Filenames come from the server and carry an event, a kind and a date. Never a
@@ -90,7 +90,7 @@ export function ExportPanel({ eventId, runId }: ExportPanelProps) {
       <p className="screen__note">
         Exports contain participants&rsquo; names, phone numbers and email
         addresses. They are generated from the selected reconciliation run and
-        leave this screen as files on the organiser&rsquo;s machine — handle
+        leave this screen as files on the organiser&rsquo;s machine, so handle
         them accordingly.
       </p>
 

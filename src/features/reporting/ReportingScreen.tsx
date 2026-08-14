@@ -14,7 +14,7 @@ import { ReportingSessionProvider } from './session'
  *
  * This component holds the credential and nothing else. Everything that reads
  * central data lives in `ReportingWorkspace`, inside the session provider, so
- * that clearing the secret unmounts the data in the same render — whether the
+ * that clearing the secret unmounts the data in the same render, whether the
  * operator signed out or the server rejected the credential mid-session.
  *
  * The secret lives in the state below and nowhere else: not in IndexedDB, not
@@ -31,8 +31,8 @@ export function ReportingScreen() {
   const [rejected, setRejected] = useState(false)
 
   /*
-   * A 401 from any reporting request. The credential is no longer a credential —
-   * rotated, revoked or mistyped — so nothing on screen is authorised any more.
+   * A 401 from any reporting request. The credential is no longer a credential
+   * (rotated, revoked or mistyped), so nothing on screen is authorised any more.
    * Clearing the secret unmounts the workspace, and the participants it was
    * displaying go with it.
    */

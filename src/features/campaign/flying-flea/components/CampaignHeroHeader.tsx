@@ -21,7 +21,7 @@ import { FLYING_FLEA_CAMPAIGN } from '../config'
  * The supplied banner is a street scene: the motorcycle sits left of centre and
  * the rider stands to the right, both around the vertical middle. The crop is
  * weighted to that band, and the title sits at the bottom over the darkest part
- * of the frame — the shadowed road — rather than over either subject.
+ * of the frame, the shadowed road, rather than over either subject.
  */
 
 interface CampaignHeroHeaderProps {

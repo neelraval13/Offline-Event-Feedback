@@ -7,8 +7,8 @@ import type { FeedbackRecord, RegistrationRecord } from '../../types'
 /*
  * Local records to wire records.
  *
- * Fields are copied one at a time, never spread. Transport state —
- * `syncStatus`, `lastSyncedAt`, `syncErrorCode` — is this device's private
+ * Fields are copied one at a time, never spread. Transport state
+ * (`syncStatus`, `lastSyncedAt`, `syncErrorCode`) is this device's private
  * bookkeeping about delivery, and has no meaning to the server. A spread would
  * ship it the moment a new transport field is added, and the server would
  * reject the batch for an unrecognised field.
@@ -36,7 +36,7 @@ export function toRegistrationWire(
     /*
      * Campaign fields, copied only when present. Spreading `undefined` into the
      * object would put the key on the wire with a null value, and the schema
-     * rejects a present-but-empty optional — a record captured before the
+     * rejects a present-but-empty optional: a record captured before the
      * campaign would stop uploading.
      */
     ...(record.vehicle === undefined ? {} : { vehicle: record.vehicle }),

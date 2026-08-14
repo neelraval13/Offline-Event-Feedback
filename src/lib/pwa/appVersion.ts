@@ -3,7 +3,7 @@
  *
  * Both values are injected at build time (see `define` in vite.config.ts), so
  * answering "what version is this device running?" needs no network, no server
- * and no repository access — an operator reads it off Admin and compares it
+ * and no repository access: an operator reads it off Admin and compares it
  * with the terminal next to it.
  *
  * Deliberately just a version and a timestamp. No commit hash, no branch, and

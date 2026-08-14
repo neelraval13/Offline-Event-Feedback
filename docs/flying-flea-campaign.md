@@ -35,7 +35,7 @@ mark cannot fail to load.
   labelled swatches instead. An approved local asset would let the photographs
   come back; there is currently none.
 - **Anton and Inter.** The design specifies both, loaded from Google Fonts. The
-  package ships no font files, so nothing was downloaded or embedded — that is a
+  package ships no font files, so nothing was downloaded or embedded; that is a
   licensing decision, not a technical one. `--ff-font-display` and
   `--ff-font-text` name the families first, so a machine that already has them
   renders as designed, and fall back to system faces of similar proportion
@@ -75,8 +75,8 @@ Two modules, split by what outlives what.
 `shared/campaign/flyingFlea.ts` owns the questionnaire itself: the form version,
 the stable answer keys, the exact six prompts, the 1–7 scale, and the closed sets
 (colours, genders) plus field bounds that both the wire schema and the backup
-validator enforce. The server imports it too — `server/reporting/campaign.ts` is
-a re-export — so a report cannot quote a prompt the tablet never showed. The
+validator enforce. The server imports it too (`server/reporting/campaign.ts` is
+a re-export), so a report cannot quote a prompt the tablet never showed. The
 wording used to be written out twice, and two copies of a question is one
 question that will eventually disagree with itself, invisibly.
 
@@ -133,7 +133,7 @@ Which correction screen an operator gets is decided by one predicate,
 `needsLegacyCorrection` in
 `src/features/campaign/flying-flea/campaignRecord.ts`.
 
-- **A campaign registration** — one carrying a vehicle, colour or location — is
+- **A campaign registration** (one carrying a vehicle, colour or location) is
   corrected through the campaign form, with every answer carried back into it so
   fixing one field cannot blank the rest.
 - **A pre-campaign registration** is corrected through the generic
@@ -143,7 +143,7 @@ Which correction screen an operator gets is decided by one predicate,
   asked about. Fabricating data is worse than a plainer screen.
 
 Optional campaign fields are **clearable**. A correction distinguishes three
-states — absent (unchanged), `null` (cleared), or a value — because with only
+states: absent (unchanged), `null` (cleared), or a value. With only
 `undefined` available, "leave it alone" and "delete it" are the same input and a
 rider who asked for their pincode to be removed keeps it. A cleared field is
 removed from the record rather than stored as an empty string, and the central
@@ -167,7 +167,7 @@ Keys are named for what the question asks, never for its position. Reordering th
 form must not silently re-point an answer at a different question.
 
 **Ratings** are integers 1–7, validated as such on the device, on the wire and in
-analytics. All four are required; the two free-text answers are not — a rider who
+analytics. All four are required; the two free-text answers are not: a rider who
 has just handed back a helmet is not held at a tablet for a paragraph. Blank text
 is stored as an absent field rather than an empty string, so "wrote nothing" and
 "typed a space" do not become different data.
@@ -181,15 +181,15 @@ large to sync; the visible question is unchanged.
 - The device stores the questionnaire and its answers as one discriminated value
   (`FeedbackQuestionnairePayload`), so a record declaring one questionnaire while
   carrying another's answers cannot be constructed. The runtime validators on the
-  wire and in the backup file are unchanged and still authoritative — the type
+  wire and in the backup file are unchanged and still authoritative: the type
   stops our own code writing a bad pair, not a tampered file.
 - The server reads `form_version` from the column and refuses a version it does
   not know, rather than assuming `feedback-v1`. Assuming it made an identical
   re-delivery of a campaign response compare as a change, which ingest correctly
-  called a conflict — for a record nobody had touched.
+  called a conflict, for a record nobody had touched.
 - Records captured in Phases 0–8 have no campaign fields. Every campaign field is
-  optional at every persistence boundary — IndexedDB, the wire schema, the
-  central table — and null means "not captured", never a default.
+  optional at every persistence boundary (IndexedDB, the wire schema, the
+  central table), and null means "not captured", never a default.
 - The IndexedDB schema is **not** versioned up. Adding optional fields to a
   record needs no new `version()` block and no index change; a bump would carry
   upgrade risk for installed devices in exchange for nothing.
@@ -205,7 +205,7 @@ large to sync; the visible question is unchanged.
 `SYNC_PROTOCOL_VERSION` is still **1**, and that is a decision rather than an
 oversight. The changes were additive: optional registration fields, and a second
 `formVersion` with its own answer schema. Bumping the version would have forced
-every device to be updated before any could sync — mid-campaign, at a venue —
+every device to be updated before any could sync (mid-campaign, at a venue)
 and would have bought nothing in either direction.
 
 What that buys, and what it costs, in both directions:
@@ -265,14 +265,14 @@ quicker to confirm than a word in a dropdown.
 
 Reporting reads both questionnaires and keeps them apart.
 
-- `analytics` — `feedback-v1` only: average 1–5 rating, experience counts,
+- `analytics` (`feedback-v1` only): average 1–5 rating, experience counts,
   recommend percentage.
-- `campaignAnalytics` — `flying-flea-feedback-v1` only: per-question average on
+- `campaignAnalytics` (`flying-flea-feedback-v1` only): per-question average on
   the 1–7 scale, per-question 1–7 distribution, and how many riders answered each
   free-text question.
-- `responsesByFormVersion` — how many matched responses each questionnaire
+- `responsesByFormVersion`: how many matched responses each questionnaire
   contributed, including versions this build cannot read.
-- `unreadableResponses` — matched responses whose questionnaire has no figures
+- `unreadableResponses`: matched responses whose questionnaire has no figures
   here. They are still listed, still exported, and still readable individually.
 
 The campaign has no recommend question, so no recommend percentage is reported
@@ -280,7 +280,7 @@ for it. A null next to the campaign figures would read as a result rather than a
 an absence.
 
 Both sets use the Phase 8 rule unchanged: only responses a reconciliation run
-classified `matched`. Coverage is unchanged — registrations with at least one
+classified `matched`. Coverage is unchanged: registrations with at least one
 valid response, over registrations.
 
 ### The licence number

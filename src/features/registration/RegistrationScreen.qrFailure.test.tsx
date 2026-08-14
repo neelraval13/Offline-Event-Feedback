@@ -9,7 +9,7 @@ import { fillCampaignRegistration } from '../campaign/flying-flea/testSupport'
  *
  * The participant is registered. Telling staff to "try again" here would create
  * a second record, a second participant ID and a second public code for one
- * human being — and the first, unprinted identity would linger in the database
+ * human being, and the first, unprinted identity would linger in the database
  * forever. So this file exists to hold the QR renderer at gunpoint and check
  * the screen says the right thing.
  */

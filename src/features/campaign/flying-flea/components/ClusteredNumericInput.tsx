@@ -1,7 +1,7 @@
 import { useId, useRef, type ChangeEvent, type KeyboardEvent } from 'react'
 
 /*
- * The campaign's numeric cluster — phone number and pincode.
+ * The campaign's numeric cluster: phone number and pincode.
  *
  * Reproduced from the reference's `.dial` / `.keypad` treatment: a round pod
  * with the digits shown as individual slots, a teal arc that sweeps as the
@@ -23,7 +23,7 @@ import { useId, useRef, type ChangeEvent, type KeyboardEvent } from 'react'
  * which is what §12 asks for.
  *
  * `type="text"` with `inputMode="numeric"`, never `type="number"`: a number
- * input strips leading zeros — fatal for a pincode — and adds spinners nobody
+ * input strips leading zeros, fatal for a pincode, and adds spinners nobody
  * wants on a phone number.
  *
  * The value is a plain digit string. This component never changes what is
@@ -84,7 +84,7 @@ export function ClusteredNumericInput({
    * A paste, which is the whole reason this control is not keypad-only.
    *
    * Into an empty field, the caller's normaliser decides what the pasted text
-   * means — that is where `+91 98765 43210` becomes ten digits. Into a field
+   * means; that is where `+91 98765 43210` becomes ten digits. Into a field
    * that already holds digits the paste appends, because there the operator is
    * extending what they typed rather than replacing it, and a prefix rule would
    * be nonsense applied to a fragment.

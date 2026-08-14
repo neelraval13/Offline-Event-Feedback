@@ -17,7 +17,7 @@ import type { CentralFeedback, CentralRegistration, SyncStore } from './store'
  * is duplicated.
  *
  * `recordId` and `revision` come from the device that captured the record.
- * Nothing here mints a new identity — a server-side ID would break the link to
+ * Nothing here mints a new identity: a server-side ID would break the link to
  * the sticker a participant is physically wearing.
  */
 
@@ -25,7 +25,7 @@ import type { CentralFeedback, CentralRegistration, SyncStore } from './store'
  * Fields that must never change for a given `recordId`.
  *
  * A higher revision may correct a name or a phone number. It may not change who
- * the record is about or where it came from — those are printed on a sticker
+ * the record is about or where it came from; those are printed on a sticker
  * and recorded as fact. Two copies disagreeing on any of them are not the same
  * record, and no revision rule can make them one.
  */
@@ -58,7 +58,7 @@ const FEEDBACK_IMMUTABLE = [
  * Mutable domain contents, compared when revisions are equal.
  *
  * The campaign fields are mutable, and deliberately so: they are things a human
- * typed at a desk — the wrong vehicle, a mistyped pincode — and a correction has
+ * typed at a desk (the wrong vehicle, a mistyped pincode) and a correction has
  * to be able to reach them. Identity is what stays immutable, because a printed
  * sticker in a rider's hand refers to it.
  *
@@ -175,8 +175,8 @@ function decideAgainstStored(
   }
 
   /*
-   * Equal revisions. Identical contents means this is a retry — very often the
-   * retry of a request whose response was lost — and must be acknowledged so
+   * Equal revisions. Identical contents means this is a retry, very often the
+   * retry of a request whose response was lost, and must be acknowledged so
    * the device can stop resending it.
    */
   return fieldsMatch(stored, incoming, mutable) ? 'already_current' : 'conflict'
@@ -269,8 +269,8 @@ async function compareRegistration(
     case 'update': {
       /*
        * Conditional on the revision that was read. If a concurrent request
-       * moved it first, this update does nothing and the record is re-examined
-       * — the outcome stays deterministic either way.
+       * moved it first, this update does nothing and the record is re-examined:
+       * the outcome stays deterministic either way.
        */
       const updated = await context.store.updateRegistration(
         record,
@@ -302,7 +302,7 @@ async function ingestFeedback(
 ): Promise<SyncRecordResult> {
   /*
    * No registration lookup, and no foreign key. Feedback may legitimately reach
-   * the server before the registration it refers to — the two devices upload
+   * the server before the registration it refers to: the two devices upload
    * independently, whenever each finds a connection.
    */
   const stored = await context.store.getFeedback(record.recordId)
@@ -421,7 +421,7 @@ export async function ingestRecord(
  * Ingests a batch, one record at a time.
  *
  * Deliberately not one big transaction. A single conflicting record must not
- * strand the other ninety-nine — those are real captures sitting on one device,
+ * strand the other ninety-nine; those are real captures sitting on one device,
  * and the whole point of syncing is to get them somewhere safe. Each record
  * commits on its own and returns its own outcome.
  */

@@ -1,14 +1,14 @@
-# Point B — physical test guide
+# Point B: physical test guide
 
 A manual pass using **real stickers printed by Point A**. The automated suite
-drives the scanner through a fake, so everything about actual optics — whether a
+drives the scanner through a fake, so everything about actual optics, whether a
 phone or tablet camera reads a 26 mm QR off a curved sticker under venue
-lighting — can only be answered here.
+lighting, can only be answered here.
 
 Run [the Point A guide](point-a-physical-test.md) first and keep the stickers it
 produces. You need at least five, from several different participants.
 
-## Origin and camera access — read first
+## Origin and camera access: read first
 
 Browsers only grant camera access in a **secure context**: `https://`, or
 `localhost`. On a plain-HTTP LAN address such as `http://192.168.1.20:5173`,
@@ -43,7 +43,7 @@ Budget about 30 minutes.
 ### 1. Open Point B
 
 Navigate to `#/b`. Confirm you see **Start scanner** and **Enter code
-manually**, and that the camera has *not* started on its own — nothing should
+manually**, and that the camera has *not* started on its own; nothing should
 request permission until staff asks.
 
 ### 2. Start the camera
@@ -59,7 +59,7 @@ Hold a sticker in front of the camera. Confirm:
 - the feedback form appears
 - the **Participant** code shown matches the code printed on that sticker,
   character for character
-- **no name, phone number or email appears anywhere on screen** — Point B has
+- **no name, phone number or email appears anywhere on screen**. Point B has
   never seen them and must never show them
 
 Keep holding the sticker in view for several seconds. The form must appear
@@ -114,8 +114,8 @@ Press **Next participant**. Confirm:
 
 Work through at least four more, from different participants.
 
-This matters more than it looks: the QR matrix size varies per participant —
-roughly 14% of payloads are 41×41 and 86% are 45×45 — so scanning only one
+This matters more than it looks: the QR matrix size varies per participant,
+roughly 14% of payloads are 41×41 and 86% are 45×45, so scanning only one
 sticker tests only one of the two symbol sizes. Confirm both scan comfortably.
 
 Note any sticker that takes more than a couple of seconds, and at what distance
@@ -124,7 +124,7 @@ and angle.
 ### 9. Manual fallback
 
 Press **Enter code manually** and type a code from a sticker you have *not* yet
-used. Try it in a deliberately sloppy form — lower case, spaces instead of
+used. Try it in a deliberately sloppy form: lower case, spaces instead of
 dashes:
 
 ```
@@ -135,12 +135,12 @@ Confirm it is accepted and normalised to the canonical printed form.
 
 Complete and submit the feedback, then check the new record: `captureMethod`
 must be `manual` and there must be **no `participantId` field at all**. That is
-correct — the printed code does not contain one and Point B cannot look one up.
+correct: the printed code does not contain one and Point B cannot look one up.
 Reconciliation resolves it centrally later.
 
 ### 10. Invalid code rejection
 
-In manual entry, type a code with one character changed — for example alter the
+In manual entry, type a code with one character changed, for example alter the
 last character:
 
 ```
@@ -155,14 +155,14 @@ issued by the registration desk.
 
 ### 11. Invalid QR rejection
 
-Point the camera at any unrelated QR — a poster, a Wi-Fi QR, a URL.
+Point the camera at any unrelated QR: a poster, a Wi-Fi QR, a URL.
 
 Confirm:
 
 - a short message appears: *"This QR is not a valid participant sticker for this
   event."*
 - no feedback form opens
-- **scanning continues** — no need to restart anything
+- **scanning continues**: no need to restart anything
 - no stack trace, no raw JSON, no technical detail
 
 Then scan a real sticker to confirm the scanner is still working.
@@ -197,7 +197,7 @@ Reload the page. Confirm the counter still shows the number of responses saved
 on this device, and that DevTools still holds every record.
 
 Navigate to `#/a` and back to `#/b`. Confirm the camera indicator light goes out
-when you leave Point B — a scanner left running after navigation is a resource
+when you leave Point B: a scanner left running after navigation is a resource
 leak.
 
 ### 15. Offline
@@ -210,5 +210,5 @@ about normal operation may depend on the network.
 Note the device and browser, whether the rear camera was selected, typical
 recognition time, any sticker that scanned poorly and its printed size, and
 whether both QR matrix sizes behaved the same. If recognition is unreliable,
-the levers are the same as at Point A — larger printed QR, better print density
-— and not changes to the identity or checksum format.
+the levers are the same as at Point A: larger printed QR, better print density,
+and not changes to the identity or checksum format.

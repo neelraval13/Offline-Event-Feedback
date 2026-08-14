@@ -15,7 +15,7 @@ import type {
  * Lifecycle of a locally-captured record with respect to the central server.
  *
  * Every record is born `pending`. Nothing in the field ever waits on a
- * transition away from it — no sync engine exists yet.
+ * transition away from it: no sync engine exists yet.
  */
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'error'
 
@@ -28,7 +28,7 @@ export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'error'
  * participant identity.
  *
  * `revision` starts at 1 and increments on every local mutation. It is not a
- * conflict resolution mechanism on its own — it is the raw material one needs
+ * conflict resolution mechanism on its own; it is the raw material one needs
  * to build one when synchronisation lands.
  */
 export interface OfflineRecordMetadata {
@@ -43,7 +43,7 @@ export interface OfflineRecordMetadata {
 
   /*
    * Transport state. Describes delivery to the central server, never an edit.
-   * Mutating these must not touch `revision` or `updatedAt` — see
+   * Mutating these must not touch `revision` or `updatedAt`, see
    * `src/lib/storage/transport.ts`.
    */
   readonly syncStatus: SyncStatus
@@ -67,7 +67,7 @@ export type RecordContext = Pick<
  *
  * The campaign fields are mixed in as optional members rather than nested under
  * a `campaign` key. Two reasons, both about what reads this later: every
- * consumer — the wire contract, the central table, the CSV — wants them flat,
+ * consumer (the wire contract, the central table, the CSV) wants them flat,
  * and optionality is what lets a device that has held records since Phase 1
  * keep reading its own history after this build lands.
  *
@@ -112,7 +112,7 @@ export type CapturedParticipantIdentity =
 
 /*
  * Identity fields are stored flat rather than nested so IndexedDB can index
- * them directly. `participantId` is absent — not null — when staff typed the
+ * them directly. `participantId` is absent, not null, when staff typed the
  * fallback code, which keeps it out of the sparse IndexedDB index.
  */
 /**

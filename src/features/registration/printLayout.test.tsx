@@ -11,8 +11,8 @@ import { db } from '../../lib/storage'
  * Regression cover for the six-duplicate-pages defect found in physical QA.
  *
  * jsdom does not paginate, so the page count itself cannot be asserted here.
- * What can be asserted is the two things that caused it — an application still
- * occupying layout, and a fixed-position label repeating across pages — plus
+ * What can be asserted is the two things that caused it (an application still
+ * occupying layout, and a fixed-position label repeating across pages), plus
  * the structural guarantee that exactly one sticker reaches the print root.
  * The page count stays a step in docs/point-a-physical-test.md.
  */

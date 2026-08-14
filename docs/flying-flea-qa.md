@@ -1,4 +1,4 @@
-# Flying Flea campaign — manual QA
+# Flying Flea campaign: manual QA
 
 What to check by hand before the campaign runs. The automated suites cover the
 rules; this pass covers the physical things a test cannot: a printed sticker, a
@@ -18,7 +18,7 @@ eyebrow, and two large station links.
 Both marks must render. If either is a broken image, the inlining regressed and
 the application is fetching assets it must not need.
 
-## 1. Point A — a rider, end to end
+## 1. Point A: a rider, end to end
 
 Open `#/a`.
 
@@ -47,7 +47,7 @@ the redesign is costing throughput and should be reported.
 
 ### Validation, without blocking the desk
 
-- Submit an empty form: five errors — vehicle, name, email, location, phone.
+- Submit an empty form: five errors (vehicle, name, email, location, phone).
 - Type a 9-digit phone: "Enter a valid 10-digit mobile number."
 - Type a 4-digit pincode: "Pincode must be 6 digits."
 - Type an unusual but real licence (`KA01 2020 0001234`, `DL-0420110149646`).
@@ -63,7 +63,7 @@ pincode, save.
 revision to increase, and the other campaign answers to survive untouched. The
 sticker does not need reprinting.
 
-## 2. Point B — the questionnaire
+## 2. Point B: the questionnaire
 
 Open `#/b`, start the scanner, scan a sticker.
 
@@ -75,7 +75,7 @@ Open `#/b`, start the scanner, scan a sticker.
 Submit with a rating missing: four errors, nothing saved.
 
 Answer all four and submit: the branded thank-you appears and says nothing about
-delivery — the tablet is routinely offline and a message implying the response had
+delivery: the tablet is routinely offline and a message implying the response had
 reached a server would be false for hours.
 
 Then:
@@ -162,3 +162,114 @@ a network it will not have.
   averages on the 1–7 scale only.
 - The licence number is on the detail view and on no list.
 - Nothing in `dist/` points at a font, image or script host.
+
+## 8. Responsive pass, both stations
+
+Layout is CSS, so no test proves it. Use Chrome DevTools device toolbar in
+**Responsive** mode and type each width by hand; the height matters far less
+than the width except where noted.
+
+Before anything else, at every width, run this in the console and expect
+`false`:
+
+```js
+document.documentElement.scrollWidth > document.documentElement.clientWidth
+```
+
+A `true` is a defect in the layout, not something to hide with `overflow-x`.
+
+### What changes, and where
+
+| Width | Personal details | Phone and pincode | Rating scale | Hero banner |
+| --- | --- | --- | --- | --- |
+| 320 to 430 | one column | stacked, full width | four then three | shortest |
+| 480 to 700 | one column | stacked | seven across | growing |
+| 768 to 1024 | two columns | side by side | seven across | growing |
+| 1280 and up | two columns | side by side | seven across | full height |
+
+The columns are decided by the space each component has, not by the window, so
+a laptop window dragged narrow behaves exactly like the tablet of that width.
+
+### 320 x 568, the smallest phone
+
+Point A:
+
+- the topbar wraps: marks on one line, the venue badge below, neither clipped
+- the hero is short, its title is legible over the photograph, and the first
+  field is reachable with one thumb scroll
+- the four vehicle plates are one per row and each is comfortably tappable
+- the motorcycle is whole: front wheel, mirror and tail all inside the frame
+- switching to Storm Black does not move anything below it
+- both colour buttons are full width and at least a finger tall
+- every personal detail is one per row; the Location and Gender selects show
+  their native arrow inside the field, and the date and time control is not cut
+- the phone cluster is a full circle with ten slots, all readable, and the arc
+  is round rather than an ellipse
+- every keypad key can be hit without hitting its neighbour
+- tapping the dial face opens the device keyboard
+- the pincode cluster is below the phone one, six slots
+- **Register & Print** is full width
+- under Recent, the public code and time share a line and **Reprint** wraps
+  below them; nothing is cut off at the right edge
+
+Point B:
+
+- the two start buttons stack, each full width, labels complete
+- the camera preview fills the card width and is about four units wide to three
+  tall; it does not grow taller than the screen
+- **Enter code manually**: the input is full width and the code fits
+- the participant code is fully visible on one line
+- each rating question shows four lamps then three, in order, with the readout
+  on its own line under them
+- both text areas are full width, at least three lines tall, and can only be
+  dragged taller, never wider
+- **Submit Feedback** is full width; the success panel and **Next rider** fit
+  without clipping
+
+### 360 x 640 and 375 x 667
+
+As above. Check specifically that the rating lamps have not become cramped and
+that the hero title still sits on at most two lines.
+
+### 390 x 844 and 414 x 896
+
+- the vehicle plates may pair up; if they do, both are still easily tappable
+- the colour buttons pair up; the swatch and label stay on one line
+
+### 430 x 932
+
+- the rating scale is still four then three at 430 and switches to seven across
+  just above it; both arrangements keep 1 on the left and 7 on the right
+
+### 768 x 1024, tablet portrait, the event device
+
+This is the one to spend time on.
+
+- personal details are two columns and every label reads on one line
+- phone and pincode sit side by side, each dial about 330px, digits large
+- the keypad keys are comfortable with a gloved fingertip
+- the hero, the vehicle grid and the bike all use the width without stretching
+- Point B: the rating scale is seven across with real spacing between lamps
+
+### 820 x 1180
+
+As 768. Confirm nothing has stretched: the form is still a readable column
+rather than the full width of the tablet.
+
+### 1024 x 768, tablet landscape
+
+- the whole form is centred with even margins, not pinned left
+- the hero is at full height and the first card is still visible under it
+
+### 1024 x 1366
+
+As 1024 x 768, with more of the form visible at once.
+
+### 1280 x 800, 1366 x 768, 1440 x 900, 1920 x 1080
+
+- the form stays centred at its reading width and does not keep growing
+- the motorcycle stage stops growing and stays in proportion; the black card
+  around it does not become a wide letterbox
+- the two clusters are side by side and neither is stretched into an oval
+- Central reporting (`#/reporting`) is the one screen that uses the extra
+  width; its tables should not scroll horizontally at 1280 and up

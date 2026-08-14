@@ -17,7 +17,7 @@ import { db } from '../../lib/storage'
  *
  * The snapshot is built once and returned by reference. `useSyncExternalStore`
  * compares snapshots with `Object.is`, so a fake that returned a fresh object
- * per call would spin forever — the same contract the real shell keeps.
+ * per call would spin forever: the same contract the real shell keeps.
  */
 function fakeShell(state: Partial<OfflineShellState> = {}): OfflineShell & {
   applyUpdate: ReturnType<typeof vi.fn>
@@ -66,7 +66,7 @@ describe('offline readiness on Admin', () => {
 
     const readiness = await screen.findByTestId('offline-readiness')
     expect(readiness.textContent).toContain(
-      'connect this device to the Internet before the event',
+      'Connect this device to the Internet before the event',
     )
   })
 
@@ -76,7 +76,7 @@ describe('offline readiness on Admin', () => {
 
     const readiness = await screen.findByTestId('offline-readiness')
     expect(readiness.textContent).not.toContain('Ready for offline use')
-    expect(readiness.textContent).toContain('keep this device online')
+    expect(readiness.textContent).toContain('Keep this device online')
   })
 
   it('is honest when there is no service worker at all', async () => {
@@ -174,7 +174,7 @@ describe('applying an update', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain('already on this device is unaffected')
-    // Admin is still usable — a lifecycle error does not take the screen down.
+    // Admin is still usable: a lifecycle error does not take the screen down.
     expect(screen.getByTestId('offline-readiness')).toBeDefined()
     expect(screen.getByTestId('app-version')).toBeDefined()
   })

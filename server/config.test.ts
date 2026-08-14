@@ -10,7 +10,7 @@ import {
  * Configuration, which both runtimes read through this one module.
  *
  * Pure and injectable, so the rules are tested directly rather than by starting
- * a process and reading its stderr — and so a rule cannot be true of the local
+ * a process and reading its stderr, and so a rule cannot be true of the local
  * server and false of the deployed function.
  */
 
@@ -43,7 +43,7 @@ describe('readServerConfig', () => {
     /*
      * Production is one origin serving both the app and the API, so there is
      * nothing to allow-list. Requiring a value here would mean a deployment
-     * could not start without inventing one — and would tempt someone into
+     * could not start without inventing one, and would tempt someone into
      * pasting a generated preview hostname, or a wildcard.
      */
     const result = readServerConfig({

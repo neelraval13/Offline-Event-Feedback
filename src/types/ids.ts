@@ -50,7 +50,7 @@ export type IsoTimestamp = Brand<string, 'IsoTimestamp'>
 /*
  * Narrowing helpers.
  *
- * These only apply the brand — they intentionally do not validate. Format
+ * These only apply the brand; they intentionally do not validate. Format
  * rules (participant ID scheme, public-code checksum, date shape) are decided
  * in later phases, and the parsing/validation logic will land here so that
  * every branded value in the system has exactly one entry point.

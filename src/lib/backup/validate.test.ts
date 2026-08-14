@@ -15,7 +15,7 @@ import { DB_VERSION } from '../storage'
 /*
  * A restore file is untrusted input from a USB stick, an email attachment or a
  * shared drive. `JSON.parse` succeeding says nothing about whether it is safe
- * to merge into a database holding an event's records — so every field is
+ * to merge into a database holding an event's records, so every field is
  * checked, and nothing is imported when anything fails.
  */
 

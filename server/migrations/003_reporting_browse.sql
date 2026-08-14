@@ -1,10 +1,10 @@
--- Offline Event Feedback — reporting browse indexes, migration 003.
+-- Offline Event Feedback: reporting browse indexes, migration 003.
 --
 -- Two indexes, no schema change. Reporting reads only: it adds no table, no
 -- column and no constraint, because it draws its conclusions entirely from what
 -- Phase 6 ingested and Phase 7 reconciled.
 --
--- Both indexes exist for one query shape — the keyset page that every browse
+-- Both indexes exist for one query shape: the keyset page that every browse
 -- screen and every export ordering uses:
 --
 --   WHERE event_id = $1
@@ -46,7 +46,7 @@ CREATE INDEX IF NOT EXISTS feedback_event_browse_idx
   ON feedback (event_id, created_at, record_id);
 
 -- Nothing is indexed for search. `name ILIKE '%term%'` cannot use a B-tree at
--- all, and the alternative — a trigram index — would mean an extension, a
+-- all, and the alternative, a trigram index, would mean an extension, a
 -- rebuild cost on every ingest, and a fuzzy-matching behaviour this phase
 -- deliberately does not have. At event scale the search is a filtered scan of
 -- one event and measures in single-digit milliseconds; if that ever stops being

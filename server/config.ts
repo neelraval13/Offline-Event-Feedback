@@ -5,7 +5,7 @@ import { describeReportingConfigProblem } from './reporting/auth'
  *
  * Two runtimes consume this: the long-lived local Node server
  * (`server/index.ts`) and the Vercel function (`api/[...path].ts`). They differ
- * in how they listen and how they talk to Postgres, and in nothing else — so
+ * in how they listen and how they talk to Postgres, and in nothing else, so
  * every rule about what a valid configuration *is* lives here, and neither
  * runtime restates it.
  *
@@ -27,7 +27,7 @@ export interface ServerConfig {
    *
    * Legitimately empty in production, where the app and the API are served from
    * one origin and CORS never enters the picture. Required only for the local
-   * split-origin setup — a Vite dev server on :5173 calling an API on :8788 —
+   * split-origin setup, a Vite dev server on :5173 calling an API on :8788,
    * and for any deliberately separate API host.
    */
   readonly allowedOrigins: readonly string[]

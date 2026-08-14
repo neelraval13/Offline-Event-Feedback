@@ -6,7 +6,7 @@ import { readServerConfig } from '../server/config'
  * The Vercel runtime.
  *
  * A catch-all function: every request to `/api/*` arrives here, and the central
- * Hono app — the same one `pnpm server:start` serves — answers it.
+ * Hono app, the same one `pnpm server:start` serves, answers it.
  *
  * ## The export
  *
@@ -16,7 +16,7 @@ import { readServerConfig } from '../server/config'
  *
  * Deliberately NOT `handle()` from `hono/vercel`. That adapter exists to produce
  * the per-method `GET`/`POST` exports a Next.js Route Handler expects, and this
- * project is a Vite frontend with standalone functions — wrapping the app in a
+ * project is a Vite frontend with standalone functions. Wrapping the app in a
  * Next.js-shaped adapter would add a translation layer between two things that
  * already speak the same protocol, and would need one export per method kept in
  * step with the routes.
@@ -36,7 +36,7 @@ import { readServerConfig } from '../server/config'
  * Request and returns a Response; opening a listener would be a process that
  * never becomes ready.
  *
- * No migrations. Not on cold start, not on first request, not ever — a schema
+ * No migrations. Not on cold start, not on first request, not ever: a schema
  * change must be an operator running `pnpm server:migrate` deliberately, never
  * a side effect of traffic arriving.
  *
@@ -46,7 +46,7 @@ import { readServerConfig } from '../server/config'
  * not once per request. Vercel keeps an instance warm across invocations, so a
  * client built here is reused by every request that instance serves; building
  * one per request would open a connection per request, and a database has a
- * finite number of those. For the same reason nothing here calls `sql.end()` —
+ * finite number of those. For the same reason nothing here calls `sql.end()`:
  * the next request wants that connection.
  */
 
@@ -65,7 +65,7 @@ if (result.ok) {
     config: result.config,
     runtime: 'serverless',
     // Vercel captures stdout per invocation. Identifiers, counts and timings
-    // only — the central app already guarantees that.
+    // only: the central app already guarantees that.
     log: (line) => console.log(line),
   })
 

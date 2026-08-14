@@ -29,7 +29,7 @@ import {
  * ten thousand registrations into Node to filter them in JavaScript would work
  * on the test fixture and fall over at an event.
  *
- * Every query here reads. Nothing in this file writes to any table — reporting
+ * Every query here reads. Nothing in this file writes to any table, reporting
  * is read-only with respect to event evidence, and the one action that does
  * write (running reconciliation) goes through the Phase 7 implementation
  * unchanged.
@@ -44,7 +44,7 @@ import {
  * Starting from `registrations` and left-joining the run reads almost the same
  * and is wrong in a way that matters. Sync keeps running after a run completes,
  * so a record that arrived afterwards would appear in a historical view with no
- * status — and, worse, in a historical export, which is then a file describing a
+ * status and, worse, in a historical export, which is then a file describing a
  * state of the event that never existed. Row counts would silently disagree with
  * the run's own counts, which is exactly the arithmetic an operator uses to
  * check a report.
@@ -151,8 +151,8 @@ export async function listRuns(
  *      server-side signal, and `content_changed_at` (migration 004) is it.
  *
  * `last_received_at` is deliberately not consulted. Phase 6 touches it on an
- * idempotent re-delivery — an offline tablet reconnecting and re-sending a batch
- * it had already delivered — and treating that as a change reported every such
+ * idempotent re-delivery, an offline tablet reconnecting and re-sending a batch
+ * it had already delivered, and treating that as a change reported every such
  * reconnection as stale data. Device `created_at` is not consulted either:
  * offline device clocks are never corrected, so a tablet running slow could make
  * a genuinely newer record look older than the run and hide staleness entirely.
@@ -310,7 +310,7 @@ export function isUuid(value: string): boolean {
  *
  * Both halves are validated before they can reach the query, where they are cast
  * to `timestamptz` and `uuid`. An unparseable cast is a Postgres error, which
- * surfaces as a 500 — the wrong answer entirely for a client that sent a
+ * surfaces as a 500: the wrong answer entirely for a client that sent a
  * malformed cursor, and an invitation to probe the database through it.
  *
  * A cursor is opaque to the client, so anything that fails to parse was either
@@ -663,7 +663,7 @@ export async function getRegistrationDetail(
   /*
    * The join is inner: a record the run never classified is not part of it, and
    * answering with its details under a run that never saw it would be a lie the
-   * caller cannot detect. Absent from the run reads the same as absent — 404.
+   * caller cannot detect. Absent from the run reads the same as absent: 404.
    */
   const [row] = await sql<Row[]>`
     SELECT reg.*, res.status, res.valid_feedback_count,
@@ -788,7 +788,7 @@ export async function getFeedbackDetail(
 
   /*
    * The summary fields are `feedback-v1` fields. Under any other version they
-   * stay null and the screen shows the raw answers with their version instead —
+   * stay null and the screen shows the raw answers with their version instead:
    * a v2 questionnaire may well have an `overall_rating` that means something
    * else entirely, and quietly reading it as a 1-5 score would invent data.
    */
@@ -855,7 +855,7 @@ export async function queryDuplicateCandidates(
 ): Promise<DuplicateCandidateRow[]> {
   /*
    * Phase 7 stores record IDs only, deliberately. Reporting joins back to the
-   * raw rows to show an operator both sides — which is exactly why this
+   * raw rows to show an operator both sides, which is exactly why this
    * endpoint is behind the privileged reporting credential.
    */
   const rows = await sql<Row[]>`

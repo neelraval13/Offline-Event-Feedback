@@ -25,7 +25,7 @@ import type { FeedbackRecord, RegistrationRecord } from '../../types'
  * The client outbox.
  *
  * The transport is injected, so these tests exercise batching, acknowledgement
- * handling and local state transitions without a network — which is where all
+ * handling and local state transitions without a network, which is where all
  * the decisions that matter actually live.
  */
 
@@ -282,7 +282,7 @@ describe('a lost response is harmless', () => {
     /*
      * The highest-value case in the whole phase. The server commits, the
      * response never arrives, the device cannot tell the difference from a
-     * request that was never received — so the record stays pending and is
+     * request that was never received, so the record stays pending and is
      * sent again. Ingest is idempotent, so the retry answers already_current
      * and the device can finally stop.
      */

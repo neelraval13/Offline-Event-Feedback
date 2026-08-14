@@ -11,7 +11,7 @@
  * face, so it takes the role Anton had and Anton is gone.
  *
  * `font-display: swap` throughout. These files are between 60 KB and 340 KB and
- * are precached, so the swap window is normally invisible — but on a first load
+ * are precached, so the swap window is normally invisible, but on a first load
  * over a venue's Wi-Fi, text that renders immediately in a fallback and reflows
  * is strictly better than a form staff cannot read yet.
  */

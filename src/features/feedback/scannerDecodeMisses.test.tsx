@@ -29,7 +29,7 @@ import { deviceId, stationId } from '../../types'
  *
  * Point B's camera "failed" on every device even though every piece of media
  * plumbing worked: permission granted, stream acquired, video playing at
- * 640x480. The cause was upstream of none of that — the decode callback treated
+ * 640x480. The cause was upstream of none of that: the decode callback treated
  * ZXing's ordinary "no QR in this frame" exception as a camera fault and pushed
  * the terminal into CAMERA_ERROR on the first frame it ever looked at.
  *

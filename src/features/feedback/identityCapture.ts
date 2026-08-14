@@ -8,7 +8,7 @@ import type { CapturedParticipantIdentity } from '../../types'
  * record.
  *
  * Both paths are pure functions over the existing identity layer. Nothing here
- * reads storage, and in particular nothing reads Point A's registrations —
+ * reads storage, and in particular nothing reads Point A's registrations.
  * Point B has no copy of them and must not need one (invariant 2). A scan is
  * accepted or rejected on the strength of the sticker alone.
  */
@@ -28,7 +28,7 @@ export type IdentityCaptureResult =
   | {
       readonly ok: false
       readonly reason: IdentityRejectionReason
-      /** Wording for staff — concise, non-technical, never a parser message. */
+      /** Wording for staff, concise, non-technical, never a parser message. */
       readonly message: string
     }
 
@@ -88,7 +88,7 @@ export function captureIdentityFromQr(decoded: string): IdentityCaptureResult {
  * Validates a public code typed by staff when scanning fails.
  *
  * Normalisation and checksum validation belong to the identity layer and are
- * not repeated here — this is a thin adapter over `parsePublicCode`, so the
+ * not repeated here; this is a thin adapter over `parsePublicCode`, so the
  * tolerance already built in (case, separators, under-padded sequences) applies
  * exactly as it does everywhere else.
  *

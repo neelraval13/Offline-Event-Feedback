@@ -102,7 +102,7 @@ describe('createRegistration', () => {
     expect(parsed.ok && parsed.stationId).toBe(record.stationId)
   })
 
-  it('needs no issuer passed in — it follows from the device context', async () => {
+  it('needs no issuer passed in: it follows from the device context', async () => {
     // The caller supplies deviceId as part of record provenance and nothing
     // else, so codes cannot be issued under another device's namespace.
     const other = newDeviceId()

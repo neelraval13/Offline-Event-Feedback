@@ -17,7 +17,7 @@ export interface DatabaseStatus {
  * Opens the database and reports whether local storage is usable.
  *
  * Worth surfacing to staff rather than logging: a browser in private mode, one
- * with site data blocked, or one that has hit a storage quota will fail here —
+ * with site data blocked, or one that has hit a storage quota, will fail here,
  * and a registration desk that cannot persist must not start taking
  * participants (invariant 1).
  */

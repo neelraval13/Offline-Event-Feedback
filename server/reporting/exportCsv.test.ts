@@ -180,7 +180,7 @@ describe('registrationsCsv', () => {
     const fields = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
 
     // Last six columns: feedback record, capture, rating, experience,
-    // recommend, comments — all empty. Reporting does not pick a response.
+    // recommend, comments: all empty. Reporting does not pick a response.
     expect(fields.slice(-6)).toEqual(['', '', '', '', '', ''])
     expect(fields).toContain('multiple_feedback')
   })
@@ -338,7 +338,7 @@ describe('duplicateCandidatesCsv', () => {
 describe('exportFileName', () => {
   const at = new Date('2026-01-02T15:04:05.000Z')
 
-  it('names the event, the kind and the date — never a participant', () => {
+  it('names the event, the kind and the date, never a participant', () => {
     expect(exportFileName('evt-dev-001', 'registrations', 'csv', at)).toBe(
       'evt-dev-001-registrations-2026-01-02.csv',
     )

@@ -20,14 +20,14 @@ import { useReportingSession } from './session'
  *
  * The identifiers are shown, not just the human-readable fields. When an operator
  * has to reconcile this screen against a device's Admin page, a support log or a
- * row in an export, the record and participant IDs are what they match on — and a
+ * row in an export, the record and participant IDs are what they match on, and a
  * screen that shows only a name and a code cannot answer "is this the same row?".
  */
 
 const STATUS_LABELS: Record<RegistrationReconciliationStatus, string> = {
-  matched: 'Matched — exactly one valid response',
+  matched: 'Matched: exactly one valid response',
   without_feedback: 'No response matched',
-  multiple_feedback: 'Several valid responses — no winner chosen',
+  multiple_feedback: 'Several valid responses, no winner chosen',
 }
 
 interface RegistrationDetailProps {
@@ -120,25 +120,25 @@ export function RegistrationDetail({
             </div>
             <div>
               <dt>Vehicle</dt>
-              <dd>{detail.vehicle ?? '—'}</dd>
+              <dd>{detail.vehicle ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Interested colour</dt>
-              <dd>{detail.interestedColour ?? '—'}</dd>
+              <dd>{detail.interestedColour ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Location</dt>
-              <dd>{detail.location ?? '—'}</dd>
+              <dd>{detail.location ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Gender</dt>
-              <dd>{detail.gender ?? '—'}</dd>
+              <dd>{detail.gender ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Test ride</dt>
               <dd>
                 {detail.testRideAt === null
-                  ? '—'
+                  ? 'Not provided'
                   : /* A wall-clock slot at the venue: shown as captured, never
                        shifted into the reader's timezone. */
                     detail.testRideAt.replace('T', ' ')}
@@ -146,11 +146,11 @@ export function RegistrationDetail({
             </div>
             <div>
               <dt>Pincode</dt>
-              <dd>{detail.pincode ?? '—'}</dd>
+              <dd>{detail.pincode ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Driving licence (sensitive)</dt>
-              <dd>{detail.drivingLicence ?? '—'}</dd>
+              <dd>{detail.drivingLicence ?? 'Not provided'}</dd>
             </div>
             <div>
               <dt>Registered</dt>
@@ -191,7 +191,7 @@ export function RegistrationDetail({
           {detail.reconciliationStatus === 'multiple_feedback' && (
             <p className="notice" role="status">
               This participant has more than one valid response. All are shown in
-              full and none is treated as the answer — the reconciliation run
+              full and none is treated as the answer. The reconciliation run
               chose no winner and neither does this screen or the exports.
             </p>
           )}

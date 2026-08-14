@@ -16,7 +16,7 @@
  *
  * `navigator.onLine` is deliberately absent from this model. It reports whether
  * a network interface thinks it has a link, which answers a different question
- * entirely — a device can be online and completely unprepared, or offline and
+ * entirely: a device can be online and completely unprepared, or offline and
  * perfectly ready. Readiness means *the shell is cached*, and only the service
  * worker can say that.
  */
@@ -75,7 +75,7 @@ export interface OfflineShell {
   getState(): OfflineShellState
   subscribe(listener: () => void): () => void
   /**
-   * Applies a waiting update. Reloads the page, by design — which is why it is
+   * Applies a waiting update. Reloads the page by design, which is why it is
    * only ever called from an explicit operator action on the Admin screen.
    */
   applyUpdate(): Promise<void>
@@ -115,7 +115,7 @@ export function createOfflineShell(
 
   if (!dependencies.isSupported()) {
     // A development build or a browser without service workers. Everything
-    // still works — it simply cannot survive losing the server.
+    // still works; it simply cannot survive losing the server.
     state = { ...INITIAL, readiness: 'unsupported' }
 
     return {
@@ -132,7 +132,7 @@ export function createOfflineShell(
 
   /**
    * A worker already controlling this page means the shell is being served
-   * from the cache right now — the strongest evidence of readiness there is,
+   * from the cache right now: the strongest evidence of readiness there is,
    * and the only signal available on repeat visits, where `onOfflineReady`
    * fires once and never again.
    */
@@ -195,9 +195,9 @@ export function describeReadiness(readiness: OfflineReadiness): string {
     case 'ready':
       return 'Ready for offline use'
     case 'preparing':
-      return 'Preparing — keep this device online until it is ready'
+      return 'Preparing. Keep this device online until it is ready'
     case 'failed':
-      return 'Not ready — connect this device to the Internet before the event'
+      return 'Not ready. Connect this device to the Internet before the event'
     case 'unsupported':
       return 'Not available in this browser or build'
   }

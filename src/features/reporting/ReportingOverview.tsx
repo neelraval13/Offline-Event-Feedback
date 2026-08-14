@@ -15,8 +15,8 @@ import { useReportingSession } from './session'
  *
  * Two numbers that are easy to confuse are shown apart on purpose:
  *
- *   coverage  — participants who responded at all, ambiguity included
- *   analytics — responses unambiguous enough to average
+ *   coverage:  participants who responded at all, ambiguity included
+ *   analytics: responses unambiguous enough to average
  *
  * A participant with two conflicting responses raises the first and not the
  * second, and presenting one "response rate" would hide exactly that.
@@ -36,7 +36,7 @@ interface ReportingOverviewProps {
 }
 
 function percentage(value: number | null): string {
-  return value === null ? '—' : `${value}%`
+  return value === null ? 'No data' : `${value}%`
 }
 
 export function ReportingOverview({
@@ -102,8 +102,8 @@ export function ReportingOverview({
       <p className="screen__note">
         Reconciliation reads the central records and writes a new run. It never
         edits, merges or deletes a registration or a response. Every figure and
-        list on this screen describes exactly the records this run classified —
-        anything that arrived afterwards belongs to the next run, not this one.
+        list on this screen describes exactly the records this run classified.
+        Anything that arrived afterwards belongs to the next run, not this one.
       </p>
 
       {loading && overview === null && <p className="screen__note">Loading…</p>}
@@ -197,7 +197,7 @@ export function ReportingOverview({
                       <dt>Average</dt>
                       <dd>
                         {rating.average === null
-                          ? '—'
+                          ? 'No data'
                           : `${rating.average} / 7`}
                       </dd>
                     </div>
@@ -243,7 +243,7 @@ export function ReportingOverview({
             Computed from the {overview.analytics.analysedResponses.toLocaleString()}{' '}
             response(s) this run matched to exactly one participant. Responses in
             a multiple-response group, identity conflicts and responses with no
-            registration are excluded — none of them can be attributed to one
+            registration are excluded, because none of them can be attributed to one
             person with confidence.
             {overview.analytics.unreadableFormVersions > 0 && (
               <>
@@ -258,7 +258,7 @@ export function ReportingOverview({
           <dl className="station-badge">
             <div>
               <dt>Average rating</dt>
-              <dd>{overview.analytics.averageOverallRating ?? '—'}</dd>
+              <dd>{overview.analytics.averageOverallRating ?? 'No data'}</dd>
             </div>
             <div>
               <dt>Would recommend</dt>

@@ -44,21 +44,21 @@ import { base64ToBytes } from './base64'
  * Runtime validation of untrusted backup files.
  *
  * A restore file is a security boundary. It arrives from a USB stick, an email
- * attachment, a shared drive — anywhere — and `JSON.parse` succeeding says
+ * attachment, a shared drive, anywhere, and `JSON.parse` succeeding says
  * nothing about whether it is safe to merge into a database holding an event's
  * records. So everything crosses this module as `unknown` and leaves as a typed
  * value only after being checked field by field. No branded cast is ever
  * applied to unvalidated input.
  *
  * Written by hand rather than with a schema library. The shapes are few and
- * stable, and the interesting checks are not shape checks at all — a public
+ * stable, and the interesting checks are not shape checks at all: a public
  * code has to satisfy its own check character, an event has to match this
  * build, a `qr` capture has to carry a participant ID while a `manual` one must
  * not. Those rules already exist in the identity layer, and a schema library
  * would either duplicate them or need bridging back into it. A dependency that
  * validates the easy half and delegates the hard half is not worth the weight.
  *
- * Every message is structural — a field name and an index. Never a value, so a
+ * Every message is structural: a field name and an index. Never a value, so a
  * validation error can never print a participant's name or email.
  */
 
@@ -323,8 +323,8 @@ function validateCampaignAnswers(
  * Validates the answers against the questionnaire the record declares.
  *
  * Branching on `formVersion` is the whole point: a restore file may legitimately
- * hold both questionnaires — a device that worked the generic event and then the
- * campaign has records of each — and validating a campaign response against the
+ * hold both questionnaires, a device that worked the generic event and then the
+ * campaign has records of each, and validating a campaign response against the
  * old shape would reject a perfectly good backup.
  */
 
@@ -333,8 +333,8 @@ function validateCampaignAnswers(
  *
  * A restore file is untrusted input, so "the current build wrote it" is not a
  * reason to skip anything. Every field is checked against the campaign's own
- * constraints — the same ones the wire schema and the form use, imported rather
- * than restated — and a record that carries none of them is a pre-campaign
+ * constraints, the same ones the wire schema and the form use, imported rather
+ * than restated, and a record that carries none of them is a pre-campaign
  * record and perfectly valid.
  *
  * Messages name the field and the index and nothing else. A validation message
@@ -761,7 +761,7 @@ function assertUnique(
 
   for (const value of values) {
     if (seen.has(value)) {
-      // The duplicated value is never printed — it could be an identifier that
+      // The duplicated value is never printed; it could be an identifier that
       // ties back to a participant.
       issues.push(`duplicate ${label} in backup`)
       return

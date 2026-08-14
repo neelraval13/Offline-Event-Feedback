@@ -771,7 +771,7 @@ describe('protocol v1 across mixed builds', () => {
   /*
    * Phase 9 added optional registration fields and a second questionnaire
    * without changing `SYNC_PROTOCOL_VERSION`. These tests are the evidence for
-   * that decision — and for the one direction that is NOT supported, which is
+   * that decision, and for the one direction that is NOT supported, which is
    * documented in docs/flying-flea-campaign.md as a deployment gate.
    */
 
@@ -820,8 +820,8 @@ describe('protocol v1 across mixed builds', () => {
      * never seen. Bumping would have forced every device to be updated before
      * any could sync, mid-campaign, for no gain in either direction.
      *
-     * The unsupported direction — a Phase 9 client against a pre-Phase 9 server
-     * — cannot be prevented by a version number either: that server would
+     * The unsupported direction, a Phase 9 client against a pre-Phase 9 server,
+     * cannot be prevented by a version number either: that server would
      * reject campaign feedback as an unknown form version and strand it on the
      * device. It is a deployment ordering rule, and it is written down.
      */

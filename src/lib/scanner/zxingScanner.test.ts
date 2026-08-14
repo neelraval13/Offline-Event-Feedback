@@ -85,7 +85,7 @@ describe('classifying decode misses', () => {
     /*
      * The regression that reached production. `@zxing/library` builds its
      * exceptions on `ts-custom-error`, which sets `name` from the constructor
-     * *function's* name — so a minified build reports `name` as whatever single
+     * *function's* name, so a minified build reports `name` as whatever single
      * letter the bundler chose. The old guard compared `error.name` against
      * 'NotFoundException' and therefore matched nothing in the built app.
      *
@@ -338,8 +338,8 @@ describe('losing the camera mid-shift', () => {
     const scanner = createZxingScanner()
     await scanner.start({ video, onDecode: vi.fn(), onFatalError })
 
-    // A camera unplugged, or seized by another app. This — not a decoder
-    // exception — is what a dead camera actually looks like.
+    // A camera unplugged, or seized by another app. This, not a decoder
+    // exception, is what a dead camera actually looks like.
     expect(listeners).toHaveLength(1)
     listeners[0]?.()
 

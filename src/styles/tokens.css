@@ -9,7 +9,7 @@
  * the lime accent asks for `var(--ff-accent)`; nothing hardcodes `#D3FF00`,
  * because a campaign that later ships a different accent should be one edit.
  *
- * Two accents, and they are not interchangeable — this is the part of the
+ * Two accents, and they are not interchangeable; this is the part of the
  * supplied design most easily got wrong:
  *
  *   --ff-accent (lime) is brand and display: eyebrows, step numbers, the last
@@ -49,7 +49,7 @@
   /*
    * Type.
    *
-   * Three roles, three faces, all served locally from `public/fonts` — see
+   * Three roles, three faces, all served locally from `public/fonts`, see
    * `src/styles/fonts.css`. The supplied reference loaded Anton and Inter from
    * Google Fonts; Anton was standing in for the campaign's own display face, and
    * `FlyingFlea` is that face.
@@ -78,8 +78,8 @@
     var(--ff-font-ui);
 
   /*
-   * The application default. Its own name because most of this product —
-   * Admin, Reporting, forms — is interface rather than prose.
+   * The application default. Its own name because most of this product
+   * (Admin, Reporting, forms) is interface rather than prose.
    */
   --ff-font-text: var(--ff-font-ui);
 
@@ -87,4 +87,28 @@
   --ff-gap-tight: 8px;
   --ff-gap: 14px;
   --ff-gap-section: 26px;
+
+  /*
+   * Layout.
+   *
+   * The same form is used on a 320px phone and a 1920px monitor, so the widths
+   * are written once here rather than as a breakpoint per screen.
+   *
+   *   --ff-gutter       space between the content and the edge of the viewport.
+   *                     Small on a phone, where every pixel of the numeric
+   *                     cluster is needed; generous on a laptop.
+   *   --ff-content-max  the reading measure. A registration form stretched
+   *                     across a 27-inch monitor is not more usable, it is
+   *                     harder to scan.
+   *   --ff-card-pad     card padding, on the same curve as the gutter.
+   *   --ff-touch        the minimum size of anything a finger operates.
+   *   --ff-dial-min     the diameter below which the cluster's keypad stops
+   *                     being comfortable, so two clusters stop sharing a row.
+   */
+  --ff-gutter: clamp(10px, 3vw, 28px);
+  --ff-content-max: 46rem;
+  --ff-card-pad: clamp(16px, 3vw, 32px);
+  --ff-touch: 44px;
+  --ff-dial-max: 340px;
+  --ff-dial-min: 300px;
 }

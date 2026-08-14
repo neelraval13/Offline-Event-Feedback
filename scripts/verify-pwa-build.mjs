@@ -6,7 +6,7 @@
  * against is quiet by nature: the app looks fine online, and only stops working
  * once the server is gone.
  *
- * Deliberately checks outcomes, not Workbox internals — that the emitted
+ * Deliberately checks outcomes, not Workbox internals; that the emitted
  * assets are in the precache manifest, not how Workbox chose to spell them.
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
@@ -23,7 +23,7 @@ function check(condition, message) {
 }
 
 if (!existsSync(DIST)) {
-  console.error(`✗ ${DIST}/ does not exist — run \`pnpm build\` first.`)
+  console.error(`✗ ${DIST}/ does not exist. Run \`pnpm build\` first.`)
   process.exit(1)
 }
 
@@ -61,7 +61,7 @@ const precached = new Set(entries.map(([, url]) => url))
 
 /*
  * The glob and the plugin's own manifest/icon injection overlap, so some URLs
- * are listed twice. Identical entries are deduped by Workbox and are harmless —
+ * are listed twice. Identical entries are deduped by Workbox and are harmless,
  * but the same URL at two different revisions would mean the shell disagrees
  * with itself about what to cache.
  */
@@ -90,7 +90,7 @@ check(stylesheets.length > 0, 'no CSS was emitted')
 for (const asset of [...javascript, ...stylesheets]) {
   check(
     precached.has(`assets/${asset}`),
-    `assets/${asset} is emitted but NOT precached — it would be unavailable offline`,
+    `assets/${asset} is emitted but NOT precached, so it would be unavailable offline`,
   )
 }
 
@@ -104,7 +104,7 @@ check(
 
 check(
   sw.includes('NavigationRoute') && sw.includes('index.html'),
-  'no navigation fallback to index.html — #/a, #/b and #/admin would not cold-start',
+  'no navigation fallback to index.html, so #/a, #/b and #/admin would not cold-start',
 )
 
 /* ---- updates must wait for an operator ---- */
@@ -115,7 +115,7 @@ check(
 )
 check(
   !/self\.skipWaiting\(\)\s*[;,}]/.test(sw.replace(/"SKIP_WAITING"===\w+\.data\.type&&self\.skipWaiting\(\)/, '')),
-  'the service worker calls skipWaiting() unconditionally — an update could reload a terminal mid-registration',
+  'the service worker calls skipWaiting() unconditionally, so an update could reload a terminal mid-registration',
 )
 
 /*
@@ -127,7 +127,7 @@ check(
  */
 check(
   !sw.includes('/v1/sync'),
-  'the service worker references the sync API — upload responses must never be cached',
+  'the service worker references the sync API; upload responses must never be cached',
 )
 check(
   !sw.includes('runtimeCaching'),
@@ -143,7 +143,7 @@ check(
  */
 check(
   !sw.includes('/v1/reporting'),
-  'the service worker references the reporting API — participant data must never be cached',
+  'the service worker references the reporting API; participant data must never be cached',
 )
 
 /*
@@ -156,7 +156,7 @@ check(
  */
 check(
   ![...precached].some((url) => url.startsWith('api/') || url.startsWith('/api')),
-  'an /api path is in the precache manifest — API responses must never be cached',
+  'an /api path is in the precache manifest; API responses must never be cached',
 )
 
 /* ---- icons ---- */
@@ -178,7 +178,7 @@ for (const file of [...javascript.map((n) => join(DIST, 'assets', n)), serviceWo
 
 /*
  * The sync API is a deliberate runtime dependency, baked in at build time. Its
- * host is expected — but a production build carrying a `localhost` or plain
+ * host is expected, but a production build carrying a `localhost` or plain
  * HTTP endpoint is a misconfiguration worth failing loudly on, because the
  * symptom in the field is a device that silently never syncs.
  */
@@ -188,14 +188,14 @@ const syncUrl = /VITE_SYNC_API_BASE_URL:\s*`([^`]+)`/.exec(
 
 if (syncUrl !== undefined && syncUrl.startsWith('/') && !syncUrl.startsWith('//')) {
   /*
-   * A same-origin path — what a Vercel deployment uses, where the app and the
+   * A same-origin path, what a Vercel deployment uses, where the app and the
    * API are one origin. There is no host to check and no protocol to downgrade:
    * the browser resolves it against the page it was served from, so an app on
    * HTTPS reaches the API on HTTPS by construction. This is the safest of the
    * three shapes and needs no warning.
    */
   notes.push(
-    `sync API configured same-origin: ${syncUrl} — resolves against the page's own origin`,
+    `sync API configured same-origin: ${syncUrl}, which resolves against the page's own origin`,
   )
 } else if (syncUrl !== undefined) {
   let syncHost = ''
@@ -207,11 +207,11 @@ if (syncUrl !== undefined && syncUrl.startsWith('/') && !syncUrl.startsWith('//'
     const local = syncHost === 'localhost' || syncHost === '127.0.0.1'
     check(
       parsed.protocol === 'https:' || local,
-      `the sync API is configured over plain HTTP (${parsed.protocol}//${syncHost}) — registrations carry participant contact details`,
+      `the sync API is configured over plain HTTP (${parsed.protocol}//${syncHost}); registrations carry participant contact details`,
     )
     if (local) {
       notes.push(
-        `sync API points at ${syncUrl} — a development endpoint. Rebuild with VITE_SYNC_API_BASE_URL unset or set to the production https URL before shipping.`,
+        `sync API points at ${syncUrl}, a development endpoint. Rebuild with VITE_SYNC_API_BASE_URL unset or set to the production https URL before shipping.`,
       )
     } else {
       notes.push(`sync API configured: ${parsed.origin}`)
@@ -242,7 +242,7 @@ const ALLOWED_HOSTS = new Set([
 const unexpected = [...externalHosts].filter((host) => !ALLOWED_HOSTS.has(host))
 if (unexpected.length > 0) {
   notes.push(
-    `external hosts referenced in the bundle: ${unexpected.join(', ')} — confirm none is fetched at runtime`,
+    `external hosts referenced in the bundle: ${unexpected.join(', ')}; confirm none is fetched at runtime`,
   )
 }
 
@@ -263,7 +263,7 @@ const totalKib = [...javascript, ...stylesheets].reduce(
 )
 
 console.log(
-  `✓ PWA build verified — ${precached.size} precached entries, ` +
+  `✓ PWA build verified: ${precached.size} precached entries, ` +
     `${javascript.length} JS + ${stylesheets.length} CSS assets (${totalKib.toFixed(0)} KiB) all cached, ` +
     `navigation fallback present, updates gated on an operator.`,
 )

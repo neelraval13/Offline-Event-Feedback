@@ -5,7 +5,7 @@ import { isUuid, parseCursor } from './postgres'
  * The values that reach a `::uuid` or `::timestamptz` cast.
  *
  * Anything that fails to parse here would otherwise become a Postgres error and
- * a 500 — the wrong answer to a malformed request, and a way to learn about the
+ * a 500: the wrong answer to a malformed request, and a way to learn about the
  * schema by watching which inputs break it.
  */
 

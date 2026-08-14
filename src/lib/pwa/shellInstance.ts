@@ -3,8 +3,8 @@ import type { OfflineShell, OfflineShellState } from './offlineShell'
 /*
  * The one offline shell for this page.
  *
- * A holder rather than a module that constructs it, so that importing this —
- * which the Admin screen does — never pulls in `virtual:pwa-register`. The
+ * A holder rather than a module that constructs it, so that importing this
+ * (which the Admin screen does) never pulls in `virtual:pwa-register`. The
  * browser wiring lives in `browserShell.ts` and is imported only by the
  * application entry point, which keeps the service worker entirely out of the
  * test environment unless a test deliberately puts a fake here.

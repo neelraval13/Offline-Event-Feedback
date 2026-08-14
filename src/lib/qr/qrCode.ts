@@ -3,8 +3,8 @@ import QRCode from 'qrcode'
 /*
  * QR rendering.
  *
- * The `qrcode` package does the encoding — matrix generation, versioning, mask
- * selection — and this module turns the resulting matrix into SVG itself.
+ * The `qrcode` package does the encoding, matrix generation, versioning, mask
+ * selection, and this module turns the resulting matrix into SVG itself.
  *
  * Why not `QRCode.toString(..., { type: 'svg' })`:
  *
@@ -13,7 +13,7 @@ import QRCode from 'qrcode'
  *     <path stroke="#000000" d="M4 4.5h7m5 0h1m1 0h6..."/>
  *
  *   Horizontal line segments on half-module y-coordinates, with no
- *   `stroke-width` attribute at all — each module's thickness is the SVG
+ *   `stroke-width` attribute at all; each module's thickness is the SVG
  *   default of 1 user unit, centred on the line. Since the symbol carries a
  *   viewBox and no intrinsic size, one user unit maps to a different number of
  *   device pixels depending on the matrix size, so the hairline is rasterised
@@ -38,7 +38,7 @@ import QRCode from 'qrcode'
  *   H -> version 10, 57 modules, 0.40 mm each
  *
  * Higher correction means more modules in the same 26 mm, so each module gets
- * smaller and the code gets *harder* to scan — at 203 dpi, H would give barely
+ * smaller and the code gets *harder* to scan: at 203 dpi, H would give barely
  * 3 printer dots per module against M's 4.2. The usual reason to accept that
  * trade is damage tolerance, but this system already has a designed answer for
  * a QR too damaged to read: the public code printed underneath it, which staff
@@ -105,7 +105,7 @@ function darkRuns(size: number, data: Uint8Array): Run[] {
 /**
  * Encodes a payload and renders it as SVG.
  *
- * @param payload the exact string to encode — callers pass the serialised QR
+ * @param payload the exact string to encode; callers pass the serialised QR
  *   payload contract, never a record or anything with PII in it
  */
 export function createQrSymbol(payload: string): QrSymbol {

@@ -5,8 +5,8 @@ The test that decides whether this application is venue-ready.
 ## Why the previous offline test was not enough
 
 Earlier phases were tested with the Internet disconnected while `pnpm preview`
-kept serving `localhost`. That proved the **data** path works offline — no API
-calls, no CDN, no lookups — and that was worth proving.
+kept serving `localhost`. That proved the **data** path works offline (no API
+calls, no CDN, no lookups), and that was worth proving.
 
 It did not prove the app can *start*. The origin server was still there, still
 answering for `index.html` and the JavaScript bundle. Pull the power on that
@@ -25,8 +25,8 @@ Only after this test passes may anyone say **"venue-ready offline cold start."**
 
 | Storage | Holds | Safe to clear? |
 | --- | --- | --- |
-| **Cache Storage** | application code, CSS, icons | Yes — it re-downloads when online |
-| **IndexedDB** | **participant registrations and feedback** | **No — this is event data** |
+| **Cache Storage** | application code, CSS, icons | Yes, it re-downloads when online |
+| **IndexedDB** | **participant registrations and feedback** | **No, this is event data** |
 
 Chrome's **Clear site data** button clears *both*. Using it during PWA
 debugging is how a day of registrations disappears. The safe reset procedure is
@@ -47,7 +47,7 @@ pnpm preview
 The build prints a verification line. It must say the assets are all cached:
 
 ```
-✓ PWA build verified — 8 precached entries, 2 JS + 1 CSS assets (826 KiB) all cached,
+✓ PWA build verified: 8 precached entries, 2 JS + 1 CSS assets (826 KiB) all cached,
   navigation fallback present, updates gated on an operator.
 ```
 
@@ -70,7 +70,7 @@ Open the printed URL in Chrome. Then:
    If it says *"Preparing"* or *"Not ready"*, stop. The device is not prepared
    and the rest of this test will fail for the right reason.
 
-4. **Visit every surface while still online** — `#/a`, `#/b`, `#/admin` — so no
+4. **Visit every surface while still online** (`#/a`, `#/b`, `#/admin`) so no
    browser-lazy behaviour is left unexercised.
 5. **Grant the camera permission** at `#/b` and confirm the preview appears.
    Permission is per-origin and persists; granting it offline later is not
@@ -85,7 +85,7 @@ Open the printed URL in Chrome. Then:
 Ctrl+C   # in the terminal running pnpm preview
 ```
 
-Confirm it is gone — reloading the page in a *new* tab should now fail if the
+Confirm it is gone; reloading the page in a *new* tab should now fail if the
 service worker were not there. Do not skip this; a backgrounded process still
 serving on 4173 invalidates the whole test.
 
@@ -99,7 +99,7 @@ serving on 4173 invalidates the whole test.
 **Expected:** the application loads, from Cache Storage, with no server and no
 network.
 
-If it fails here, nothing below matters — the shell is not cached and the device
+If it fails here, nothing below matters: the shell is not cached and the device
 is not field-ready.
 
 ## D. Point A, offline
@@ -142,14 +142,14 @@ disconnected, reopen it.
 
 **Expected:** it starts again, and all data is still present.
 
-A single successful cold start can be luck — a warm HTTP cache, a tab that was
+A single successful cold start can be luck: a warm HTTP cache, a tab that was
 never really closed. Two in a row from a fully quit browser is the evidence.
 
 ---
 
 # Installed-PWA test
 
-Where Chrome permits installation (it requires a secure context — see below):
+Where Chrome permits installation (it requires a secure context; see below):
 
 1. Prepare the device online exactly as in section A.
 2. Install the app (address-bar install icon, or ⋮ → Cast, save and share →
@@ -169,7 +169,7 @@ Do not let a missing install badge block deployment.
 
 The camera requires a secure context, and so does the service worker. Both work
 on `localhost` for development. In the field the app must be served over
-**HTTPS** — `http://192.168.x.x` will have neither a camera nor an offline
+**HTTPS**: `http://192.168.x.x` will have neither a camera nor an offline
 shell, and is not the deployment strategy.
 
 ---
@@ -180,7 +180,7 @@ Run this before field deployment, not after every small edit.
 
 1. **Build version N**, prepare a device as in section A, and create a
    registration and a feedback record.
-2. Leave that tab open, on `#/a`, **with a half-filled form** — type a name and
+2. Leave that tab open, on `#/a`, **with a half-filled form**: type a name and
    a phone number but do not submit.
 3. **Build version N+1** while the device is online:
    ```bash
@@ -218,5 +218,5 @@ IndexedDB, and nothing in the update path opens the database.
 Note the Chrome version, the platform, whether installation was offered, the
 device ID before and after, and the record counts before and after. If a cold
 start fails, capture DevTools → Application → Service Workers and Cache Storage
-before clearing anything — and do not use **Clear site data** to "try again",
+before clearing anything, and do not use **Clear site data** to "try again",
 because that deletes the participant records the test just created.

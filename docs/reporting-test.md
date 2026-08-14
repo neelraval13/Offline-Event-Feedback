@@ -1,4 +1,4 @@
-# Central reporting — real Postgres QA
+# Central reporting: real Postgres QA
 
 Reporting is the first API in this system that returns a participant's name,
 phone number and email address. This pass proves it against a real database, on
@@ -23,7 +23,7 @@ between two responses, mark an anomaly resolved, or touch a device's sync state.
 a Phase 7 run. Nothing is reclassified in the browser or on the way to a CSV.
 
 **A run contains exactly what it classified.** Records that arrived after a run
-completed belong to the next run, not that one — they are absent from its
+completed belong to the next run, not that one; they are absent from its
 browsers, its detail views and its exports.
 
 **It shows ambiguity rather than resolving it.** A participant with two valid
@@ -69,12 +69,12 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Authorization: Bearer wrong' \
   "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
 
-# The ENROLMENT secret — valid for enrolling a device, useless here
+# The ENROLMENT secret: valid for enrolling a device, useless here
 curl -s -o /dev/null -w '%{http_code}\n' \
   -H "Authorization: Bearer $SYNC_ENROLLMENT_SECRET" \
   "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
 
-# A device token issued by /v1/sync/enroll — valid for uploading, useless here
+# A device token issued by /v1/sync/enroll: valid for uploading, useless here
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Authorization: Bearer <device token>' \
   "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
 ```
@@ -163,7 +163,7 @@ time:
 1. **Sync a new record.** It must flip to `true`, and
    `registrationsAddedSinceRun` (or `feedbackAddedSinceRun`) must be 1. The run's
    own counts must not move.
-2. **Sync a correction to an existing record** — a higher revision, accepted. It
+2. **Sync a correction to an existing record**: a higher revision, accepted. It
    must be `true` with the added-counts still 0: `latestContentChangeAt` is what
    moved.
 3. **Re-sync a batch a device has already delivered**, unchanged. Phase 6 answers
@@ -185,8 +185,8 @@ server accepted new content.
 ### Historical runs
 
 Request an older `runId` explicitly and confirm `isHistoricalRun` is `true`. On
-the screen, the warning must be visible on **every** tab — Participants,
-Responses, Needs review, Duplicates and Export — not only on Overview, and it must
+the screen, the warning must be visible on **every** tab (Participants,
+Responses, Needs review, Duplicates and Export), not only on Overview, and it must
 say both halves: reconciliation statuses are historical, while names, phone
 numbers, emails and answers are the current canonical values.
 
@@ -251,7 +251,7 @@ issues a request.
 
 **Expect** the screen to return to the sign-in form with a notice that the secret
 was rejected, and **every participant's name, phone number and email to be gone
-from the page** — not merely covered by an error message. Confirm in DevTools that
+from the page**, not merely covered by an error message. Confirm in DevTools that
 the panels are unmounted and that nothing was written to storage on the way out.
 
 ## 4. The browsers, and where an answer is not
@@ -284,8 +284,8 @@ curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
 Search from the screen (`#/reporting` → Participants) for a participant's phone
 number, then check both:
 
-- the browser's address bar still reads `#/reporting` — no search term in it
-- the server log line reads `reporting registrations event=… rows=N ms=…` — a
+- the browser's address bar still reads `#/reporting`; no search term in it
+- the server log line reads `reporting registrations event=… rows=N ms=…`: a
   count and a timing, with no term, no name and no body
 
 Search is a `POST` with a JSON body precisely so a phone number never reaches an
@@ -337,7 +337,7 @@ done
 
 For each file, confirm:
 
-- the filename is `evt-dev-001-<kind>-<date>.<ext>` — **no participant name,
+- the filename is `evt-dev-001-<kind>-<date>.<ext>`: **no participant name,
   code, phone number or email in the filename**
 - `cache-control: no-store, private` is present on the download too
 - the row count matches the run: registrations CSV has one row per registration,
@@ -353,8 +353,8 @@ Then check the two things that break spreadsheets:
   `+919876543210` must appear as `"'+919876543210"`. Open the CSV in Excel or
   Numbers and confirm no cell evaluates and no cell reads `#NAME?`.
 
-For the workbook, confirm five sheets — Summary, Registrations, Feedback,
-Duplicate Candidates, Metadata — and that **every** participant-derived cell is
+For the workbook, confirm five sheets (Summary, Registrations, Feedback,
+Duplicate Candidates, Metadata), and that **every** participant-derived cell is
 text, not a number and never a formula. The Metadata sheet must state the
 inclusion rules: `analyticsInclusionRule`, `coverageRule`,
 `multipleFeedbackRule`, `snapshotCaveat`, `supportedFormVersion`.
@@ -389,7 +389,7 @@ curl -s -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
 ```
 
 Both sides of each pair are shown with their public codes. There is no merge
-action and no endpoint that could merge — a shared phone number at an event is
+action and no endpoint that could merge: a shared phone number at an event is
 common and legitimate.
 
 If `truncated` is `true`, the screen must say how many pairs the run found and
@@ -400,17 +400,17 @@ all of them would be the misleading failure here.
 
 With the reporting screen open on real data, in DevTools:
 
-- **Application → IndexedDB** — the local database contains only this device's
+- **Application → IndexedDB**: the local database contains only this device's
   own captures. No central registration, response or aggregate appears in it.
-- **Application → Local Storage / Session Storage** — empty of report data, and
+- **Application → Local Storage / Session Storage**: empty of report data, and
   the reporting secret appears in neither.
-- **Application → Cache Storage** — the precache holds built assets only. No
+- **Application → Cache Storage**: the precache holds built assets only. No
   entry for `/v1/reporting/*`.
-- **Network** — every reporting response shows `Cache-Control: no-store, private`.
+- **Network**: every reporting response shows `Cache-Control: no-store, private`.
   Reload with the network throttled to offline: the screen fails to load data and
   shows an error. It must **not** serve a cached copy of anyone's details.
 
-Press **Sign out**, then reload. The screen must ask for the secret again — a
+Press **Sign out**, then reload. The screen must ask for the secret again: a
 credential that survived either would be a credential that survived the machine
 being handed to someone else.
 
@@ -436,7 +436,7 @@ curl -s -o /dev/null -D - -X OPTIONS -H 'Origin: http://localhost:5173' \
   -H 'Access-Control-Request-Method: GET' \
   http://localhost:8788/v1/reporting/overview | grep -i access-control
 
-# The same for a sync POST — Phase 6 must not have regressed
+# The same for a sync POST. Phase 6 must not have regressed
 curl -s -o /dev/null -D - -X OPTIONS -H 'Origin: http://localhost:5173' \
   -H 'Access-Control-Request-Method: POST' \
   http://localhost:8788/v1/sync/batch | grep -i access-control
@@ -454,7 +454,7 @@ There is no wildcard anywhere.
 ## 11. Scale
 
 The automated suite covers 10,000 registrations and 9,000 responses. Point it at
-a scratch database — it writes ~19,000 rows and clears them first, so never aim
+a scratch database; it writes ~19,000 rows and clears them first, so never aim
 it at a database holding an event:
 
 ```bash
@@ -485,8 +485,8 @@ fails, paging has quietly become proportional to the size of the event.
 - With no reporting secret configured, reporting returns 503 and sync still works.
 - No registration, response or reconciliation row was modified by anything in
   this pass; the only new rows are reconciliation runs.
-- A participant with several responses has no answer attached anywhere — screen,
-  CSV or workbook — and every one of their responses is present in full.
+- A participant with several responses has no answer attached anywhere (screen,
+  CSV or workbook), and every one of their responses is present in full.
 - No participant data reached IndexedDB, localStorage, sessionStorage or a cache
   on the reviewing machine.
 - No PII, and no credential, appears in any URL, filename or log line.

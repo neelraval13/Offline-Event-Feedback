@@ -147,7 +147,7 @@ describe('scanning a valid sticker', () => {
     const user = await startScanner()
 
     // Forty frames of the same stationary sticker, delivered regardless of
-    // pause — exactly what a real camera does.
+    // pause: exactly what a real camera does.
     act(() => {
       for (let i = 0; i < 40; i += 1) {
         scanner.emitRaw(sticker.qr)

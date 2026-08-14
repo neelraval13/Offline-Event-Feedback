@@ -22,7 +22,7 @@ import { isUuid } from './uuid'
  * printed public code. It carries no name, phone, email, or anything else from
  * which a participant could be identified by a person holding the sticker.
  * `qrPayloadForRegistration` is the only bridge from a PII-bearing record to
- * this payload, and it copies fields explicitly — never by spreading.
+ * this payload, and it copies fields explicitly, never by spreading.
  */
 
 /** Incremented when the payload shape changes in a way old readers cannot handle. */

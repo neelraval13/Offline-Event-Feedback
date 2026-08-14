@@ -13,7 +13,7 @@
  * Digits only.
  *
  * A missing country code is **not** inferred. `+91 98765 43210` and
- * `9876543210` normalise differently, and that is correct — one of them may
+ * `9876543210` normalise differently, and that is correct: one of them may
  * belong to a different country entirely, and this engine has no way to know
  * which. Only formatting is removed.
  */

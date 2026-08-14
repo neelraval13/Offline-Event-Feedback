@@ -8,7 +8,7 @@
  * with fake details. So these rules catch blank fields and obvious typos, and
  * nothing more.
  *
- * No network validation of any kind — no OTP, no email verification, no
+ * No network validation of any kind: no OTP, no email verification, no
  * carrier lookup. The device is offline.
  *
  * International phone normalisation is explicitly out of scope. Counting digits
@@ -29,7 +29,7 @@ const PHONE_FORMATTING = /[\s\-().]/g
 
 /**
  * Pragmatic e-mail shape check: something, an @, a dotted domain. Deliberately
- * not RFC 5322 — that grammar accepts addresses no participant will ever have
+ * not RFC 5322; that grammar accepts addresses no participant will ever have
  * and rejecting on it would be worse than useless offline.
  */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/
@@ -78,7 +78,7 @@ export function validatePhone(raw: string): string | null {
 
   const digits = phoneDigits(trimmed)
 
-  // Anything left over after removing formatting and digits is a typo —
+  // Anything left over after removing formatting and digits is a typo:
   // a letter, a slash, a stray symbol.
   if (!/^\d*$/.test(digits)) {
     return 'Phone number can only contain digits, spaces, + - ( ) and dots.'

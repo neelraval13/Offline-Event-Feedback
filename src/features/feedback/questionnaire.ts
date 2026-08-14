@@ -13,7 +13,7 @@ import {
  *
  * Four questions, locked. The prompts and visible labels live here; the stored
  * values live in `src/types/feedback.ts`. Keeping them apart is what lets the
- * wording change — or be translated — without touching a single recorded
+ * wording change, or be translated, without touching a single recorded
  * answer's meaning.
  */
 

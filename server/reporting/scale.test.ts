@@ -25,7 +25,7 @@ import {
  * table, an export that walks itself a page at a time, a workbook built by
  * concatenating strings.
  *
- * Timings are printed rather than asserted tightly — a CI box is not a server,
+ * Timings are printed rather than asserted tightly: a CI box is not a server,
  * and a strict threshold here would fail for reasons that have nothing to do
  * with this code. The generous bounds that are asserted exist to catch an
  * order-of-magnitude regression, which is the failure worth blocking on.
@@ -361,7 +361,7 @@ describeScale('reporting at 10,000 registrations', () => {
     /*
      * The plan of the shape the browser actually issues: driven from the run's
      * results, joined to the registration, ordered by the keyset. The plan is
-     * the real evidence — a sort here means every page pays for the whole event.
+     * the real evidence: a sort here means every page pays for the whole event.
      */
     const plan = await sql<{ 'QUERY PLAN': string }[]>`
       EXPLAIN (FORMAT TEXT)

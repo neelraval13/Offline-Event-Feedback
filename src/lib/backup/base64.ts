@@ -20,7 +20,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-/** Strict Base64 — used on untrusted files, so anything odd is rejected. */
+/** Strict Base64, used on untrusted files, so anything odd is rejected. */
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export function isBase64(value: string): boolean {

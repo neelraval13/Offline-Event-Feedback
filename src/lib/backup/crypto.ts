@@ -8,7 +8,7 @@ import { base64ToBytes, bytesToBase64 } from './base64'
  * That second property is what makes a tampered or truncated backup fail loudly
  * instead of decrypting into plausible nonsense.
  *
- * The passphrase is never persisted — not in IndexedDB, not in localStorage,
+ * The passphrase is never persisted, not in IndexedDB, not in localStorage,
  * not in a URL, not in a log. There is no recovery mechanism and no pretence of
  * one: lose the passphrase and the backup is gone.
  */
@@ -26,7 +26,7 @@ const KEY_BITS = 256
 /**
  * Bounds on the iteration count read out of an untrusted file.
  *
- * A backup declares its own KDF cost, which it must — otherwise an older file
+ * A backup declares its own KDF cost, which it must; otherwise an older file
  * could never be opened. But an attacker-supplied file claiming a billion
  * iterations would hang the browser on a single click, so the declared value is
  * clamped to a sane range before any work is done with it.
@@ -136,7 +136,7 @@ export type DecryptResult =
 /**
  * Decrypts and authenticates.
  *
- * Every failure — wrong passphrase, flipped byte, altered IV, truncated file —
+ * Every failure (wrong passphrase, flipped byte, altered IV, truncated file)
  * arrives here as the same AES-GCM authentication error, and is reported as one
  * outcome. There is deliberately no way to learn *which* of those went wrong,
  * and no partially decoded data is ever returned.

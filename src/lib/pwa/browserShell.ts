@@ -6,7 +6,7 @@ import { setOfflineShell } from './shellInstance'
  * Browser wiring for the offline shell.
  *
  * Imported only by the application entry point. Everything else reaches the
- * shell through `shellInstance`, so no other module — and no test — pulls in
+ * shell through `shellInstance`, so no other module, and no test, pulls in
  * the generated `virtual:pwa-register` code.
  */
 

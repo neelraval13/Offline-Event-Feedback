@@ -11,7 +11,7 @@ import { validateEnvelope, validatePayload } from './validate'
  * Verifying a backup file without importing anything.
  *
  * The point of this path is that an operator can establish a file is genuinely
- * recoverable *before* trusting it — and before a real recovery, when the
+ * recoverable *before* trusting it, and before a real recovery, when the
  * original device may no longer exist. Verification reads, decrypts, checks and
  * reports. It writes nothing to the database.
  */
@@ -43,7 +43,7 @@ function tooLarge(byteLength: number): boolean {
  * Wrong passphrase, a flipped byte, an altered IV and a truncated file all
  * surface as one message. That is deliberate: AES-GCM cannot distinguish them,
  * saying which would help an attacker more than an operator, and the operator's
- * next action — check the passphrase, check the file — is the same in every
+ * next action (check the passphrase, check the file) is the same in every
  * case.
  */
 export async function verifyBackupFile(

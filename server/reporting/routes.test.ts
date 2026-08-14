@@ -738,7 +738,7 @@ describeDb('reporting API', () => {
 
       /*
        * The revision is accepted after the run, but the API process reports a
-       * time an hour before it — the shape of a host whose clock has drifted, or
+       * time an hour before it: the shape of a host whose clock has drifted, or
        * one that has not synchronised since booting.
        *
        * If that timestamp were stored, the change would sort before the run and
@@ -784,7 +784,7 @@ describeDb('reporting API', () => {
 
       /*
        * An offline tablet reconnecting and re-uploading a batch it had already
-       * delivered — the most ordinary event in this system. Phase 6 answers
+       * delivered: the most ordinary event in this system. Phase 6 answers
        * `already_current` and touches `last_received_at`, which must not be
        * mistaken for the data having changed.
        */

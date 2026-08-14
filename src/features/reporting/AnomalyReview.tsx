@@ -11,7 +11,7 @@ import { RegistrationTable } from './RegistrationTable'
  * reconciliation run, and hiding one behind a resolved flag would make the next
  * run's counts disagree with the screen for no traceable reason.
  *
- * What an organiser does with an anomaly is human work — find the person, ask
+ * What an organiser does with an anomaly is human work, find the person, ask
  * at the desk, accept the loss.
  */
 
@@ -70,7 +70,7 @@ export function AnomalyReview({
 
       <p className="screen__note">
         These are read-only. Nothing here can be merged, linked, deleted or
-        marked resolved — the reconciliation run is the record of what the
+        marked resolved. The reconciliation run is the record of what the
         evidence says, and this screen does not overrule it.
       </p>
 

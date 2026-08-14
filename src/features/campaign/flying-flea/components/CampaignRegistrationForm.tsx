@@ -36,7 +36,7 @@ import { VehicleSelector } from './VehicleSelector'
  *     numeric inputs, which raise the same keypad the dial imitates.
  *
  * Name is focused on arrival, tab order runs down the fields to the button, and
- * validation runs on submit — errors that appear while someone is still typing
+ * validation runs on submit, errors that appear while someone is still typing
  * an email address are noise at a desk.
  */
 
@@ -242,7 +242,7 @@ export function CampaignRegistrationForm({
 
         {/*
           The campaign's instrument-cluster treatment for the two numbers. They
-          still accept typing and paste — see ClusteredNumericInput — so the
+          still accept typing and paste (see ClusteredNumericInput), so the
           look costs staff nothing at a busy desk.
         */}
         <div className="ff-clusters">

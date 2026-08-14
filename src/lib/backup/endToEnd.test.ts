@@ -65,7 +65,7 @@ describe('backup, verify, restore', () => {
 
       expect(await replacement.registrations.count()).toBe(8)
       expect(await replacement.feedback.count()).toBe(5)
-      // The replacement keeps its own identity — it does not become the source.
+      // The replacement keeps its own identity; it does not become the source.
       expect(await peekDeviceId(replacement)).toBe(replacementDeviceId)
       expect(await peekDeviceId(replacement)).not.toBe(sourceDeviceId)
     } finally {

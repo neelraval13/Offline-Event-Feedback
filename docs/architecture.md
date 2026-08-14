@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Phase 7 — central reconciliation.** This document
+Status: **Phase 7, central reconciliation.** This document
 describes the architecture the code is being built towards, and marks clearly
 what exists today versus what is deferred.
 
@@ -27,8 +27,9 @@ in V1. There is no event management UI and no configuration dashboard.
 4. Only then is a QR sticker printed and placed on the participant. The QR
    carries no PII; the human-readable public code is printed below it.
 5. The participant completes the physical activity.
-6. At **Point B**, staff scans the QR. If scanning fails — damaged sticker, bad
-   light, broken camera — staff types the printed public code instead.
+6. At **Point B**, staff scans the QR. If scanning fails because of a damaged
+   sticker, bad light or a broken camera, staff types the printed public code
+   instead.
 7. Feedback is collected and durably saved on the Point B device.
 8. Later, at any time, both devices synchronise their records to a central
    server.
@@ -40,7 +41,7 @@ These constrain every subsequent design decision.
 ### 1. No sticker before a durable local save
 
 A participant must never carry a sticker whose registration is not persisted.
-The print action is therefore downstream of a confirmed write — never optimistic
+The print action is therefore downstream of a confirmed write, never optimistic
 and never fire-and-forget. If the write fails, the flow stops and no sticker is
 produced. A participant walking around with an identity the system has no record
 of is unrecoverable; a retried registration is not.
@@ -50,7 +51,7 @@ of is unrecoverable; a retried registration is not.
 Everything Point B requires to attribute feedback is physically present on the
 participant: the QR payload and the printed public code. Point B does not query
 Point A, does not hold a copy of the participant list, and does not need
-connectivity. This is why the public code is self-validating — a typo in a
+connectivity. This is why the public code is self-validating: a typo in a
 manually entered code is caught by its check character locally, with no lookup.
 It is also why the code must be unique across every issuing device without
 coordination, which is what the issuer segment provides.
@@ -60,14 +61,14 @@ coordination, which is what the issuer segment provides.
 Sync may run at any time, in any order, repeatedly, from either device, without
 creating duplicates. Each record is created with a client-generated `recordId`
 that acts as the idempotency key; the server upserts on it. Feedback may reach
-the server before the corresponding registration does — the server must accept
+the server before the corresponding registration does: the server must accept
 that ordering and reconcile, not reject it.
 
 ## Privacy boundary
 
 | | holds | never holds |
 | --- | --- | --- |
-| **Point A** | PII (name, phone, email) + participant identity | — |
+| **Point A** | PII (name, phone, email) + participant identity | none |
 | **Point B** | participant identity + feedback | participant PII |
 
 PII enters the system at Point A and stays there. The QR payload and the public
@@ -77,7 +78,7 @@ both a privacy property and the reason invariant 2 is achievable: there is no
 PII at Point B to keep in sync.
 
 Re-joining feedback to a participant is a **central-server** concern, performed
-after synchronisation — never a field concern.
+after synchronisation, never a field concern.
 
 ## Offline architecture
 
@@ -128,7 +129,7 @@ Every record captured in the field is stamped with:
 `deviceId` is discovered at runtime from local storage. All four are stored per
 record anyway. That is the whole point: adding a second day, a second
 registration desk, a third device or an entirely separate event later becomes a
-matter of supplying different configuration and filtering data — not of
+matter of supplying different configuration and filtering data, not of
 redesigning participant identity or migrating already-collected records.
 
 Identifiers are nominally typed (`EventId`, `StationId`, `DeviceId`,
@@ -144,7 +145,7 @@ contract its eventual implementation must satisfy. `src/lib/identity` and
 browser store that is durable, transactional and large enough for ~10,000
 registrations with room to spare. Dexie is a thin wrapper over it, chosen
 because raw IndexedDB's request/event API makes transaction boundaries easy to
-get subtly wrong — and transaction correctness is precisely what the public
+get subtly wrong, and transaction correctness is precisely what the public
 code sequence depends on.
 
 Database `offline-event-feedback`, schema version **1**:
@@ -153,15 +154,15 @@ Database `offline-event-feedback`, schema version **1**:
 | --- | --- | --- | --- |
 | `registrations` | `recordId` | `&participantId`, `&publicCode`, `syncStatus`, `createdAt` | Point A records, including PII |
 | `feedback` | `recordId` | `publicCode`, `participantId` (sparse), `syncStatus`, `createdAt` | Point B records |
-| `deviceConfig` | `key` | — | values belonging to this browser install |
-| `sequences` | `key` | — | one monotonic counter per issuing scope |
+| `deviceConfig` | `key` | none | values belonging to this browser install |
+| `sequences` | `key` | none | one monotonic counter per issuing scope |
 
 `&` marks a unique index. A duplicate participant ID or public code is refused
 by the database itself rather than by application code that might not run.
 `feedback.publicCode` is deliberately *not* unique: nothing offline can rule out
 a participant being recorded twice, and silently dropping the second record
 would destroy evidence the server needs to reconcile. `feedback.participantId`
-is sparse — manual-entry records omit the field entirely rather than storing
+is sparse, manual-entry records omit the field entirely rather than storing
 null, so "we do not know it" stays distinct from "it is empty".
 
 **Schema evolution.** Every future change ships as a new `version(n).stores({})`
@@ -181,7 +182,7 @@ exists, so in this phase nothing ever leaves `pending` on its own.
 `createRegistration` resolves only after IndexedDB has committed. A caller that
 awaits it and then prints is correct by construction. Sequence allocation and
 the record insert share one readwrite transaction, so a failure after allocation
-rolls the counter back rather than burning a code — or, worse, handing the same
+rolls the counter back rather than burning a code, or, worse, handing the same
 code to the next participant.
 
 ## Device identity
@@ -207,13 +208,13 @@ first launch cannot both observe an empty store and mint competing identities.
 
 ## Participant identity
 
-**`participantId` — UUIDv7**, generated offline with no central sequence
+**`participantId`: UUIDv7**, generated offline with no central sequence
 (`src/lib/identity/uuid.ts`). Two reasons for the `uuid` package over
 `crypto.randomUUID()`:
 
 1. `crypto.randomUUID()` is restricted to **secure contexts**. This app may well
    be served at a venue from a laptop over plain HTTP on a LAN address, where it
-   is simply `undefined`. `crypto.getRandomValues` — which the package uses —
+   is simply `undefined`. `crypto.getRandomValues`, which the package uses,
    carries no such restriction. Discovering that at the event would be
    unrecoverable.
 2. UUIDv7 is time-ordered, so ~10,000 inserts stay local in IndexedDB's B-tree
@@ -239,7 +240,7 @@ Separator style is forgiven (`a1 b8efd9 00001 x`, `A1--B8EFD9--00001--X` and
 `A1.B8EFD9.00001.X` all parse), and so is under-padding: the check character is
 computed over the padded payload, so `A1-B8EFD9-1-X` validates and normalises to
 `A1-B8EFD9-00001-X`. The code contains a station, a device namespace and a
-counter — no PII (invariant E).
+counter: no PII (invariant E).
 
 ### The issuer segment, and why it exists
 
@@ -257,7 +258,7 @@ installation's persisted `deviceId` (`src/lib/identity/issuerCode.ts`):
   has. Nothing new to persist, nothing to keep in sync, and a device that
   reloads keeps its issuer forever.
 - **Hexadecimal**, not base36. `0-9A-F` contains neither `O` nor `I`, so adding
-  six characters to a hand-typed code introduces no new glyph ambiguity — which
+  six characters to a hand-typed code introduces no new glyph ambiguity, which
   matters given `O`/`0` and `I`/`1` are already a known concern for the check
   character.
 - **24 bits** (~16.7 million values). For the ~10 devices an event of this size
@@ -270,8 +271,8 @@ installation's persisted `deviceId` (`src/lib/identity/issuerCode.ts`):
 
 The hash is FNV-1a (32-bit) followed by MurmurHash3's `fmix32` finalizer, both
 standard published algorithms, both synchronous. A cryptographic digest would be
-the reflex choice, but `crypto.subtle` is restricted to secure contexts — the
-same trap that rules out `crypto.randomUUID()` here — and this needs dispersion,
+the reflex choice, but `crypto.subtle` is restricted to secure contexts, the
+same trap that rules out `crypto.randomUUID()` here, and this needs dispersion,
 not preimage resistance. Nothing about the issuer code is a security control; it
 is a namespace.
 
@@ -303,14 +304,14 @@ Why this and not the alternatives:
   station and issuer characters, so they do not apply without mangling the
   format.
 - ISO 7064 MOD 37,36 (the hybrid system) needs no skipping, but measurement
-  showed it misses a small class of adjacent transpositions — those where the
+  showed it misses a small class of adjacent transpositions; those where the
   two characters differ by exactly 1 in value. In a zero-padded numeric sequence
   that class is dominated by `0`↔`1` swaps, which is precisely the typo manual
   entry is most likely to produce, so the trade was not worth taking.
 - A prime modulus buys total detection instead. The price: 1 payload in 37
   yields check value 36, which has no character in a 36-symbol alphabet. Those
   sequence numbers are **skipped at issue time** (~2.8% of the counter), which
-  costs nothing — the sequence is a ticket dispenser, not a census.
+  costs nothing: the sequence is a ticket dispenser, not a census.
 
 The check character detects transcription mistakes. It is **not** a signature,
 authenticates nothing, and anyone can compute one.
@@ -320,7 +321,7 @@ authenticates nothing, and anyone can compute one.
 Counters live in the `sequences` store, keyed per issuing scope
 (`publicCode:<eventId>:<eventDay>:<stationId>:<issuerCode>`), so a second day, a
 second desk, or a second device at the same desk each start their own run rather
-than colliding with this one. The counter is device-local and always was —
+than colliding with this one. The counter is device-local and always was.
 IndexedDB has no other kind. Including the issuer in both the key and the
 printed code is what makes parallel device-local counters safe.
 
@@ -333,7 +334,7 @@ A read-modify-write on a counter is the textbook way to hand out duplicates, so
 the increment never happens outside a readwrite transaction:
 
 - IndexedDB runs readwrite transactions with overlapping scopes strictly one at
-  a time, so two allocations cannot interleave their read and their write —
+  a time, so two allocations cannot interleave their read and their write,
   whether from two rapid clicks in one tab or from two tabs on one device.
 - Dexie's transaction callback must only await Dexie operations; awaiting
   anything else lets the IndexedDB transaction auto-commit mid-flight and the
@@ -348,7 +349,7 @@ format grows past five digits rather than truncating, up to 999,999,999,999.
 ## QR payload contract
 
 Defined and validated in `src/lib/identity/qrPayload.ts`. **Nothing renders or
-scans a QR code in this phase** — the boundary is locked now so Point A and
+scans a QR code in this phase**: the boundary is locked now so Point A and
 Point B share one versioned identity contract instead of two implicit ones.
 
 ```json
@@ -369,7 +370,7 @@ a mismatched event when one is expected, and public codes that fail their own
 check character. Unknown extra keys are ignored rather than carried through.
 
 `qrPayloadForRegistration` is the only bridge from a PII-bearing registration to
-a payload, and it copies the three identity fields explicitly — never by
+a payload, and it copies the three identity fields explicitly, never by
 spreading, which would silently start leaking PII into stickers the moment the
 registration record grows a field.
 
@@ -399,7 +400,7 @@ sticker on screen -> Print -> Reprint as often as needed
 
 The ordering is the whole point. `useRegistrationTerminal` is the only place it
 lives, and a sticker is unreachable before the commit because the record
-returned by `createRegistration` is the sole input to the QR payload — there is
+returned by `createRegistration` is the sole input to the QR payload; there is
 no other path to a `Sticker` component. A failed save produces no sticker state
 at all, so there is nothing to print.
 
@@ -433,7 +434,7 @@ else.
 +---------------------------+
 ```
 
-No name, no phone number, no email — no participant PII of any kind. This is
+No name, no phone number, no email: no participant PII of any kind. This is
 enforced by the component's shape: `Sticker` takes a public code and
 pre-rendered QR markup, **not** a registration record, so there is nothing in
 scope that could leak onto a label.
@@ -449,7 +450,7 @@ artefact at 1:1 rather than an approximation of it.
 
 ## QR rendering
 
-The `qrcode` package does the **encoding** — matrix generation, versioning, mask
+The `qrcode` package does the **encoding**: matrix generation, versioning, mask
 selection. This codebase turns the resulting matrix into SVG itself
 (`src/lib/qr/qrCode.ts`), and does not use `QRCode.toString(..., {type:'svg'})`.
 
@@ -463,7 +464,7 @@ SVG draws every dark module as part of one **stroked** path:
 ```
 
 Horizontal segments on half-module y-coordinates, with **no `stroke-width`
-attribute at all** — each module's thickness is the SVG default of one user
+attribute at all**; each module's thickness is the SVG default of one user
 unit, centred on the line. The symbol carries a viewBox and no intrinsic size,
 so one user unit maps to a different number of device pixels depending on the
 matrix size. Chrome's print pipeline rasterised that hairline differently for a
@@ -490,7 +491,7 @@ dark modules in a row merged into a single rectangle:
 </svg>
 ```
 
-- every coordinate is an integer module index — nothing lands on a half pixel
+- every coordinate is an integer module index; nothing lands on a half pixel
 - a filled rectangle covers the area it declares at any scale, in any
   rasteriser, on screen or through a PDF; there is no implicit width to lose
 - the viewBox is a fixed square derived from matrix size plus quiet zone, so the
@@ -511,7 +512,7 @@ The QR payload contract is untouched.
 | H | 10 | 57 | 0.40 mm |
 
 Higher correction packs more modules into the same 26 mm, so each module gets
-smaller and the symbol gets *harder* to scan — at 203 dpi, H would give barely 3
+smaller and the symbol gets *harder* to scan, at 203 dpi, H would give barely 3
 printer dots per module against M's 4.2. The usual reason to accept that trade
 is damage tolerance, but this system already has a designed answer for an
 unreadable QR: the public code printed underneath, which staff types instead.
@@ -520,7 +521,7 @@ The standard four-module quiet zone is kept. No logo, no tint.
 
 ## Printing
 
-Generic browser printing — `window.print()` behind a one-function module. No
+Generic browser printing, `window.print()` behind a one-function module. No
 vendor SDK, because the printer model is not chosen yet and nothing here needs
 one.
 
@@ -530,7 +531,7 @@ Physical QA produced **six identical pages** per print. Two causes, both real,
 both needed fixing:
 
 1. The application was hidden with `visibility: hidden`. That keeps elements in
-   layout — the document stayed as tall as the registration screen, and at a
+   layout: the document stayed as tall as the registration screen, and at a
    40 mm page height it paginated into six pages.
 2. The sticker was anchored with `position: fixed`. Fixed-position elements
    **repeat on every page** of paged media, so each of those six pages got its
@@ -581,13 +582,13 @@ So the system tracks two separate facts:
 
 | Fact | Knowable? | Consequence |
 | --- | --- | --- |
-| Registration persisted | Yes — the transaction committed | Invariant 1 turns on this |
+| Registration persisted | Yes: the transaction committed | Invariant 1 turns on this |
 | Sticker physically printed | **No** | Operator's judgement; reprint always available |
 
 ### Reprint
 
 Reprint re-renders the QR from the stored record and prints again. It creates no
-record, moves no counter, and mints no identity — the symbol is identical
+record, moves no counter, and mints no identity: the symbol is identical
 because the input is the same committed row. It is available for the current
 registration and for any of the recent ones.
 
@@ -595,7 +596,7 @@ registration and for any of the recent ones.
 
 A refresh throws away screen state, never the record. **Recent registrations on
 this device** lists the latest few local registrations, newest first, and each
-can be reprinted. It shows public codes and times only — a list of participant
+can be reprinted. It shows public codes and times only: a list of participant
 names on a desk-facing screen would be a privacy leak that buys nothing.
 
 This is deliberately not a management dashboard. It is the path back to a
@@ -606,8 +607,8 @@ sticker that failed to come out.
 Staff can correct name, phone and email on a saved registration.
 `updateRegistration` bumps `revision`, refreshes `updatedAt`, and returns the
 record to `pending` so an already-uploaded copy gets re-sent. Everything that
-identifies the participant — `recordId`, `participantId`, `publicCode`,
-`eventId`, `stationId`, `deviceId`, `createdAt` — is immutable: the first three
+identifies the participant, `recordId`, `participantId`, `publicCode`,
+`eventId`, `stationId`, `deviceId`, `createdAt`, is immutable: the first three
 are printed on a sticker the participant is physically wearing, and the rest
 record what happened.
 
@@ -620,7 +621,7 @@ the label.
 | --- | --- | --- |
 | Validation fails | Nothing | Errors beside the fields; other values kept |
 | IndexedDB write fails | Nothing | "Could not save… nothing was written"; no sticker; print impossible |
-| Saved, QR rendering fails | The registration | "Saved — do **not** register again"; public code shown; Retry sticker |
+| Saved, QR rendering fails | The registration | "Saved, do **not** register again"; public code shown; Retry sticker |
 | Saved, printing cancelled or jams | The registration | Sticker stays; Reprint |
 | Local storage unavailable at open | Nothing | Banner warning not to register until resolved |
 
@@ -662,9 +663,9 @@ the code never asks for any.
 
 ### One explicit state machine
 
-`usePointBTerminal` holds a single discriminated union — `idle`,
+`usePointBTerminal` holds a single discriminated union, `idle`,
 `starting-camera`, `scanning`, `camera-error`, `manual-entry`, `feedback`,
-`saving`, `already-recorded`, `success` — rather than a handful of booleans.
+`saving`, `already-recorded`, `success`, rather than a handful of booleans.
 With flags, "saving" and "already recorded" and "camera error" can all be true
 at once and the screen has to guess which to believe; here they cannot be.
 
@@ -675,7 +676,7 @@ careful component choreography.
 ## Scanner boundary
 
 `src/lib/scanner` is the seam. React components talk to a `QrScanner`
-interface — `start` / `pause` / `resume` / `dispose` — and never to ZXing.
+interface, `start` / `pause` / `resume` / `dispose`, and never to ZXing.
 
 **`@zxing/browser`**, bundled locally. `BrowserQRCodeReader` decodes QR only;
 the multi-format readers try every barcode symbology on every frame, which costs
@@ -683,9 +684,9 @@ CPU on a tablet and can only produce results this app would reject. Decoding
 happens on frames in this process: no image ever leaves the device, and there is
 no remote decoding service anywhere in the path.
 
-The interface exists for two reasons. The lifecycle is genuinely awkward — a
+The interface exists for two reasons. The lifecycle is genuinely awkward, a
 live `MediaStream` that must be released or the camera light stays on after
-navigation — and tests must drive decode callbacks without a camera. The suite
+navigation, and tests must drive decode callbacks without a camera. The suite
 uses a `FakeScanner` implementing the same interface.
 
 ### Camera lifecycle
@@ -704,7 +705,7 @@ uses a `FakeScanner` implementing the same interface.
 
 ### Decoding once, not forty times
 
-A stationary sticker decodes on every video frame — dozens of callbacks for one
+A stationary sticker decodes on every video frame, dozens of callbacks for one
 participant. Acceptance is gated on a **ref that flips synchronously**, before
 any await:
 
@@ -720,7 +721,7 @@ more frames have arrived. Frames already in flight when `pause()` is called
 still arrive, and the ref is what turns them away. The test suite fires forty
 raw decodes through the pause to prove it.
 
-Rejected payloads do not latch — scanning continues — but a repeated identical
+Rejected payloads do not latch, scanning continues, but a repeated identical
 rejection is silent, so one wrong sticker held in view does not re-render
 forever.
 
@@ -733,7 +734,7 @@ Could not start video source"* tells an operator nothing they can use.
 
 `insecure-context` deserves its own name. `navigator.mediaDevices` is undefined
 outside a secure context, so a venue laptop serving over plain HTTP on a LAN
-address can never start a camera — and without saying so, that is
+address can never start a camera, and without saying so, that is
 indistinguishable from a broken one. Manual entry works on any origin, which is
 the point of having it.
 
@@ -760,7 +761,7 @@ leaves the scanner running.
 ## Manual fallback
 
 Staff types the code printed under the QR. Normalisation and checksum validation
-belong to the identity layer and are **not** repeated in React — the tolerance
+belong to the identity layer and are **not** repeated in React: the tolerance
 already built in (case, separator style, under-padded sequences) applies exactly
 as it does everywhere else. Re-implementing any of it in a component is how two
 different notions of "the same code" start to exist.
@@ -789,8 +790,8 @@ Four questions, locked:
 | `comments` | Any comments? | string, optional, ≤2000 chars |
 
 Visible labels ("Very Poor") live with the form; stored values (`very_poor`)
-live in `src/types/feedback.ts`. Keeping them apart lets the wording change — or
-be translated — without touching a recorded answer's meaning.
+live in `src/types/feedback.ts`. Keeping them apart lets the wording change, or
+be translated, without touching a recorded answer's meaning.
 
 A blank or whitespace-only comment is stored as **absent**, not as an empty
 string, so "said nothing" and "typed three spaces" do not become different data.
@@ -798,7 +799,7 @@ string, so "said nothing" and "typed three spaces" do not become different data.
 Every record carries `formVersion: 'feedback-v1'`. A second questionnaire adds a
 member to the answers union and a value to `FeedbackFormVersion`; `formVersion`
 is what tells a later reader which shape it is holding. Adding the field needed
-**no IndexedDB migration** — it is not indexed, and IndexedDB stores are
+**no IndexedDB migration**; it is not indexed, and IndexedDB stores are
 schemaless apart from their indexes.
 
 The choices are large buttons rather than radio inputs, carrying selection state
@@ -814,7 +815,7 @@ anything.
 
 Scoped to this device on purpose. Point B terminals are independent offline
 clients with no way to see each other's records, so this catches the mistake
-that actually happens — the same operator scanning the same sticker twice — and
+that actually happens, the same operator scanning the same sticker twice, and
 makes no claim about the event as a whole. The database still permits repeated
 public codes, because cross-device duplicates must stay representable for the
 server to reconcile. No supervisor override exists in V1.
@@ -849,7 +850,7 @@ Everything before this phase removed the network from *operations*. This phase
 removes it from *starting up*.
 
 The distinction matters more than it sounds. Point A and Point B were tested
-with the Internet disconnected while a local dev server kept serving the app —
+with the Internet disconnected while a local dev server kept serving the app,
 which proved there are no API calls, no CDN, no lookups. It proved nothing about
 what happens when the server itself is gone. A venue laptop that sleeps, a
 process that dies, a tab reopened the next morning: any of those and the app
@@ -857,7 +858,7 @@ would simply not load.
 
 **vite-plugin-pwa** with the **`generateSW`** strategy. What is needed here is
 deterministic precaching of the built shell, which is exactly what the generated
-worker does. `injectManifest` would mean owning a service-worker source file —
+worker does. `injectManifest` would mean owning a service-worker source file,
 more surface to get wrong, and nothing gained until there is a server to sync
 with. There is no background sync, no runtime API caching, no push.
 
@@ -868,7 +869,7 @@ Everything the build emits, verified rather than assumed:
 | Entry | Why |
 | --- | --- |
 | `index.html` | the only document; every hash route resolves from it |
-| `assets/index-*.js` | ~830 kB — React, Dexie, `qrcode`, the ZXing scanner |
+| `assets/index-*.js` | ~830 kB. React, Dexie, `qrcode`, the ZXing scanner |
 | `assets/workbox-window.prod.es5-*.js` | the registration client |
 | `assets/index-*.css` | all styling, including the print rules |
 | `manifest.webmanifest` | installability |
@@ -876,7 +877,7 @@ Everything the build emits, verified rather than assumed:
 
 `maximumFileSizeToCacheInBytes` is raised to 8 MiB. Workbox's 2 MiB default
 would silently drop the main bundle, leaving a device that reports itself ready
-and then cannot scan once the network is gone — precisely the failure this
+and then cannot scan once the network is gone, precisely the failure this
 phase exists to prevent.
 
 **The scanner is never lazily fetched.** A dynamically imported chunk needs the
@@ -914,7 +915,7 @@ worker can attest to that.
 
 Two signals establish `ready`. Workbox's `onOfflineReady` fires once, when
 precaching completes on first install. On every later visit it never fires
-again, so readiness is also derived from a worker **controlling the page** —
+again, so readiness is also derived from a worker **controlling the page**,
 which means the shell is being served from cache at that very moment, the
 strongest evidence available.
 
@@ -931,7 +932,7 @@ deployment that happened to land at the wrong moment. So:
 
 - a new version downloads and **waits**
 - the running version keeps working, and stays `ready`
-- **Point A and Point B say nothing at all** about updates — the only control is
+- **Point A and Point B say nothing at all** about updates: the only control is
   on `#/admin`, where nobody is holding a queue
 - applying reloads the page, deliberately, because an operator pressed a button
 
@@ -978,7 +979,7 @@ against `pnpm build && pnpm preview`.
 `APP_VERSION` and `BUILD_ID` are injected at build time and shown on Admin, so
 an operator can answer "what is this device running?" and compare two terminals
 with no network, no server and no repository access. Deliberately just a package
-version and an ISO build timestamp — no commit hash, no branch, nothing about
+version and an ISO build timestamp: no commit hash, no branch, nothing about
 the machine that produced the build.
 
 ### Secure context
@@ -986,7 +987,7 @@ the machine that produced the build.
 The service worker and the camera both require a secure context. `localhost` is
 fine for development; the field deployment must be **HTTPS**. A plain-HTTP LAN
 address gets neither an offline shell nor a camera, and no workaround for that
-is being added — see the Point B notes.
+is being added; see the Point B notes.
 
 ### Icons
 
@@ -1017,8 +1018,8 @@ A `.oefbackup` file is an **envelope** wrapping a **payload**.
 }
 ```
 
-That is the entire plaintext. Everything else — records, counts, event, source
-device — lives inside the ciphertext. Someone holding the file without the
+That is the entire plaintext. Everything else, records, counts, event, source
+device, lives inside the ciphertext. Someone holding the file without the
 passphrase learns that it is a backup of this application and **nothing more**:
 not the event, not how many participants, and above all not who.
 
@@ -1035,7 +1036,7 @@ AES-GCM rather than AES-CBC because it **authenticates**. A wrong passphrase, a
 flipped byte, an altered IV and a truncated file all fail the same way, and none
 of them can produce partially decoded records. The UI reports one message for
 all of them: which it was helps an attacker more than an operator, and the
-operator's next move — check the passphrase, check the file — is the same
+operator's next move (check the passphrase, check the file) is the same
 regardless.
 
 Encrypting the same snapshot twice produces two different files. Fresh salt and
@@ -1043,8 +1044,8 @@ IV per run is not a quirk to be normalised away: reusing an AES-GCM IV under one
 key is catastrophic, and deterministic output would also reveal that two backups
 hold identical data.
 
-**The passphrase is never stored** — not in IndexedDB, not in localStorage, not
-in a URL, not in a log — and the input fields are cleared after every operation.
+**The passphrase is never stored**: not in IndexedDB, not in localStorage, not
+in a URL, not in a log, and the input fields are cleared after every operation.
 There is no recovery mechanism and no pretence of one.
 
 A backup declares its own iteration count, which it must, or an older file could
@@ -1056,7 +1057,7 @@ browser.
 
 All four stores are read inside a single Dexie read transaction. Reading them
 one at a time would let a registration land between two reads, producing a
-backup whose sequence counter had not moved — a file that looks valid and
+backup whose sequence counter had not moved: a file that looks valid and
 quietly reissues a printed code on restore.
 
 Arrays are sorted before serialisation, so two snapshots of an unchanged
@@ -1065,7 +1066,7 @@ database are identical and the plaintext is reviewable.
 ### Validated before it is encrypted
 
 The snapshot is checked with **the same validator the restore path runs on
-untrusted files** — record shapes, UUIDs, public-code check characters, event
+untrusted files**, record shapes, UUIDs, public-code check characters, event
 match, uniqueness, declared counts. If the local database has drifted into a
 state this application would refuse to restore, no file is produced.
 
@@ -1081,13 +1082,13 @@ database holding an event's records. Everything crosses the boundary as
 cast is applied to unvalidated input.
 
 Validation is hand-written rather than delegated to a schema library. The shapes
-are few and stable, and the interesting checks are not shape checks at all — a
+are few and stable, and the interesting checks are not shape checks at all: a
 public code has to satisfy its own check character, a `qr` capture has to carry a
 participant ID while a `manual` one must not, the event has to match this build.
 Those rules already exist in the identity layer; a library would either duplicate
 them or need bridging back into it.
 
-Every validation message is structural — a field name and an index — so a
+Every validation message is structural, a field name and an index, so a
 failure can never print a participant's name or email.
 
 A file is refused before parsing if it exceeds **64 MiB**. A full
@@ -1113,12 +1114,12 @@ data would destroy exactly the records nobody else has a copy of.
 | Identical | skip |
 | Same identity, backup revision higher | take the backup's |
 | Same identity, local revision higher | keep local |
-| **Same revision, different contents** | **conflict — abort** |
-| Same `recordId`, different identity or provenance | **conflict — abort** |
-| Backup `participantId` or `publicCode` already belongs to another local record | **conflict — abort** |
+| **Same revision, different contents** | **conflict, abort** |
+| Same `recordId`, different identity or provenance | **conflict, abort** |
+| Backup `participantId` or `publicCode` already belongs to another local record | **conflict, abort** |
 
-Immutable fields — `kind`, `recordId`, `participantId`, `publicCode`, `eventId`,
-`eventDay`, `stationId`, `deviceId`, `createdAt` — may never differ between two
+Immutable fields, `kind`, `recordId`, `participantId`, `publicCode`, `eventId`,
+`eventDay`, `stationId`, `deviceId`, `createdAt`, may never differ between two
 copies of one record. A participant ID or public code is printed on a sticker
 somebody is wearing; provenance records what actually happened. If two copies
 disagree on any of them, they are not the same record and no merge rule can make
@@ -1133,7 +1134,7 @@ unique**: two Point B terminals may each hold a response for the same
 participant, and both must survive for the server to reconcile later.
 
 `syncStatus`, `revision` and `updatedAt` are preserved exactly. Restore does not
-mark records `pending` — synchronisation semantics belong to a later phase and
+mark records `pending`, synchronisation semantics belong to a later phase and
 inventing them here would corrupt whatever that phase decides.
 
 ### Sequences take the maximum
@@ -1144,14 +1145,14 @@ restored value = max(local, backup)
 
 A counter is never lowered. An older backup restored onto a device that has kept
 working would otherwise reissue public codes that are already printed and on
-participants — reintroducing, through recovery, the exact collision the
+participants, reintroducing, through recovery, the exact collision the
 per-device issuer was built to eliminate.
 
 ### Atomicity
 
 The whole merge runs in one readwrite transaction across registrations, feedback
 and sequences. Any conflict throws, the transaction aborts, and **nothing** is
-committed — not the 99 good records that preceded the bad one. A half-restored
+committed, not the 99 good records that preceded the bad one. A half-restored
 database cannot be reasoned about or safely retried.
 
 Restoring the same file twice is idempotent: the second pass reports everything
@@ -1173,7 +1174,7 @@ after restoring A's backup onto B:
 ```
 
 If DEVICE-A ever came back into service, a cloned identity would give two
-independent offline machines the same public-code namespace — the collision
+independent offline machines the same public-code namespace: the collision
 Phase 1.1 exists to eliminate, reintroduced by the recovery procedure.
 
 **No `deviceConfig` key is imported at all.** The store is captured in the
@@ -1183,10 +1184,10 @@ front of the operator rather than one that failed last week.
 
 | `deviceConfig` key | Restored? |
 | --- | --- |
-| `deviceId` | **No** — the destination keeps its own |
-| `lastBackupGeneratedAt` | No — describes this installation |
-| `lastBackupVerifiedAt` | No — describes this installation |
-| `lastRestoreAt` | No — describes this installation |
+| `deviceId` | **No**: the destination keeps its own |
+| `lastBackupGeneratedAt` | No, describes this installation |
+| `lastBackupVerifiedAt` | No, describes this installation |
+| `lastRestoreAt` | No, describes this installation |
 
 Restored registrations keep their `participantId`, `publicCode` and `recordId`
 exactly, so the stickers participants are already wearing stay valid. A new
@@ -1198,26 +1199,26 @@ The browser cannot report whether the operator kept a downloaded file, so the UI
 says **"Backup file generated"** and never "safely stored". Two timestamps are
 tracked, and they mean different things:
 
-- `lastBackupGeneratedAt` — a file was produced. Weak evidence.
-- `lastBackupVerifiedAt` — a file was **selected back off disk and successfully
+- `lastBackupGeneratedAt`: a file was produced. Weak evidence.
+- `lastBackupVerifiedAt`: a file was **selected back off disk and successfully
   decrypted**. That is real evidence the device is protected.
 
 Verification imports nothing. It exists so an operator can establish a file is
-recoverable *before* trusting it — and before a real recovery, when the original
+recoverable *before* trusting it, and before a real recovery, when the original
 device may no longer exist.
 
 ### Everything works offline
 
 Backup, verification and restore are pure local computation over IndexedDB and
 Web Crypto. No network call is involved at any point, and nothing about them is
-placed in Cache Storage — the precache holds application code only, never
+placed in Cache Storage: the precache holds application code only, never
 participant data.
 
 ## Central synchronisation
 
 The first networked component. Local capture stays authoritative for the field;
 the server becomes authoritative for consolidation. **No event operation depends
-on synchronisation succeeding** — with the server switched off, every earlier
+on synchronisation succeeding**, with the server switched off, every earlier
 phase behaves exactly as it did.
 
 ```
@@ -1228,8 +1229,8 @@ offline local capture  ->  Internet eventually  ->  idempotent upload  ->  Postg
 
 The same record may legitimately be sent once, twice or ten times. A device
 cannot distinguish "the request never arrived" from "the response was lost", so
-it keeps the record pending and sends it again. `recordId` — generated on the
-capturing device, printed indirectly on a sticker — is the idempotency key, and
+it keeps the record pending and sends it again. `recordId`, generated on the
+capturing device, printed indirectly on a sticker, is the idempotency key, and
 the server returns `already_current` for a record it already holds. Nothing is
 duplicated and the device can finally stop.
 
@@ -1248,7 +1249,7 @@ src/lib/sync/   The client outbox
 
 **One protocol definition, shared.** Two independently written validators drift,
 and the drift shows up as records that upload from one build and are rejected by
-another — at an event, with no way to diagnose it. Zod earns its place here
+another, at an event, with no way to diagnose it. Zod earns its place here
 because both sides consume the same schemas; the server parses every request
 with them, because TypeScript types do not survive an HTTP boundary.
 
@@ -1274,7 +1275,7 @@ restart must not be able to alter a schema holding an event's data.
 
 ### Enrolment, not a shared secret
 
-A single API key inside the PWA would not be a secret — the bundle is readable.
+A single API key inside the PWA would not be a secret: the bundle is readable.
 Instead an operator types a shared enrolment code once, on a device with
 Internet, and the device receives **its own** 256-bit token. The server stores
 only a SHA-256 hash, so a leaked database yields no usable upload credential.
@@ -1324,14 +1325,14 @@ Never last-write-wins. Equal revisions with different contents means two devices
 believe different things about the same record, and guessing would silently
 discard somebody's capture.
 
-Responses carry outcomes only — no name, phone, email or answers. The ingest API
+Responses carry outcomes only: no name, phone, email or answers. The ingest API
 is write-oriented, and nothing about a person needs to travel back to a device
 that already has it.
 
 ### Batch semantics
 
 One `POST /v1/sync/batch`, at most 100 records. A malformed **envelope** rejects
-the whole request — there is no sensible per-record answer when the batch itself
+the whole request; there is no sensible per-record answer when the batch itself
 cannot be parsed. Records inside a well-formed batch are processed
 independently: 98 accepted, 1 already current and 1 conflicting commits the 99
 and reports all 100. A single conflict must never strand real captures that are
@@ -1355,14 +1356,14 @@ actually said something about them.
 ### Transport state is not a domain revision
 
 This is the sharpest edge in the phase. `updateRegistration` increments
-`revision` on every call — appropriate for a correction at Point A, catastrophic
+`revision` on every call, appropriate for a correction at Point A, catastrophic
 for an acknowledgement. Marking a record synced through it would raise the
 revision, the server would see a higher revision carrying identical contents,
 and the two would ratchet against each other indefinitely.
 
 So synchronisation uses dedicated functions in `src/lib/storage/transport.ts`
 that touch `syncStatus`, `lastSyncedAt` and `syncErrorCode` and **nothing
-else** — not `revision`, not `updatedAt`, not identity.
+else**, not `revision`, not `updatedAt`, not identity.
 
 | Concern | Fields | Meaning |
 | --- | --- | --- |
@@ -1391,8 +1392,8 @@ never "failed" or "lost", because they are neither.
 
 **Sync now** is the operator control. Beyond that: one attempt when Admin opens,
 and one when the browser fires `online`. No polling, no background sync,
-no service-worker sync API. `navigator.onLine` is treated as a hint — it reports
-a link, not a reachable server — so an opportunistic failure is silent, visible
+no service-worker sync API. `navigator.onLine` is treated as a hint, it reports
+a link, not a reachable server, so an opportunistic failure is silent, visible
 only in Admin.
 
 Point A and Point B display nothing about synchronisation at all.
@@ -1402,7 +1403,7 @@ Point A and Point B display nothing about synchronisation at all.
 **Backups exclude the sync credential.** A device token is not event data:
 carrying it would make a backup file a reusable server credential, and restoring
 it would hand a replacement machine the failed one's upload identity. A
-replacement enrols itself. `deviceId` stays in the backup exactly as before —
+replacement enrols itself. `deviceId` stays in the backup exactly as before;
 that is provenance.
 
 **The service worker does not cache sync.** Precaching is GET-only over built
@@ -1412,7 +1413,7 @@ network-only. Startup never waits on `/health`, `/enroll` or `/sync`.
 **Restore compares domain contents only.** Synchronisation actively changes
 `syncStatus`, so two copies of one record will routinely disagree about
 delivery. Comparing transport state during a merge reported conflicts for
-records that were identical in every meaningful sense — see the regression note
+records that were identical in every meaningful sense; see the regression note
 below.
 
 ## Central reconciliation
@@ -1423,8 +1424,8 @@ response, and which records look like they might describe the same person.
 
 ### Derived data, not a rewrite
 
-`registrations`, `feedback`, `sync_devices` and `sync_batches` are **evidence**
-— the account of what devices actually captured. Reconciliation never edits,
+`registrations`, `feedback`, `sync_devices` and `sync_batches` are **evidence**:
+the account of what devices actually captured. Reconciliation never edits,
 merges or deletes any of them. Conclusions go into separate
 `reconciliation_*` tables.
 
@@ -1445,7 +1446,7 @@ run 1:  feedback → without_registration     (Point A had not synced yet)
 run 2:  same feedback → matched
 ```
 
-Both runs are correct. Run 1 is not a mistake to be fixed — it is what was true
+Both runs are correct. Run 1 is not a mistake to be fixed; it is what was true
 when it ran. Runs are kept, never overwritten.
 
 The read and the write happen inside **one `REPEATABLE READ` transaction**.
@@ -1473,17 +1474,17 @@ describe one person:
 
 Neither identifier is preferred when they disagree. Silently trusting
 `participantId` would bury the evidence that something upstream produced an
-inconsistent sticker or an inconsistent record — the disagreement *is* the
+inconsistent sticker or an inconsistent record: the disagreement *is* the
 finding.
 
 **Manual feedback** has no participant ID by design, and none is fabricated. Its
-public code either resolves — `matched`, `manual_public_code` — or it does not.
+public code either resolves (`matched`, `manual_public_code`) or it does not.
 The raw feedback row is never updated to add the participant ID reconciliation
 discovered; the relationship lives in the derived result.
 
 ### Registration status
 
-Counting only *valid* links — identity conflicts are not links to anything:
+Counting only *valid* links, identity conflicts are not links to anything:
 
 | Valid feedback | Status |
 | --- | --- |
@@ -1509,7 +1510,7 @@ reports the ambiguity and stops.
 ### Duplicate registration candidates
 
 The same human may register twice, producing two records with entirely distinct
-`recordId`, `participantId` and `publicCode` — all correct, all real captures.
+`recordId`, `participantId` and `publicCode`: all correct, all real captures.
 
 Candidates come from exactly equal normalised contact values, grouped rather
 than compared pairwise:
@@ -1520,8 +1521,8 @@ than compared pairwise:
 | Same normalised phone only | `phone_only` |
 | Same normalised email only | `email_only` |
 
-A pair matching on both emits **only** the stronger basis — a reviewer should
-see one candidate, not three — and is stored once in canonical order, so A/B and
+A pair matching on both emits **only** the stronger basis, a reviewer should
+see one candidate, not three, and is stored once in canonical order, so A/B and
 B/A cannot both appear.
 
 **Normalisation is deliberately minimal:**
@@ -1559,8 +1560,8 @@ pnpm server:reconcile -- --event evt-dev-001
 
 Never run after a sync batch. Ingest is a hot path a device is waiting on;
 reconciliation is a whole-event analysis that grows with the event, and coupling
-them would make every upload pay for it. It requires an explicit event —
-reconciling the wrong one silently would be worse than not reconciling at all —
+them would make every upload pay for it. It requires an explicit event,
+reconciling the wrong one silently would be worse than not reconciling at all,
 and is safe to re-run at any time.
 
 `reconciliation_latest_runs` exposes the most recent **completed** run per
@@ -1570,7 +1571,7 @@ construction.
 ## Central reporting, review and export
 
 Phase 7 concluded what the records mean. Phase 8 is the first place a human sees
-those conclusions — and the first API in the system that returns a participant's
+those conclusions, and the first API in the system that returns a participant's
 name, phone number or email address. That single fact shapes every decision
 below.
 
@@ -1587,14 +1588,14 @@ an identity between those two would mean a tablet left unattended is equivalent
 to the organiser's admin session.
 
 The secret is compared in constant time, after hashing both sides so the
-comparison runs over fixed-length buffers whatever was submitted — otherwise the
+comparison runs over fixed-length buffers whatever was submitted, otherwise the
 length of a guess leaks through timing. The server refuses to start if it is
 shorter than 32 characters, so a weak secret is a deployment error rather than a
 discovery made afterwards.
 
 When it is not configured at all, reporting **fails closed**: every
 `/v1/reporting/*` request answers `503 reporting_not_configured`. Ingest is
-untouched — a deployment that only needs uploads never has to configure
+untouched: a deployment that only needs uploads never has to configure
 privileged access to PII. The reverse dependency does not exist either: reporting
 being switched off cannot break a device's ability to sync.
 
@@ -1607,7 +1608,7 @@ That is the whole list.
 It cannot update, delete or merge a record, choose a winner between two
 responses, mark an anomaly resolved, or alter a device's sync state. There is no
 endpoint for any of it. This is not a permissions question that a later phase
-might relax — the event's records are the account of what happened at the desks,
+might relax: the event's records are the account of what happened at the desks,
 and a reporting screen that could rewrite them would destroy the only evidence
 there is.
 
@@ -1623,8 +1624,8 @@ result tables and joins the raw record, never the other way around.
 
 Starting from `registrations` and left-joining the run reads almost the same and
 is wrong in a way that matters. Sync keeps running after a run completes, so a
-record that arrived afterwards would show up in a historical view with no status
-— and in a historical export, which is then a file describing a state of the
+record that arrived afterwards would show up in a historical view with no status,
+and in a historical export, which is then a file describing a state of the
 event that never existed. Row counts would silently stop matching the run's own
 counts, which is the arithmetic an operator uses to check a report.
 
@@ -1643,7 +1644,7 @@ disagreeing copies of every participant.
 Every status, count, anomaly and duplicate pair on screen comes from a run.
 Nothing is reclassified in the browser and nothing is recomputed differently on
 the way to a CSV. If a figure looks wrong, the answer is to reconcile again, not
-to fix it in the UI — a second implementation of the matching rules would be a
+to fix it in the UI: a second implementation of the matching rules would be a
 second source of truth, disagreeing with the first at exactly the moments that
 matter.
 
@@ -1651,9 +1652,9 @@ matter.
 
 The two are reported separately and never merged into one "response rate":
 
-- **Coverage** — how many participants gave us anything at all. Includes a
+- **Coverage**: how many participants gave us anything at all. Includes a
   participant with several conflicting responses: they did respond.
-- **Analytics** — what the unambiguous responses said. Averages only responses a
+- **Analytics**: what the unambiguous responses said. Averages only responses a
   run classified `matched`, which is exactly one response for one participant.
 
 A participant with two conflicting responses therefore raises coverage and
@@ -1661,13 +1662,13 @@ contributes to no average. Presenting a single number would hide precisely the
 case a reviewer needs to see, and would let an ambiguity quietly move a mean.
 
 A response whose `form_version` this build cannot read is counted and skipped
-rather than guessed at, and the count is published — a future questionnaire might
+rather than guessed at, and the count is published: a future questionnaire might
 reuse field names for a different scale, and averaging across them silently
 produces a number that looks fine and means nothing.
 
 ### Where a `multiple_feedback` participant's answers are not
 
-For a participant with several valid responses, the answer columns are blank —
+For a participant with several valid responses, the answer columns are blank,
 on screen, in the registrations CSV, and in the workbook's Registrations sheet.
 Every individual response appears in full in the feedback export and on the
 participant's detail view.
@@ -1677,7 +1678,7 @@ guess as the participant's answer. The run refused to choose; so does the report
 
 ### Nothing central is stored on the device
 
-Report data exists in React state and nowhere else — never IndexedDB, never
+Report data exists in React state and nowhere else, never IndexedDB, never
 localStorage, never sessionStorage, never CacheStorage. Every reporting response
 carries `Cache-Control: no-store, private`, requests are made with
 `cache: 'no-store'` and `credentials: 'omit'`, and the service worker registers
@@ -1708,7 +1709,7 @@ in the same millisecond on two devices are ordinary, and without a total order a
 cursor can skip or repeat a row.
 
 `OFFSET` would re-scan everything before the page on every request, and would
-also shift under a concurrent insert — which, with sync still running, is not
+also shift under a concurrent insert, which, with sync still running, is not
 hypothetical.
 
 Migration 003 adds one index per table for exactly this shape. Measured at 10,000
@@ -1725,7 +1726,7 @@ deliberately does not have.
 
 Participant text is untrusted spreadsheet input. A comment beginning `=` or a
 phone number beginning `+` is interpreted by Excel, Numbers and Google Sheets as
-a **formula** — which at worst can invoke external calls when the recipient opens
+a **formula**, which at worst can invoke external calls when the recipient opens
 the file, and at best mangles the value into `#NAME?`. Phone numbers make this
 unavoidable rather than theoretical: every international number starts with `+`.
 
@@ -1741,7 +1742,7 @@ filename.
 
 Downloads are fetched with the credential in an `Authorization` header and handed
 to the browser as a blob, whose object URL is revoked immediately. A plain link
-cannot carry a header, and the usual workaround — a token in the URL — would
+cannot carry a header, and the usual workaround, a token in the URL, would
 write the credential into history and every access log on the path.
 
 ### Staleness has two halves, and neither is `last_received_at`
@@ -1753,15 +1754,15 @@ differently:
   timestamp at all: a record present now and absent from the run's results
   arrived afterwards. Immune to every clock in the system.
 - **Something the run did classify was revised.** This needs a server-side
-  signal, and `content_changed_at` (migration 004) is it — written on an insert
+  signal, and `content_changed_at` (migration 004) is it, written on an insert
   and on an accepted revision, and deliberately *not* on the idempotent touch
   that Phase 6 performs for an `already_current` result.
 
 The obvious signal was `last_received_at`, and it was the wrong one. Phase 6
 touches it on a re-delivery because knowing when a device last spoke is genuinely
 useful for diagnosing sync. The consequence was that an offline tablet
-reconnecting and re-uploading a batch it had already delivered — the most ordinary
-event in this system — made a perfectly current run report as stale. An operator
+reconnecting and re-uploading a batch it had already delivered, the most ordinary
+event in this system, made a perfectly current run report as stale. An operator
 told the data has changed when it has not either reconciles pointlessly or stops
 believing the warning by the time it is true.
 
@@ -1775,7 +1776,7 @@ than the run and hide staleness completely.
 `overall_rating`, `experience`, `recommend` and `comments` are `feedback-v1`
 fields. Every query that extracts them guards on `form_version`, so a response
 captured under a later questionnaire contributes no rating to an average, no
-summary to a participant row, and no answer columns to an export — even if it
+summary to a participant row, and no answer columns to an export, even if it
 happens to use identical key names for a ten-point scale.
 
 The response is never hidden. It is listed, exported with its version, and its
@@ -1810,7 +1811,7 @@ emitted asset, so this is a startup-cost decision, not an availability one.
 
 ## Campaign adaptation
 
-Phase 9 dressed the system for one campaign — Flying Flea test rides — without
+Phase 9 dressed the system for one campaign, Flying Flea test rides, without
 changing what it is. The full account is in
 [flying-flea-campaign.md](flying-flea-campaign.md); what belongs here is the
 shape of the seam, because the next campaign will use it.
@@ -1882,8 +1883,8 @@ rather than slower.
 
 ## Deployment: two runtimes, one API
 
-The application is deployed as a single Vercel project — the PWA served
-statically from `/`, and the same Hono API answering at `/api/*` — against a
+The application is deployed as a single Vercel project, the PWA served
+statically from `/`, and the same Hono API answering at `/api/*`, against a
 Neon Postgres. Nothing about the API changed to make that work.
 
 ### The prefix belongs to the deployment
@@ -1904,7 +1905,7 @@ exporting a request handler.
 
 Two hand-written `createApp({...})` call sites is how a deployment ends up with
 reporting enabled in one runtime and not the other, or a health check that
-answers differently depending on where it runs — and the one that is wrong is
+answers differently depending on where it runs, and the one that is wrong is
 always the one nobody tests locally.
 
 ### Same origin removes a whole class of configuration
@@ -1915,8 +1916,8 @@ HTTPS and cannot be downgraded; it also means no request is cross-origin, so
 there is nothing to allow-list. Deployment hostnames change with every push, and a
 configuration that required listing them would be wrong within a day.
 
-The explicit origin allowlist stays for the local split-origin setup — a Vite dev
-server on :5173 calling an API on :8788 is genuinely cross-origin — and there is
+The explicit origin allowlist stays for the local split-origin setup, a Vite dev
+server on :5173 calling an API on :8788 is genuinely cross-origin, and there is
 still no wildcard anywhere.
 
 ### Serverless connections are not a smaller pool, they are a different shape
@@ -1929,7 +1930,7 @@ exists to reuse.
 
 `prepare: false` is not tuning. The pooled endpoint is PgBouncer in transaction
 mode, where named prepared statements do not survive being handed between
-sessions — and the resulting error appears only under the load that makes it
+sessions, and the resulting error appears only under the load that makes it
 hardest to reproduce.
 
 ### Migrations never ride along
@@ -1946,11 +1947,11 @@ migration's must not be.
 Point B needs three things to record attributable feedback, and has all three
 without a lookup:
 
-1. **The identifiers** — both are on the sticker. A QR scan yields
+1. **The identifiers**; both are on the sticker. A QR scan yields
    `participantId` and `publicCode`; a typed fallback yields `publicCode` alone.
-2. **Validation** — the check character is deterministic arithmetic over the
+2. **Validation**: the check character is deterministic arithmetic over the
    code itself, so a typo is caught locally with no participant list to consult.
-3. **Somewhere to put it** — Point B's own IndexedDB, which never contains a
+3. **Somewhere to put it**. Point B's own IndexedDB, which never contains a
    copy of Point A's data.
 
 Point B therefore holds no participant PII, needs no connectivity, and cannot be
@@ -1967,9 +1968,9 @@ synchronisation.
 - participant ID generation, per-device issuer codes, public code issuing and
   validation
 - the QR payload contract: serialiser, parser and validation
-- **Point A**: the working registration terminal — validation, durable save, QR
+- **Point A**: the working registration terminal, validation, durable save, QR
   sticker rendering, printing, reprint, refresh recovery and PII correction
-- **Point B**: the working feedback terminal — QR scanning, manual fallback,
+- **Point B**: the working feedback terminal, QR scanning, manual fallback,
   the `feedback-v1` questionnaire, durable save, same-device duplicate refusal
 - **Offline application shell**: the whole app precached, cold-starting with no
   server reachable; operator-gated updates; readiness and version on Admin
@@ -1981,7 +1982,7 @@ synchronisation.
   registration/feedback relationships and proposes duplicate candidates without
   ever altering the raw records
 - **Central reporting**: a separately-credentialled, read-only API and screen
-  over reconciled data — overview, participant and response browsers, anomaly
+  over reconciled data, overview, participant and response browsers, anomaly
   and duplicate review, an explicit reconciliation trigger, and CSV/XLSX exports
   that never reach the device's storage
 - **Campaign adaptation**: the Flying Flea design applied across the application,
@@ -2001,7 +2002,7 @@ None of the following exists yet:
 - cross-device duplicate detection and reconciliation
 - background sync, push notifications and runtime API caching
 - printer-vendor SDKs and any automatic paper-out/jam detection
-- automatic merging of duplicates or selection of a winning feedback record —
+- automatic merging of duplicates or selection of a winning feedback record,
   reporting surfaces both sides and leaves the decision to a human
 - user accounts, roles and permissions: reporting has one shared secret, and
   there is no way to tell two reviewers apart
@@ -2015,8 +2016,8 @@ Phase 4.
 
 - **Restore once compared transport state.** Until Phase 6, the backup merge
   compared whole records, including `syncStatus`. Once synchronisation began
-  changing that field, two copies of one record — synced on the source device,
-  pending on the replacement — compared as different contents at the same
+  changing that field, two copies of one record, synced on the source device,
+  pending on the replacement, compared as different contents at the same
   revision and aborted the restore as a conflict. The merge now compares domain
   contents only. Latent since Phase 5; only reachable once records could be
   marked synced.
@@ -2026,8 +2027,8 @@ Phase 4.
   deliberately does not fold `O`/`0` or `I`/`1`, because folding would corrupt
   legitimate codes. The issuer segment is hexadecimal specifically so that it
   cannot add to this problem, which leaves exactly one exposed character per
-  code. The failure mode is benign — a misread character fails its checksum and
-  staff retries, rather than attributing feedback to the wrong participant — but
+  code. The failure mode is benign (a misread character fails its checksum and
+  staff retries, rather than attributing feedback to the wrong participant), but
   sticker typography should use a font that disambiguates. This is a Phase 2
   concern.
 - **Device clock drift.** `createdAt` comes from the device clock, and offline

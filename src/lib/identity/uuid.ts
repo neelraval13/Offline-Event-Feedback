@@ -15,8 +15,8 @@ import {
  *
  * 1. `crypto.randomUUID()` is restricted to secure contexts. This app is
  *    expected to be served at a venue, possibly from a laptop over plain HTTP
- *    on a LAN address, where it is simply `undefined`. `crypto.getRandomValues`
- *    — which this package uses — has no such restriction. Discovering that at
+ *    on a LAN address, where it is simply `undefined`. `crypto.getRandomValues`,
+ *    which this package uses, has no such restriction. Discovering that at
  *    the event would be unrecoverable.
  * 2. UUIDv7 is time-ordered. Sequentially increasing primary keys keep
  *    IndexedDB's B-tree inserts local rather than scattered across the

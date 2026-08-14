@@ -26,7 +26,7 @@ export type ScannerErrorKind =
   | 'camera-busy'
   | 'insecure-context'
   | 'unsupported'
-  /** The camera was running and stopped — unplugged, or taken by another app. */
+  /** The camera was running and stopped: unplugged, or taken by another app. */
   | 'camera-stopped'
   | 'failed'
 
@@ -42,7 +42,7 @@ export interface ScannerStartOptions {
 
   /**
    * Called for every successful decode, which for a stationary sticker means
-   * many times a second. Callers are responsible for acting once — see
+   * many times a second. Callers are responsible for acting once, see
    * `usePointBTerminal`.
    */
   readonly onDecode: (text: string) => void
@@ -50,7 +50,7 @@ export interface ScannerStartOptions {
   /**
    * The scanner has **stopped working** and will produce no further decodes.
    *
-   * Reserved for genuine hardware or permission faults — a camera unplugged
+   * Reserved for genuine hardware or permission faults: a camera unplugged
    * mid-shift, a track ended by the browser. It is never called because a frame
    * failed to decode. A caller may safely transition to a camera-error state
    * from here; that is the whole point of the name.
@@ -62,7 +62,7 @@ export interface ScannerStartOptions {
    * **not** one of the ordinary "no QR in this frame" conditions.
    *
    * Non-fatal by definition. The scanner keeps running, and callers must not
-   * change state in response — it exists so an unfamiliar decoder fault can be
+   * change state in response; it exists so an unfamiliar decoder fault can be
    * observed rather than silently swallowed.
    */
   readonly onDecodeIssue?: (error: unknown) => void
@@ -81,7 +81,7 @@ export interface QrScanner {
    * Requests camera access and begins decoding.
    *
    * Rejects with a {@link ScannerError} when the camera cannot be started at
-   * all. **Startup failure is a rejection of this promise** — it is the only
+   * all. **Startup failure is a rejection of this promise**; it is the only
    * way a start problem is reported, and it is deliberately a different channel
    * from anything the running decode loop emits.
    */

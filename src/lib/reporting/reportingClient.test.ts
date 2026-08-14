@@ -44,7 +44,7 @@ function lastRequest(): { url: string; init: RequestInit } {
 
 describe('configuration', () => {
   it('derives the reporting base from the configured sync server', () => {
-    // Same process, same location — but a different credential entirely.
+    // Same process, same location, but a different credential entirely.
     expect(client.REPORTING_API_BASE_URL).toBe(`${BASE}/v1/reporting`)
     expect(client.isReportingConfigured()).toBe(true)
   })

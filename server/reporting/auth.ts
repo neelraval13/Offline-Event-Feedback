@@ -7,7 +7,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
  * **not** share an identity with anything else. A device token authorises one
  * enrolled tablet to *upload* what it captured; the enrolment code lets a device
  * obtain such a token. Neither should be able to read the whole event's names,
- * phone numbers and email addresses — a tablet left on a desk at a venue is a
+ * phone numbers and email addresses: a tablet left on a desk at a venue is a
  * very different threat model from an operator's admin session.
  *
  * So reporting requires its own secret, and it fails **closed**: if none is
@@ -41,7 +41,7 @@ function bearer(header: string | undefined | null): string | null {
  * Constant-time comparison of two secrets.
  *
  * Hashed first so the comparison runs over fixed-length buffers whatever was
- * submitted — otherwise the length of a guess leaks through timing.
+ * submitted, otherwise the length of a guess leaks through timing.
  */
 function secretsMatch(provided: string, expected: string): boolean {
   const a = createHash('sha256').update(provided, 'utf8').digest()
@@ -92,14 +92,14 @@ export function describeSecretWeakness(secret: string): string | null {
  *
  * Pure, so it is tested directly rather than by spawning processes and reading
  * stderr. Returns the operator-facing message, or null when the configuration is
- * acceptable — including the entirely valid case of reporting being switched off.
+ * acceptable, including the entirely valid case of reporting being switched off.
  *
  * The separation check is the substantive one. The whole argument for a second
  * credential is that uploading and reading the venue's contact list are different
  * privileges; setting both variables to the same string reinstates exactly the
  * problem the design exists to prevent, while looking correctly configured. It is
- * a plausible mistake — an operator with one generated secret to hand, pasting it
- * twice — so it fails the deployment rather than being documented against.
+ * a plausible mistake, an operator with one generated secret to hand, pasting it
+ * twice, so it fails the deployment rather than being documented against.
  *
  * No message ever contains either secret: startup errors are read in terminals,
  * copied into tickets and captured by process supervisors.

@@ -15,7 +15,7 @@ import type { OfflineEventDb } from './db'
 /*
  * The local registration sequence behind the printed public code.
  *
- * The counter is device-local and always was — IndexedDB has no other kind.
+ * The counter is device-local and always was. IndexedDB has no other kind.
  * What changed in Phase 1.1 is that the code it feeds is namespaced by the
  * issuing device, so two installations at the same station counting 1, 2, 3
  * in parallel produce disjoint codes instead of identical ones. The scope key
@@ -95,8 +95,8 @@ export interface AllocatedPublicCode {
 /**
  * Allocates the next public code for a scope.
  *
- * Joins the caller's transaction when there is one — Dexie nests a transaction
- * into its parent when the scope is a subset — so allocation and the write that
+ * Joins the caller's transaction when there is one: Dexie nests a transaction
+ * into its parent when the scope is a subset, so allocation and the write that
  * consumes it commit or roll back together.
  */
 export async function allocatePublicCode(

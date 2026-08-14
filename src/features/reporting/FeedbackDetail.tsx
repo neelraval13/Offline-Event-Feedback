@@ -18,8 +18,8 @@ import { useReportingSession } from './session'
  * captured under a future questionnaire is therefore fully visible without any
  * part of this screen pretending to know what its keys mean.
  *
- * For an identity conflict — where the scanned participant ID and the printed
- * code point at different people — the screen shows what each identifier resolves
+ * For an identity conflict, where the scanned participant ID and the printed
+ * code point at different people, the screen shows what each identifier resolves
  * to *right now*. That is a diagnostic to help an organiser work out what happened
  * at the desk, not a decision: nothing here resolves the conflict or picks a side.
  */
@@ -27,7 +27,7 @@ import { useReportingSession } from './session'
 const STATUS_LABELS: Record<FeedbackReconciliationStatus, string> = {
   matched: 'Matched to one participant',
   without_registration: 'No matching registration',
-  identity_conflict: 'Identity conflict — identifiers disagree',
+  identity_conflict: 'Identity conflict: identifiers disagree',
   multiple_feedback: 'One of several responses for one participant',
 }
 
@@ -55,7 +55,7 @@ interface FeedbackDetailProps {
 
 function renderAnswer(value: unknown): string {
   if (value === null || value === undefined) {
-    return '—'
+    return 'None'
   }
   if (typeof value === 'boolean') {
     return value ? 'Yes' : 'No'
@@ -145,7 +145,7 @@ export function FeedbackDetail({
                   ? 'Participant ID'
                   : detail.matchMethod === 'manual_public_code'
                     ? 'Public code'
-                    : '—'}
+                    : 'Not matched'}
               </dd>
             </div>
             <div>
@@ -163,7 +163,7 @@ export function FeedbackDetail({
                 {detail.formVersion === SUPPORTED_FORM_VERSION ||
                 detail.formVersion === CAMPAIGN_FORM_VERSION
                   ? ''
-                  : ' — not readable by this build'}
+                  : ' (not readable by this build)'}
               </dd>
             </div>
             <div>
@@ -253,8 +253,8 @@ export function FeedbackDetail({
               <h4 className="section-title">Identity conflict</h4>
               <p className="notice" role="status">
                 The scanned participant ID and the printed code on this response
-                point at different registrations. Shown for diagnosis only —
-                nothing on this screen resolves the conflict.
+                point at different registrations. Shown for diagnosis only.
+                Nothing on this screen resolves the conflict.
               </p>
               <dl className="station-badge">
                 <div>

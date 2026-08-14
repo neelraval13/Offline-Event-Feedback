@@ -455,7 +455,7 @@ describe('normalising a pasted phone number', () => {
      * The failure this prevents: taking the tail of `123456789012345` gives
      * `6789012345`, a perfectly plausible mobile number that nobody typed and
      * that passes the 10-digit rule. Truncating from the front leaves
-     * `1234567890`, which the validator rejects — so the operator is told,
+     * `1234567890`, which the validator rejects, so the operator is told,
      * rather than a wrong number being stored silently.
      */
     const normalised = normalisePastedPhone('123456789012345')

@@ -12,7 +12,7 @@ import type { DuplicateCandidateRow, OverviewResponse } from './types'
  * XLSX workbook.
  *
  * Generated server-side. `exceljs` is a server dependency and is deliberately
- * never imported from `src/` — it would add megabytes to a bundle that has to
+ * never imported from `src/`; it would add megabytes to a bundle that has to
  * be precached onto a tablet for offline use.
  *
  * Every participant-derived value is written as an explicit **string cell**.

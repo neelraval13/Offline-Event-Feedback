@@ -7,8 +7,8 @@ import {
  * The feedback questionnaire's data model.
  *
  * These are the canonical persisted values. Anything a participant taps is
- * translated into exactly these before it reaches storage, so a later reader —
- * the central server, an analyst, a future version of this app — never has to
+ * translated into exactly these before it reaches storage, so a later reader
+ * (the central server, an analyst, a future version of this app) never has to
  * guess what a stored answer meant.
  */
 
@@ -30,10 +30,10 @@ export type FeedbackFormVersion =
   | typeof FEEDBACK_FORM_VERSION
   | typeof FLYING_FLEA_FORM_VERSION
 
-/** `overall_rating` — 1 to 5 inclusive. */
+/** `overall_rating`: 1 to 5 inclusive. */
 export type OverallRating = 1 | 2 | 3 | 4 | 5
 
-/** `experience` — a closed set, stored as stable machine values. */
+/** `experience`: a closed set, stored as stable machine values. */
 export type ExperienceValue =
   | 'very_poor'
   | 'poor'
@@ -67,8 +67,8 @@ export type FeedbackAnswers = FeedbackV1Answers | FlyingFleaFeedbackV1Answers
 /**
  * A questionnaire and its answers, as one indivisible value.
  *
- * The two used to be independent fields — a `FeedbackFormVersion` beside a
- * `FeedbackAnswers` — and that let this compile:
+ * The two used to be independent fields (a `FeedbackFormVersion` beside a
+ * `FeedbackAnswers`), and that let this compile:
  *
  *     { formVersion: 'feedback-v1', answers: flyingFleaAnswers }
  *

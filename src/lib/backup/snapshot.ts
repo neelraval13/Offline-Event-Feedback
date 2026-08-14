@@ -13,7 +13,7 @@ import { validatePayload, type ValidationResult } from './validate'
  *
  * All four stores are read inside a single Dexie read transaction. Querying
  * them one at a time would let a registration land between two reads, and the
- * backup would then hold a registration whose sequence counter had not moved —
+ * backup would then hold a registration whose sequence counter had not moved:
  * a file that looks perfectly valid and quietly reissues a printed code on
  * restore.
  *
@@ -60,7 +60,7 @@ export async function createSnapshot(
        * the file a reusable server credential in anyone's hands, and restoring
        * it would hand a replacement machine the failed one's upload identity.
        * A replacement enrols itself. `deviceId` stays, exactly as Phase 5
-       * requires — that is provenance, not a credential.
+       * requires; that is provenance, not a credential.
        */
       const sortedDeviceConfig = byKey(
         deviceConfig.filter(
@@ -103,7 +103,7 @@ export async function createSnapshot(
  * Deliberately the same validator the restore path runs on untrusted files. If
  * the local database has drifted into a state this application would refuse to
  * restore, writing it to an encrypted file would only produce a backup that
- * cannot be used — worse, one the operator believes in.
+ * cannot be used, worse, one the operator believes in.
  */
 export function validateSnapshot(
   payload: BackupPayloadV1,

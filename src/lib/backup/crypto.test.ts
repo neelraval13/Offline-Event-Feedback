@@ -17,7 +17,7 @@ import { base64ToBytes, bytesToBase64 } from './base64'
  * Cryptographic primitives.
  *
  * These tests run real PBKDF2, so they are deliberately few. Everything about
- * backup structure and merge behaviour is tested elsewhere without crypto —
+ * backup structure and merge behaviour is tested elsewhere without crypto:
  * a suite that derived a 600,000-iteration key hundreds of times would take
  * minutes and teach nothing extra.
  *

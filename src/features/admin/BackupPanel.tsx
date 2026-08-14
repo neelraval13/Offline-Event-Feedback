@@ -167,7 +167,7 @@ export function BackupPanel({ onDataChanged }: BackupPanelProps) {
       return
     }
 
-    // Recorded only after a file was actually selected and opened — real
+    // Recorded only after a file was actually selected and opened, real
     // evidence that a recoverable backup exists.
     await recordBackupEvent(db, LAST_BACKUP_VERIFIED_KEY)
     await refreshMetadata()

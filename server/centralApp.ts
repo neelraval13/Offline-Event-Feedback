@@ -16,7 +16,7 @@ import type { ServerConfig, ServerRuntime } from './config'
  * The point of it existing is that the local server and the Vercel function
  * cannot drift. Two hand-written `createApp({...})` call sites is how a
  * deployment ends up with reporting enabled in one runtime and not the other,
- * or with a health check that answers differently depending on where it runs —
+ * or with a health check that answers differently depending on where it runs,
  * and the one that is wrong is always the one nobody tests locally.
  *
  * Listening is not here. A Node server binds a port; a function is handed a

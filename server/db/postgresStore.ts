@@ -11,8 +11,8 @@ import type {
  * The Postgres implementation.
  *
  * Concurrency is handled by the database, not by application logic. Every write
- * is a single statement — `INSERT ... ON CONFLICT DO NOTHING` and updates
- * conditional on the revision that was read — so two devices uploading the same
+ * is a single statement: `INSERT ... ON CONFLICT DO NOTHING` and updates
+ * conditional on the revision that was read, so two devices uploading the same
  * record at the same instant produce one row and two deterministic answers.
  *
  * A read-then-write in application code would be a race with no lock behind it.
@@ -84,8 +84,8 @@ function mapRegistration(row: Row): CentralRegistration {
  * whole point of storing a version is not having to guess.
  *
  * An unrecognised version throws rather than being silently downgraded to
- * `feedback-v1`. It can only mean this build is older than the row — a
- * deployment rolled back under a database that has moved on — and answering a
+ * `feedback-v1`. It can only mean this build is older than the row, a
+ * deployment rolled back under a database that has moved on, and answering a
  * comparison with the wrong questionnaire would be worse than refusing: ingest
  * would report a campaign response as `conflict` and a device would retry it
  * forever.
@@ -97,7 +97,7 @@ function readFormVersion(value: unknown): CentralFeedback['formVersion'] {
     return version
   }
 
-  // The version only — never the answers, never the record.
+  // The version only, never the answers, never the record.
   throw new Error(`Unknown feedback form_version in the database: ${version}`)
 }
 
@@ -263,7 +263,7 @@ export function createPostgresStore(sql: Sql): SyncStore {
           -- against reconciliation_runs.completed_at, which Postgres writes
           -- with its own clock; receivedAt comes from the API process. If the
           -- two hosts disagree by even a few seconds, a revision accepted after
-          -- a run could be stamped before it and vanish from staleness — the
+          -- a run could be stamped before it and vanish from staleness: the
           -- run would report itself current while no longer describing the
           -- event. Both sides of that comparison must come from one clock.
           content_changed_at = now()
@@ -278,7 +278,7 @@ export function createPostgresStore(sql: Sql): SyncStore {
     async touchRegistration(recordId, receivedAt, uploaderDeviceId) {
       /*
        * An idempotent re-delivery: the record we hold is already what the device
-       * is sending. `content_changed_at` is deliberately NOT touched — a tablet
+       * is sending. `content_changed_at` is deliberately NOT touched: a tablet
        * reconnecting and re-uploading a batch must not make a current
        * reconciliation run look stale.
        */
@@ -354,7 +354,7 @@ export function createPostgresStore(sql: Sql): SyncStore {
     },
 
     async recordBatch(audit) {
-      // Counts only — never a record, never a participant.
+      // Counts only, never a record, never a participant.
       await sql`
         INSERT INTO sync_batches (
           batch_id, event_id, uploader_device_id, received_at,

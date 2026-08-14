@@ -18,7 +18,7 @@ import { TextQuestion } from './TextQuestion'
  * The Flying Flea questionnaire at Point B.
  *
  * Six questions, in the campaign's own order and wording, rendered from
- * `config.ts` rather than typed out here — a question that exists in two places
+ * `config.ts` rather than typed out here: a question that exists in two places
  * is a question that will eventually disagree with itself, and the wording is
  * what an export has to quote back.
  *

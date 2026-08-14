@@ -21,7 +21,7 @@ export type { CampaignQuestion }
  * found in four components, and the one that gets missed is the one staff use.
  *
  * The questionnaire itself is NOT here. Its version, answer keys, wording and
- * scale live in `shared/campaign/flyingFlea.ts`, which the server reads too —
+ * scale live in `shared/campaign/flyingFlea.ts`, which the server reads too:
  * two copies of a question is one question that will eventually disagree with
  * itself, and the disagreement is invisible until a report quotes a prompt no
  * rider ever saw.
@@ -69,7 +69,7 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
   /*
    * The supplied deployment reads these from a Google Sheet's Settings tab so
    * the campaign team can edit them without a code change. This application has
-   * no Sheet and no network at the desk, so they are compiled in — the same
+   * no Sheet and no network at the desk, so they are compiled in: the same
    * defaults the supplied page falls back to when its injection has not run.
    */
   vehicles: ['Vehicle 1', 'Vehicle 2', 'Vehicle 3', 'Vehicle 4'],
@@ -93,7 +93,7 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
  *
  * Taken from the supplied form's own submit-time validation: vehicle, name,
  * email, location and phone are refused when blank; gender, test-ride time,
- * licence and pincode are not. Nothing is added to that list — an event desk
+ * licence and pincode are not. Nothing is added to that list: an event desk
  * with a queue is the worst possible place to discover a newly mandatory field.
  *
  * Colour is absent because it cannot be unanswered: the supplied control is a

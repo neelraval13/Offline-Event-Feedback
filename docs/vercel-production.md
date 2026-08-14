@@ -1,4 +1,4 @@
-# Deploying to Vercel — operator guide
+# Deploying to Vercel: operator guide
 
 Everything here is done by a person, in a browser and a terminal. Nothing in the
 repository deploys itself, creates a Vercel project, or touches the production
@@ -16,7 +16,7 @@ You need three things ready.
 imports. Check `git status` is clean and the branch is pushed.
 
 **2. A Neon database with the schema applied and nothing else.** Production
-receives **schema only**. There is no data import, no QA copy, no seed —
+receives **schema only**. There is no data import, no QA copy, no seed,
 registrations, feedback, device enrolments and reconciliation runs all begin at
 zero and are created by the event itself.
 
@@ -28,7 +28,7 @@ MIGRATION_DATABASE_URL='postgres://…neon.tech/…?sslmode=require' pnpm server
 ```
 
 Expect seven migrations, `001` through `007`. Running it again reports them all
-as already applied — it is safe to repeat and it never drops anything.
+as already applied; it is safe to repeat and it never drops anything.
 
 Then confirm the database is empty:
 
@@ -48,7 +48,7 @@ SELECT name FROM schema_migrations ORDER BY name;  -- 001 … 007
 node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
 
 # The reporting login. Must be at least 32 characters, and must NOT equal the
-# enrolment code — the server refuses to start if it does.
+# enrolment code: the server refuses to start if it does.
 openssl rand -hex 32
 ```
 
@@ -77,7 +77,7 @@ H. You do not need to configure either in the dashboard.
 ## C. Environment variables
 
 Project → **Settings → Environment Variables**. Add these to **Production** (and
-to Preview if you are using a separate preview database — see section I).
+to Preview if you are using a separate preview database; see section I).
 
 | Name | Value | Notes |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ to Preview if you are using a separate preview database — see section I).
 
 Leave these **unset** in Vercel:
 
-- `MIGRATION_DATABASE_URL` — the direct connection, needed only on your machine.
+- `MIGRATION_DATABASE_URL`: the direct connection, needed only on your machine.
   The application never reads it, and it should not be in a deployment.
-- `SYNC_ALLOWED_ORIGINS` — the app and the API share one origin in production, so
+- `SYNC_ALLOWED_ORIGINS`: the app and the API share one origin in production, so
   there is nothing cross-origin to allow. Do not paste deployment hostnames here;
   they change with every deployment and would not help.
 
 `VITE_SYNC_API_BASE_URL` is compiled into the browser bundle. The other three are
-server-side only and never reach it — a build test asserts their names do not
+server-side only and never reach it: a build test asserts their names do not
 appear in the output.
 
 ---
@@ -107,8 +107,8 @@ Trigger the first deployment (importing the project does this automatically).
 Watch the build log for the line from the build verifier:
 
 ```
-✓ PWA build verified — … navigation fallback present, updates gated on an operator.
-  note: sync API configured same-origin: /api — resolves against the page's own origin
+✓ PWA build verified: … navigation fallback present, updates gated on an operator.
+  note: sync API configured same-origin: /api, which resolves against the page's own origin
 ```
 
 If it instead says the sync API is configured over plain HTTP, the build fails on
@@ -133,7 +133,7 @@ Open the deployment URL and check each of these.
 `false` or the request fails, the pooled `DATABASE_URL` is wrong or the database
 is unreachable from the function region.
 
-The health response deliberately says nothing else — no host, no database name,
+The health response deliberately says nothing else: no host, no database name,
 no connection count.
 
 ---
@@ -163,7 +163,7 @@ One row per enrolled device.
 3. From Admin, sync. Both records should report as accepted.
 4. Confirm centrally: `SELECT count(*) FROM registrations;` → 1.
 5. Sync again. The same records must come back **already current**, not
-   conflicts — that is the idempotency the whole outbox depends on.
+   conflicts; that is the idempotency the whole outbox depends on.
 6. Open `/#/reporting`, sign in with the reporting secret, run reconciliation,
    and check the participant and response appear.
 7. Download the registrations CSV and confirm it opens cleanly.
@@ -185,7 +185,7 @@ Already configured by `vercel.json`; verify rather than change.
   additionally carry `no-store, private`. Nothing central is ever cached by a
   CDN, a proxy or the browser.
 - The service worker precaches the application shell only. It contains no rule
-  that could cache an API response — a build test fails if one appears.
+  that could cache an API response: a build test fails if one appears.
 
 To verify offline readiness on a device:
 
@@ -216,7 +216,7 @@ The Phase 9 rollout contract applies, and the order is not optional:
 1. Deploy the new server and frontend (they are one deployment).
 2. On **each** field device, open the app **while online** and let the new
    version install.
-3. Confirm in Admin that the update has been applied — the app prompts rather
+3. Confirm in Admin that the update has been applied: the app prompts rather
    than reloading itself mid-registration.
 4. Confirm offline readiness on that device.
 5. Only then begin capturing campaign records on it.
@@ -233,7 +233,7 @@ responses will be refused by the server and will sit on the tablet.
 Vercel → Deployments → the previous good deployment → **Promote to Production**.
 
 **The database does not roll back.** Migrations only ever create; there are no
-automatic down migrations, and there deliberately never will be — an automatic
+automatic down migrations, and there deliberately never will be: an automatic
 reversal of a schema change is a script that can delete an event's records
 because someone clicked the wrong button.
 
@@ -241,9 +241,9 @@ If a schema change has to be undone, it is a deliberate recovery decision: take 
 Neon backup or branch first, write the corrective migration, review it, and apply
 it with `pnpm server:migrate` like any other.
 
-Rolling the code back to a deployment older than a migration is usually safe —
+Rolling the code back to a deployment older than a migration is usually safe,
 the migrations so far are additive, and older code ignores columns it does not
-know about — but confirm that for the specific migration before relying on it.
+know about, but confirm that for the specific migration before relying on it.
 
 ---
 

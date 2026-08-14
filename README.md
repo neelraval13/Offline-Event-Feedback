@@ -6,7 +6,7 @@ during operations**.
 
 Participants register at **Point A**, where staff captures their details and
 prints a QR sticker. After completing the activity they arrive at **Point B**,
-where staff scans that sticker — or types the code printed under it — and
+where staff scans that sticker, or types the code printed under it, and
 records their feedback. Both devices store everything locally and synchronise to
 a central server later, whenever a connection happens to be available.
 
@@ -24,7 +24,7 @@ redesigning participant identity. See [docs/architecture.md](docs/architecture.m
 
 ## Current phase
 
-**Phase 10 — Vercel production compatibility.**
+**Phase 10: Vercel production compatibility.**
 
 The repository is ready to deploy; nothing in it deploys. One Vercel project
 serves the PWA from `/` and the same Hono API from `/api/*`, against Neon.
@@ -52,10 +52,10 @@ Vercel
 Deployment is documented for a human:
 [docs/vercel-production.md](docs/vercel-production.md).
 
-### Phase 9 — Flying Flea redesign and campaign forms
+### Phase 9: Flying Flea redesign and campaign forms
 
 The same offline system, dressed and worded for one campaign: the Flying Flea
-test-ride events. No architecture changed — identity, persistence, the QR
+test-ride events. No architecture changed: identity, persistence, the QR
 contract, sync, reconciliation and reporting are exactly as Phases 0–8 left them.
 
 - **The supplied package is the authority.** Palette, marks, labels, questions
@@ -63,11 +63,11 @@ contract, sync, reconciliation and reporting are exactly as Phases 0–8 left th
   [docs/flying-flea-campaign.md](docs/flying-flea-campaign.md).
 - **One questionnaire definition.** The form version, answer keys, exact prompts
   and 1–7 scale live in `shared/campaign/flyingFlea.ts`, which the browser and
-  the reporting server both import. Vehicles, venues and hero copy — the parts
-  that can change without changing what an answer means — stay in
+  the reporting server both import. Vehicles, venues and hero copy (the parts
+  that can change without changing what an answer means) stay in
   `src/features/campaign/flying-flea/config.ts`.
-- **A new questionnaire, not a changed one.** `flying-flea-feedback-v1` — four
-  1–7 ratings and two free-text answers — sits alongside `feedback-v1`. Nothing
+- **A new questionnaire, not a changed one.** `flying-flea-feedback-v1`, with four
+  1–7 ratings and two free-text answers, sits alongside `feedback-v1`. Nothing
   reinterprets an existing response, and every reader branches on the version.
 - **Additive registration fields.** Vehicle, colour, location, gender, test-ride
   time, licence and pincode are optional at every persistence boundary, so
@@ -79,7 +79,7 @@ contract, sync, reconciliation and reporting are exactly as Phases 0–8 left th
 
 - **Deployment is ordered.** The Phase 9 server (and its migration) goes first;
   devices update second. A Phase 9 client must never be pointed at a
-  pre-Phase-9 server — it would strand campaign responses on the tablet. The
+  pre-Phase-9 server; it would strand campaign responses on the tablet. The
   protocol stays at version 1, and the reasoning is written down.
 
 Campaign QA: [docs/flying-flea-qa.md](docs/flying-flea-qa.md).
@@ -97,7 +97,7 @@ reconciliation run  ->  reporting API (protected)  ->  #/reporting, CSV, XLSX
 - **Its own credential.** `REPORTING_ADMIN_SECRET`, compared in constant time,
   entirely separate from `SYNC_ENROLLMENT_SECRET` and from device tokens. A
   tablet left on a desk can upload what it captured; it cannot read the venue's
-  contact list. Unset means reporting **fails closed** — sync is unaffected.
+  contact list. Unset means reporting **fails closed**: sync is unaffected.
 - **Read-only about the event.** Reporting never edits, merges, deletes, picks a
   winner, or marks an anomaly resolved. Its one write is an explicit
   "Run reconciliation", which calls the Phase 7 engine unchanged.
@@ -115,7 +115,7 @@ reconciliation run  ->  reporting API (protected)  ->  #/reporting, CSV, XLSX
   the first and not the second.
 - **Exports are spreadsheet-safe.** Participant text is neutralised so that
   `=`, `+`, `-` and `@` are treated as text, and every XLSX cell is a string.
-  Filenames carry an event, a kind and a date — never a participant.
+  Filenames carry an event, a kind and a date, never a participant.
 
 See [docs/reporting-test.md](docs/reporting-test.md) for the real-Postgres pass.
 
@@ -137,7 +137,7 @@ central registrations + feedback  ->  reconciliation run  ->  derived results
   accumulate; nothing is overwritten.
 - **It classifies; it never resolves.** Two responses for one participant, or
   two registrations that may be one person, are reported as ambiguous. No winner
-  is chosen and nothing is merged — there is no honest basis for either.
+  is chosen and nothing is merged; there is no honest basis for either.
 - **Exact matching only.** Duplicate candidates come from exactly equal
   normalised phone or email. No fuzzy names, no inferred country codes, no
   provider-specific email rules.
@@ -163,7 +163,7 @@ offline capture  ->  Internet eventually  ->  idempotent upload  ->  Postgres
 ```
 
 - **At-least-once delivery, exactly-once storage.** `recordId` is the
-  idempotency key. A lost response is harmless — the device retries, the server
+  idempotency key. A lost response is harmless: the device retries, the server
   answers `already_current`, and nothing is duplicated.
 - **Per-device credentials.** An operator types a shared enrolment code once;
   the device gets its own 256-bit token and the server keeps only a hash. No API
@@ -188,13 +188,13 @@ device  ->  encrypted .oefbackup  ->  verify  ->  merge onto a replacement
 ```
 
 - **AES-GCM with PBKDF2-SHA-256 at 600,000 iterations.** The unopened file
-  reveals only that it is a backup of this application — no event, no counts, no
+  reveals only that it is a backup of this application: no event, no counts, no
   participant. The passphrase is never stored and cannot be recovered.
 - **Verify without importing.** Generating a file is weak evidence; selecting it
   back off disk and decrypting it is real evidence, and Admin tracks the two
   separately.
 - **Restore merges, never replaces.** The destination is never cleared, the
-  whole merge is one transaction, and any conflict aborts it entirely — no
+  whole merge is one transaction, and any conflict aborts it entirely: no
   partial import. Restoring the same file twice changes nothing.
 - **Device identity is never cloned.** A replacement keeps its own `deviceId`
   and its own public-code issuer namespace, so a recovered machine can never
@@ -214,30 +214,30 @@ server, no network, no CDN.
 prepare device online  ->  shell precached  ->  server can disappear entirely
 ```
 
-- **Installable PWA** — the whole app is precached, including the ~830 kB bundle
+- **Installable PWA**: the whole app is precached, including the ~830 kB bundle
   carrying Dexie, the QR generator and the ZXing scanner. Nothing is lazily
   fetched, so nothing can be missing when the network is gone.
-- **Updates never interrupt anyone** — a new version downloads and waits. Point A
+- **Updates never interrupt anyone**: a new version downloads and waits. Point A
   and Point B say nothing about it; only Admin offers **Apply update**, and only
   an operator pressing it reloads the terminal.
-- **Offline readiness is verified, not assumed** — Admin reports *Ready for
+- **Offline readiness is verified, not assumed**. Admin reports *Ready for
   offline use* only when the shell is genuinely precached, never from
   `navigator.onLine`.
-- **Updating never touches participant data** — application code lives in Cache
+- **Updating never touches participant data**: application code lives in Cache
   Storage, records live in IndexedDB, and the two never meet.
 
 See [docs/offline-cold-start-test.md](docs/offline-cold-start-test.md) for the
-test that decides whether a device is venue-ready — it requires **stopping the
+test that decides whether a device is venue-ready; it requires **stopping the
 preview server**, which every earlier offline test did not.
 
 > ⚠️ Chrome's **Clear site data** deletes IndexedDB, and IndexedDB holds the
-> participant records. Never use it to reset the app cache — the safe procedure
+> participant records. Never use it to reset the app cache: the safe procedure
 > is in [docs/architecture.md](docs/architecture.md#resetting-the-app-cache-safely).
 > Keep an encrypted backup regardless.
 
 Both stations can be physically tested.
 
-**Point A** — staff enters a participant's details, the registration is durably
+**Point A**. Staff enters a participant's details, the registration is durably
 saved to this device, and only then is a QR sticker produced for printing.
 
 ```
@@ -245,10 +245,10 @@ name / phone / email  ->  saved to IndexedDB  ->  QR sticker  ->  print / reprin
 ```
 
 - **50 mm × 40 mm sticker** carrying a 26 mm QR code and the public code
-  beneath it — and no participant PII of any kind.
+  beneath it, and no participant PII of any kind.
 - **Print and reprint** through the browser's own print dialog. Reprint produces
   the identical sticker: no new record, no new identity, no counter movement.
-- **Survives a refresh** — recent local registrations stay reachable for
+- **Survives a refresh**: recent local registrations stay reachable for
   reprint.
 - **Correct name, phone or email** on a saved registration without changing its
   identity or needing a new sticker.
@@ -256,7 +256,7 @@ name / phone / email  ->  saved to IndexedDB  ->  QR sticker  ->  print / reprin
 See [docs/point-a-physical-test.md](docs/point-a-physical-test.md) for the
 manual print QA pass.
 
-**Point B** — staff scans that sticker, or types the code printed under it, and
+**Point B**. Staff scans that sticker, or types the code printed under it, and
 records the participant's feedback.
 
 ```
@@ -269,10 +269,10 @@ type code -> validate the check character --------------+
   everything it validates comes from the sticker itself.
 - **Manual fallback always available**, including when the camera is denied,
   missing or broken.
-- **Same-device duplicate refusal** — scanning a sticker this terminal has
+- **Same-device duplicate refusal**: scanning a sticker this terminal has
   already recorded shows *Already recorded* rather than quietly taking a second
   response.
-- **No participant PII at Point B** — the screen shows the public code and
+- **No participant PII at Point B**: the screen shows the public code and
   nothing else.
 
 See [docs/point-b-physical-test.md](docs/point-b-physical-test.md) for the
@@ -292,16 +292,16 @@ later leaves already-collected answers interpretable.
 
 Beneath the UI:
 
-- **Local storage** — IndexedDB (Dexie) holding registrations, feedback and
+- **Local storage**. IndexedDB (Dexie) holding registrations, feedback and
   device configuration, with unique-index protection against duplicate
   identities and transactional writes.
-- **Device identity** — a stable `deviceId` generated on first use and
+- **Device identity**: a stable `deviceId` generated on first use and
   persisted, surviving refresh and browser restart.
-- **Participant identity** — offline UUIDv7 participant IDs, and issued public
+- **Participant identity**: offline UUIDv7 participant IDs, and issued public
   codes of the form `A1-B8EFD9-00001-X` with an ISO 7064 MOD 37-2 check
   character. The `B8EFD9` segment namespaces codes per device, so two
   installations at one station can issue in parallel without ever colliding.
-- **QR payload contract** — a versioned serialiser, parser and validator, so
+- **QR payload contract**: a versioned serialiser, parser and validator, so
   Point A and Point B agree on identity before either is built.
 
 Merging duplicates and choosing between conflicting feedback are **deliberately
@@ -334,10 +334,10 @@ file server, or a USB stick, with no server-side rewrite rules.
 
 | Route | Surface |
 | --- | --- |
-| `/#/a` | Point A — Registration |
-| `/#/b` | Point B — Feedback |
+| `/#/a` | Point A: Registration |
+| `/#/b` | Point B: Feedback |
 | `/#/admin` | Device Admin |
-| `/#/reporting` | Central reporting — organiser's machine only, needs the reporting secret |
+| `/#/reporting` | Central reporting: organiser's machine only, needs the reporting secret |
 | `/#/` | Development home / navigation |
 
 `/#/reporting` is deliberately absent from the in-app navigation: it is the only
@@ -364,7 +364,7 @@ pnpm icons       # regenerate the temporary PWA icons
 
 ```bash
 cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
-pnpm server:migrate    # apply the schema, deliberately — never on startup
+pnpm server:migrate    # apply the schema deliberately; never on startup
 pnpm server:start      # serve the ingest API on :8788, unprefixed
 pnpm server:reconcile -- --event evt-dev-001   # classify central data
 pnpm server:typecheck
@@ -378,7 +378,7 @@ characters; the server refuses to start with a shorter one):
 openssl rand -hex 32   # generate one; never commit it, never put it in a URL
 ```
 
-Without it the server still ingests and still reconciles — only
+Without it the server still ingests and still reconciles, only
 `/v1/reporting/*` answers `503 reporting_not_configured`.
 
 The Postgres-backed server suites are skipped unless pointed at a scratch
@@ -392,7 +392,7 @@ RECONCILIATION_TEST_DATABASE_URL=postgres://localhost:5432/oef_recon_test pnpm s
 
 The client only talks to it when `VITE_SYNC_API_BASE_URL` is set at build time.
 Leave it unset and synchronisation is cleanly disabled; everything else is
-unaffected. Production must be **https** — registrations carry participant
+unaffected. Production must be **https**: registrations carry participant
 contact details.
 
 `pnpm dev` runs **without** a service worker, so development never fights a
@@ -408,12 +408,12 @@ src/
   styles/       Design tokens (the only place brand values are written down)
   config/       Typed V1 event / station / device configuration
   features/
-    registration/  Point A — form, sticker, print/reprint, recovery
-    feedback/      Point B — scanner, manual entry, questionnaire
+    registration/  Point A: form, sticker, print/reprint, recovery
+    feedback/      Point B: scanner, manual entry, questionnaire
     admin/         Device admin
     campaign/
       flying-flea/ Campaign config, questionnaire, and its own form components
-    reporting/     Central reporting — review, analytics, export (loaded on demand)
+    reporting/     Central reporting: review, analytics, export (loaded on demand)
     home/          Development navigation screen
   lib/
     backup/     Encrypted backup, verification and non-destructive restore
@@ -426,7 +426,7 @@ src/
     routing/    Hash router
     identity/   Participant/record/device IDs, public codes, QR payload
     storage/    IndexedDB schema, repositories, device identity, sequences
-    sync/       (seam) upload to the central server — not implemented
+    sync/       (seam) upload to the central server; not implemented
   test/         Test database helpers and the fake-indexeddb setup
   types/        Domain types: IDs, records, sync status
 server/           Central sync API, reconciliation engine and reporting API
@@ -459,16 +459,16 @@ scripts/
 
 | Phase | Content |
 | --- | --- |
-| 0 | Foundation, architecture, routing, types, config — done |
-| 1 | Local persistence, participant identity, public codes, QR contract — done |
-| 2 | Point A registration, QR generation, sticker printing — done |
-| 3 | Point B scanning, manual fallback entry, feedback questionnaire — done |
-| 4 | Offline application shell / installable PWA — done |
-| 5 | Local counts, encrypted backup and restore — done |
-| 6 | Central server, device enrolment, idempotent sync — done |
-| 7 | Central reconciliation engine — done |
-| 8 | Central reporting, review and export — done |
-| 9 | Flying Flea redesign and campaign forms — done |
+| 0 | Foundation, architecture, routing, types, config *(done)* |
+| 1 | Local persistence, participant identity, public codes, QR contract *(done)* |
+| 2 | Point A registration, QR generation, sticker printing *(done)* |
+| 3 | Point B scanning, manual fallback entry, feedback questionnaire *(done)* |
+| 4 | Offline application shell / installable PWA *(done)* |
+| 5 | Local counts, encrypted backup and restore *(done)* |
+| 6 | Central server, device enrolment, idempotent sync *(done)* |
+| 7 | Central reconciliation engine *(done)* |
+| 8 | Central reporting, review and export *(done)* |
+| 9 | Flying Flea redesign and campaign forms *(done)* |
 | 10 | Vercel production compatibility *(current)* |
 
 Phase boundaries are indicative; the ordering constraint that matters is that

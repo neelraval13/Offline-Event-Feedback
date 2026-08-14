@@ -254,7 +254,7 @@ describe('sequences take the maximum, never the backup value', () => {
   it('never lowers a higher local counter', async () => {
     /*
      * The decisive rule. Lowering the counter would reissue public codes that
-     * are already printed and on participants — the exact collision the
+     * are already printed and on participants: the exact collision the
      * per-device issuer was built to eliminate.
      */
     await database.sequences.put({ key: SEQUENCE_KEY, value: 900 })

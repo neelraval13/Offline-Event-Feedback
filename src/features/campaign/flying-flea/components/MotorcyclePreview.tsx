@@ -20,7 +20,7 @@ import { MOTORCYCLE_ALT, MOTORCYCLE_IMAGES } from '../assets'
  * The frame reserves its space with `aspect-ratio`, so selecting a colour never
  * moves the form under the operator's finger. Both photographs share a canvas
  * and are drawn with `object-fit: contain`, so the bike keeps its proportions
- * and nothing — wheel, mirror, tail — is ever cropped away.
+ * and nothing (wheel, mirror, tail) is ever cropped away.
  */
 
 interface MotorcyclePreviewProps {

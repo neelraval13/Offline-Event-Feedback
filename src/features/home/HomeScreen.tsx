@@ -12,12 +12,12 @@ interface SurfaceLink {
 const SURFACES: readonly SurfaceLink[] = [
   {
     path: '/a',
-    title: 'Point A — Registration',
+    title: 'Point A: Registration',
     description: 'Register a rider, then print the QR sticker.',
   },
   {
     path: '/b',
-    title: 'Point B — Feedback',
+    title: 'Point B: Feedback',
     description:
       'Scan the sticker, or type the fallback code, and collect the test-ride feedback.',
   },
@@ -59,7 +59,7 @@ export function HomeScreen() {
         Test Ride <span className="ff-heading__accent">Stations</span>
       </h1>
       <p className="ff-sub">
-        {EVENT_CONFIG.eventName} — {EVENT_CONFIG.eventDay}. Offline-first
+        {EVENT_CONFIG.eventName}, {EVENT_CONFIG.eventDay}. Offline-first
         registration and feedback for the {FLYING_FLEA_CAMPAIGN.name} campaign.
       </p>
 

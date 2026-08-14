@@ -1,4 +1,4 @@
--- Offline Event Feedback — central synchronisation schema, migration 001.
+-- Offline Event Feedback: central synchronisation schema, migration 001.
 --
 -- Safe to apply to an empty database. Applied deliberately via
 -- `pnpm server:migrate`, never as a side effect of starting the server: a
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   last_uploader_device_id  UUID        NOT NULL
 );
 
--- One participant, one code, one row — enforced by the database rather than by
+-- One participant, one code, one row, enforced by the database rather than by
 -- application logic, because two devices can upload at the same instant.
 CREATE UNIQUE INDEX IF NOT EXISTS registrations_participant_key
   ON registrations (event_id, participant_id);
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 
 -- Deliberately NOT unique on public_code: two Point B terminals may each hold
 -- a response for one participant, and both must survive for reconciliation to
--- see them. There is also no foreign key to registrations — feedback may
+-- see them. There is also no foreign key to registrations, feedback may
 -- legitimately arrive first.
 CREATE INDEX IF NOT EXISTS feedback_public_code_idx
   ON feedback (event_id, public_code);

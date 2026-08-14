@@ -77,8 +77,8 @@ export interface ReconciliationRunResult {
 /**
  * Runs reconciliation for one event and persists the results.
  *
- * The whole thing — snapshot read, classification, result inserts and the
- * completion stamp — is one transaction. A failure anywhere rolls back the run
+ * The whole thing, snapshot read, classification, result inserts and the
+ * completion stamp, is one transaction. A failure anywhere rolls back the run
  * row along with everything else, so a partially written run can never be
  * mistaken for a finished one.
  */
@@ -221,7 +221,7 @@ async function insertDuplicateCandidates(
 }
 
 /* ------------------------------------------------------------------ *
- * Reading runs back — Phase 8's data source
+ * Reading runs back: Phase 8's data source
  * ------------------------------------------------------------------ */
 
 /** The most recent **completed** run for an event, or null if there is none. */

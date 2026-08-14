@@ -103,7 +103,7 @@ export async function markRegistrationSyncError(
   })
 }
 
-/** Returns a record to the outbox — used when a transient failure clears. */
+/** Returns a record to the outbox, used when a transient failure clears. */
 export async function markRegistrationPending(
   database: OfflineEventDb,
   recordId: RecordId,

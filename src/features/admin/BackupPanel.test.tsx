@@ -15,7 +15,7 @@ import {
 /*
  * Admin's backup and recovery surface.
  *
- * Real crypto at production cost runs here, but only a handful of times — the
+ * Real crypto at production cost runs here, but only a handful of times: the
  * flows are what is under test, not the KDF.
  */
 

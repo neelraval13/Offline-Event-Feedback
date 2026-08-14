@@ -12,7 +12,7 @@
  *
  * So the system keeps two separate facts: **registration persisted**, which is
  * knowable and is what invariant 1 turns on, and **sticker physically
- * printed**, which is not knowable here and stays the operator's judgement —
+ * printed**, which is not knowable here and stays the operator's judgement,
  * which is why reprint is always available.
  */
 

@@ -7,8 +7,8 @@ import { db } from '../../lib/storage'
 /*
  * Reporting's privacy properties, asserted at the screen level.
  *
- * The rule this suite defends: central report data — and the credential that
- * fetches it — exist in React state and nowhere else. A tablet or laptop that
+ * The rule this suite defends: central report data, and the credential that
+ * fetches it, exist in React state and nowhere else. A tablet or laptop that
  * has had this screen open must have nothing on disk to recover afterwards.
  */
 
@@ -242,7 +242,7 @@ describe('ReportingScreen', () => {
     ].join('|')
 
     expect(persisted).not.toContain(SECRET)
-    // And it is not left lying in the DOM either — the field is a password
+    // And it is not left lying in the DOM either: the field is a password
     // input that gets cleared, and no panel echoes it back.
     expect(container.innerHTML).not.toContain(SECRET)
   })
@@ -301,8 +301,8 @@ describe('ReportingScreen', () => {
     expect(container.textContent).toContain('+919876543210')
 
     /*
-     * The secret is rotated on the server mid-session. The next request — any
-     * request — comes back 401, and from that moment nothing on screen is
+     * The secret is rotated on the server mid-session. The next request, any
+     * request, comes back 401, and from that moment nothing on screen is
      * authorised: leaving the participants visible behind an error notice would
      * be a privileged view of the event with nothing authorising it.
      */

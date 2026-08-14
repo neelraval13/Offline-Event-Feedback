@@ -46,11 +46,11 @@ export class OfflineEventDb extends Dexie {
 
     /*
      * v1 indexes:
-     *   registrations — `&participantId` and `&publicCode` are unique, so a
+     *   registrations, `&participantId` and `&publicCode` are unique, so a
      *     duplicate identity is refused by the database itself rather than by
      *     application code that might not run. `syncStatus` and `createdAt`
      *     serve the future outbox.
-     *   feedback — `publicCode` is indexed but NOT unique: a participant could
+     *   feedback, `publicCode` is indexed but NOT unique: a participant could
      *     legitimately be recorded twice, and Point B has no basis to decide
      *     otherwise offline. `participantId` is a sparse index; manual-entry
      *     records simply omit the field.

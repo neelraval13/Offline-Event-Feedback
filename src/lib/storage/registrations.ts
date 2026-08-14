@@ -20,8 +20,8 @@ import { allocatePublicCode } from './sequences'
  * Registration persistence.
  *
  * There is no registration UI in this phase. What exists here is the write path
- * the UI will call, because invariant 1 — no sticker before a durable local
- * save — is a property of this function, not of a form. `createRegistration`
+ * the UI will call, because invariant 1 (no sticker before a durable local
+ * save) is a property of this function, not of a form. `createRegistration`
  * resolves only after IndexedDB has committed; a caller that awaits it and then
  * prints is correct by construction, and one that does not await it is not.
  */
@@ -41,7 +41,7 @@ export type NewRegistrationInput = RecordContext &
  * rider's hand refers to, and a correction that changed any of them would
  * silently detach the record from the physical thing pointing at it.
  *
- * Everything a human can mistype — contact details and campaign answers — is
+ * Everything a human can mistype (contact details and campaign answers) is
  * correctable, because the alternative is staff registering the same rider
  * twice to fix a digit. See docs/flying-flea-campaign.md.
  */
@@ -84,7 +84,7 @@ function campaignFields(
  *
  * Returns the campaign portion of the updated record, and it is a *replacement*
  * for that portion rather than an overlay: a cleared field is left out of the
- * result, so spreading it over the existing record is not enough — the caller
+ * result, so spreading it over the existing record is not enough: the caller
  * deletes the key. See {@link CampaignFieldCorrections} for the three states.
  */
 function applyCampaignCorrections(
@@ -124,7 +124,7 @@ function applyCampaignCorrections(
  *
  * Sequence allocation and the record insert share one readwrite transaction:
  * if the insert fails, the counter rolls back with it, so a failed attempt
- * cannot leave a code issued to nobody or — worse — hand the same code to the
+ * cannot leave a code issued to nobody or, worse, hand the same code to the
  * next participant.
  *
  * The issuer code is derived from `deviceId`, which the caller already supplies
@@ -194,13 +194,13 @@ export async function getRegistrationByPublicCode(
  * patchable: a participant's ID and public code are printed on a sticker they
  * are physically wearing, so changing them locally would silently break the
  * link the whole system rests on. Provenance (`eventId`, `stationId`,
- * `deviceId`, `createdAt`) is equally fixed — it records what happened, not
+ * `deviceId`, `createdAt`) is equally fixed; it records what happened, not
  * what someone would prefer.
  *
  * Correcting contact details returns the record to `pending`, because a record
  * already uploaded now differs from the server's copy and has to go again. A
- * patch that sets `syncStatus` explicitly — which is what the sync engine will
- * do — is taken at its word instead.
+ * patch that sets `syncStatus` explicitly, which is what the sync engine will
+ * do, is taken at its word instead.
  */
 export async function updateRegistration(
   database: OfflineEventDb,

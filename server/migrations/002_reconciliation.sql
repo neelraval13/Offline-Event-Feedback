@@ -1,4 +1,4 @@
--- Offline Event Feedback — reconciliation results, migration 002.
+-- Offline Event Feedback: reconciliation results, migration 002.
 --
 -- Reconciliation is DERIVED data. Everything here is a conclusion about the
 -- rows in `registrations` and `feedback`; nothing here replaces them, and the

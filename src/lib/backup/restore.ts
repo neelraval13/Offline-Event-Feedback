@@ -7,7 +7,7 @@ import type { BackupPayloadV1 } from './format'
  *
  * Restore is a **merge**, never a replace. The destination database is not
  * cleared, because the most likely restore is onto a device that has already
- * started working — and wiping it to make room for older data would destroy
+ * started working, and wiping it to make room for older data would destroy
  * exactly the records nobody has a copy of.
  *
  * The whole merge runs inside one readwrite transaction. Any conflict throws,
@@ -78,7 +78,7 @@ const FEEDBACK_IMMUTABLE = [
  * Transport state, excluded from every merge comparison.
  *
  * `syncStatus` and its companions describe whether a record reached the central
- * server *from this device* — they are not part of the record's contents. Two
+ * server *from this device*; they are not part of the record's contents. Two
  * copies of one registration will routinely disagree here: the source device
  * synced it, the replacement has not. Comparing them would report a conflict
  * for records that are in every meaningful sense identical, and abort a restore
@@ -337,7 +337,7 @@ export async function restoreBackup(
          * Sequences take the maximum, never the backup's value.
          *
          * Lowering a counter would reissue public codes that are already
-         * printed and on participants — the collision Phase 1.1 exists to
+         * printed and on participants: the collision Phase 1.1 exists to
          * prevent, reintroduced by a restore.
          */
         let sequencesMerged = 0
@@ -362,7 +362,7 @@ export async function restoreBackup(
         await database.sequences.bulkPut(sequencesToWrite)
 
         /*
-         * `deviceConfig` is deliberately not imported — not one key.
+         * `deviceConfig` is deliberately not imported, not one key.
          *
          * The destination keeps its own `deviceId`. Cloning the source's would
          * give two independent offline machines the same public-code issuer

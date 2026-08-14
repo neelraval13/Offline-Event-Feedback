@@ -1,4 +1,4 @@
-# Central sync — real Postgres QA
+# Central sync: real Postgres QA
 
 The automated suites exercise ingest semantics against an in-memory store with
 the same atomicity contract as the SQL. What they cannot prove is that the SQL
@@ -33,7 +33,7 @@ random value:
 node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
 ```
 
-Apply the schema deliberately — the server never does this on startup:
+Apply the schema deliberately. The server never does this on startup:
 
 ```bash
 pnpm server:migrate
@@ -73,7 +73,7 @@ Build the client with the API location set:
 VITE_SYNC_API_BASE_URL=http://localhost:8788 pnpm build && pnpm preview
 ```
 
-Open it in **two separate Chrome profiles** — separate profiles, not tabs, so
+Open it in **two separate Chrome profiles**: separate profiles, not tabs, so
 each gets its own IndexedDB and therefore its own device identity. Call them
 **Device A** and **Device B**.
 
@@ -94,7 +94,7 @@ SELECT event_id, uploader_device_id, left(token_hash, 12) AS hash_prefix,
 FROM sync_devices;
 ```
 
-Two rows. **The tokens are not there** — only a SHA-256 hash. Nothing you can
+Two rows. **The tokens are not there**: only a SHA-256 hash. Nothing you can
 replay.
 
 Now try a **wrong** enrolment code on a third profile. Expect *"Device could not
@@ -120,11 +120,11 @@ SELECT count(*) FROM feedback;
 They should match what Admin reported. Then confirm the local statuses flipped:
 `#/admin` shows pending at zero and **Synced** at the same total.
 
-## 6. Sync again — idempotency
+## 6. Sync again: idempotency
 
 Press **Sync now** a second time.
 
-Expect: *"Everything on this device is already synced."* — there is nothing
+Expect: *"Everything on this device is already synced."* There is nothing
 pending, so nothing is sent. Central counts unchanged.
 
 Now force a resend by flipping one record back:
@@ -153,14 +153,14 @@ FROM registrations WHERE record_id = '<the record id>';
 ```
 
 Revision incremented, email updated. The participant ID and public code are
-unchanged — check them.
+unchanged, check them.
 
 ## 8. Feedback before registration
 
 This is the ordering the server must tolerate.
 
-On **Device B**, capture feedback for a participant registered on Device A —
-scan one of A's stickers — but **do not sync Device A first**. Sync Device B.
+On **Device B**: capture feedback for a participant registered on Device A,
+scan one of A's stickers, but **do not sync Device A first**. Sync Device B.
 
 ```sql
 SELECT record_id, public_code, participant_id FROM feedback ORDER BY first_received_at DESC LIMIT 1;
@@ -170,7 +170,7 @@ SELECT count(*) FROM registrations WHERE public_code = '<that public code>';
 The feedback row exists; the registration does not yet. No foreign key blocked
 it. Now sync Device A and confirm the registration inserts normally.
 
-## 9. Restore-aware upload — the mandatory case
+## 9. Restore-aware upload: the mandatory case
 
 Take an encrypted backup on **Device A** (`#/admin` → **Create encrypted
 backup**), then restore it onto **Device B** following
@@ -186,8 +186,8 @@ ORDER BY last_received_at DESC LIMIT 5;
 
 **Expected, and the point of the whole exercise:**
 
-- `source_device_id` is **Device A** — provenance survives recovery
-- `last_uploader_device_id` is **Device B** — delivery is recorded separately
+- `source_device_id` is **Device A**: provenance survives recovery
+- `last_uploader_device_id` is **Device B**: delivery is recorded separately
 
 If the server had required `record.deviceId` to equal the uploader, recovered
 records would be permanently unsyncable.
@@ -225,7 +225,7 @@ Expect:
 > Sync could not reach the central server. Your local records are safe and
 > remain pending. Try again when connectivity is available.
 
-Confirm the records are still `pending`, not `error` — nothing is known to be
+Confirm the records are still `pending`, not `error`; nothing is known to be
 wrong with them. Open `#/a` and `#/b` and confirm both work normally. Restart
 the server and sync again; the records go up.
 
@@ -250,18 +250,18 @@ header. If any appears, treat it as a privacy defect.
 
 | Step | Result |
 | --- | --- |
-| 1 — migrations apply, re-run is a no-op | |
-| 4 — tokens stored hashed only | |
-| 5 — central counts match local | |
-| 6 — second sync sends nothing | |
-| 7 — higher revision accepted, identity unchanged | |
-| 8 — feedback before registration accepted | |
-| 9 — source device A, uploader device B | |
-| 10 — two feedback rows for one code | |
-| 11 — conflict marked locally, central row untouched | |
-| 12 — records stay pending, A and B keep working | |
-| 13 — revoked device rejected | |
-| 14 — no PII in logs | |
+| 1: migrations apply, re-run is a no-op | |
+| 4: tokens stored hashed only | |
+| 5: central counts match local | |
+| 6: second sync sends nothing | |
+| 7: higher revision accepted, identity unchanged | |
+| 8: feedback before registration accepted | |
+| 9: source device A, uploader device B | |
+| 10: two feedback rows for one code | |
+| 11: conflict marked locally, central row untouched | |
+| 12: records stay pending, A and B keep working | |
+| 13: revoked device rejected | |
+| 14: no PII in logs | |
 
 ## Known limitations
 

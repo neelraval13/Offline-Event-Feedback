@@ -10,7 +10,7 @@ import type { RoutePath } from '../lib/routing/hashRoute'
  *
  * Every other surface has to survive the network disappearing mid-shift, so it
  * is compiled into the eager bundle. Reporting cannot work without the network
- * by definition, and it never runs on a station device — so keeping it out of
+ * by definition, and it never runs on a station device, so keeping it out of
  * the startup bundle means a tablet parses less code at every cold start and
  * carries no participant-browsing UI at all until someone asks for it.
  *
@@ -43,14 +43,14 @@ export const ROUTES: readonly RouteDefinition[] = [
   },
   {
     path: '/a',
-    title: 'Point A — Registration',
+    title: 'Point A: Registration',
     navLabel: 'Point A',
     showInNav: true,
     render: () => <RegistrationScreen />,
   },
   {
     path: '/b',
-    title: 'Point B — Feedback',
+    title: 'Point B: Feedback',
     navLabel: 'Point B',
     showInNav: true,
     render: () => <FeedbackScreen />,

@@ -72,7 +72,7 @@ describe('offline readiness', () => {
 
   it('is ready on a repeat visit, where offline-ready never fires again', () => {
     // Workbox reports onOfflineReady once, on first install. On every later
-    // load the only evidence is that a worker is controlling the page — which
+    // load the only evidence is that a worker is controlling the page, which
     // means the shell is being served from cache right now.
     const { shell, io } = harness()
     io.controller = true
@@ -240,7 +240,7 @@ describe('subscriptions', () => {
 describe('describeReadiness', () => {
   it('speaks to staff, not developers', () => {
     expect(describeReadiness('ready')).toBe('Ready for offline use')
-    expect(describeReadiness('failed')).toContain('connect this device')
+    expect(describeReadiness('failed')).toContain('Connect this device')
 
     for (const readiness of [
       'ready',

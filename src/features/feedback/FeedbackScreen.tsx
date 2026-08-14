@@ -13,7 +13,7 @@ interface FeedbackScreenProps {
 }
 
 /**
- * Point B — the scanner and feedback terminal.
+ * Point B: the scanner and feedback terminal.
  *
  * Everything on this screen comes from the sticker in front of the operator.
  * It never reads Point A's registrations, never asks the network, and never
@@ -155,7 +155,7 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
           {state.status === 'feedback' && state.saveError !== null && (
             <p className="notice notice--error" role="alert">
               Feedback was <strong>not</strong> saved: {state.saveError}. Please
-              try submitting again — the answers below are still here.
+              try submitting again. The answers below are still here.
             </p>
           )}
 

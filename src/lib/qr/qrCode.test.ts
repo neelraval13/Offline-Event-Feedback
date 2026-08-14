@@ -36,8 +36,8 @@ function contractPayload(): string {
 
 /*
  * Payload lengths chosen to land on specific QR versions at EC level M.
- * The printed payload is 41x41 today, but its size depends on its content —
- * the encoder packs digits and uppercase far denser than arbitrary bytes — so
+ * The printed payload is 41x41 today, but its size depends on its content:
+ * the encoder packs digits and uppercase far denser than arbitrary bytes, so
  * a longer event ID or public code would push it to 45x45. That is exactly the
  * transition that broke printing, so both are pinned here.
  */
@@ -199,7 +199,7 @@ describe('the identity contract survives rendering', () => {
      * UUIDs into numeric segments while letter-heavy ones fall back to byte
      * mode. Measured over 3,000 real payloads, ~14% land on 41x41 and ~86% on
      * 45x45. Consecutive participants therefore get different matrix sizes at
-     * random — which is why one sticker printed correctly and the next did not.
+     * random, which is why one sticker printed correctly and the next did not.
      */
     const sizes = new Set<number>()
     for (let i = 0; i < 400; i += 1) {
@@ -216,7 +216,7 @@ describe('the identity contract survives rendering', () => {
 
   it('still renders once the payload grows past the 41x41 boundary', () => {
     // A longer event ID pushes the symbol to the next version. It must print,
-    // not degrade — that is the whole point of this fix.
+    // not degrade; that is the whole point of this fix.
     const payload = serializeQrPayload(
       buildQrPayload({
         eventId: eventId('evt-a-considerably-longer-event-identifier-2026'),

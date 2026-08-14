@@ -1,4 +1,4 @@
-# Reconciliation — real Postgres QA
+# Reconciliation: real Postgres QA
 
 Reconciliation reads the canonical central tables and writes conclusions about
 them somewhere else. This pass proves it against a real database, on the data
@@ -12,8 +12,8 @@ Reconciliation never edits, merges or deletes any of them. Every conclusion goes
 into a `reconciliation_*` table, and if a conclusion is later found to be wrong,
 the evidence is still there to re-derive from.
 
-**It classifies; it does not resolve.** Where the data is ambiguous — two
-responses for one participant, two registrations that might be one person — it
+**It classifies; it does not resolve.** Where the data is ambiguous (two
+responses for one participant, two registrations that might be one person), it
 says so and stops. Choosing a winner would record a guess as a fact.
 
 **A run is a snapshot.** Feedback classified `without_registration` on Monday
@@ -22,7 +22,7 @@ runs are never overwritten.
 
 ## Setup
 
-Use the Phase 6 test database — it already contains useful cases.
+Use the Phase 6 test database; it already contains useful cases.
 
 ```bash
 export DATABASE_URL=postgres://localhost:5432/offline_event_feedback_test
@@ -48,7 +48,7 @@ Five relations: three result tables, the runs table, and the
 pnpm server:reconcile -- --event evt-dev-001
 ```
 
-The output is counts only — no name, phone number, email address, comment or
+The output is counts only: no name, phone number, email address, comment or
 answer. Confirm that by reading it.
 
 Check the arithmetic, which must always hold:
@@ -78,7 +78,7 @@ SELECT md5(string_agg(record_id::text || revision::text || answers::text, ','
 ```
 
 Run reconciliation again. Both fingerprints must be identical. In particular,
-check that a manual feedback record still has `participant_id IS NULL` — the
+check that a manual feedback record still has `participant_id IS NULL`: the
 relationship lives in the derived result, and the raw row keeps saying exactly
 what the device captured:
 
@@ -135,7 +135,7 @@ chosen: device clocks are not aligned across machines, and `first_received_at`
 records when a device found a connection, not when a participant answered.
 Neither is authority, so the ambiguity is reported rather than resolved.
 
-## 4. Fixture — a deliberate duplicate registration
+## 4. Fixture: a deliberate duplicate registration
 
 Create two registrations for the same person, with distinct record IDs,
 participant IDs and public codes but identical contact details. Sync them from a
@@ -171,7 +171,7 @@ WHERE run_id = (SELECT run_id FROM reconciliation_latest_runs
 
 **Expected:** exactly one row, `match_basis = phone_and_email`, and the pair
 stored once in canonical order. Not two rows, and not also `phone_only` and
-`email_only` — a reviewer should see one candidate, not three.
+`email_only`: a reviewer should see one candidate, not three.
 
 **Also expected:** both registrations still exist as independent records.
 
@@ -183,7 +183,7 @@ A candidate means *these may be the same person*. Families share phone numbers
 and couples share email accounts. Nothing is ever merged automatically, and
 Phase 7 provides no way to merge anything at all.
 
-## 5. Fixture — feedback that arrives first
+## 5. Fixture: feedback that arrives first
 
 Insert feedback whose public code has no registration:
 
@@ -201,7 +201,7 @@ INSERT INTO feedback (
 );
 ```
 
-Re-run reconciliation. The record is `without_registration` — which is not
+Re-run reconciliation. The record is `without_registration`, which is not
 necessarily an error. The Point A device may simply not have synced yet.
 
 Now add the missing registration with `public_code = 'A1-ORPHAN-00001-X'` and
@@ -262,7 +262,7 @@ towards neither registration's `valid_feedback_count`.
 
 The QR contract says both identifiers describe the same person. When they
 disagree, preferring one silently would bury evidence that something upstream
-produced an inconsistent sticker or record — so the disagreement itself is the
+produced an inconsistent sticker or record, so the disagreement itself is the
 finding.
 
 ## What to record
@@ -290,7 +290,7 @@ finding.
 - **Exact matching only.** Duplicate candidates come from exactly equal
   normalised phone or email. No fuzzy names, no nicknames, no transposed digits.
 - **Normalisation is deliberately minimal.** A missing country code is not
-  inferred and no provider-specific email rules are applied — see the
+  inferred and no provider-specific email rules are applied; see the
   architecture notes for why.
 - **A shared contact value produces a pair for every combination in the group.**
   A group of *k* registrations sharing one phone number yields *k(k-1)/2*

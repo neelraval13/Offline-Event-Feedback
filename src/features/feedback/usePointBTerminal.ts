@@ -93,8 +93,8 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
   const mountedRef = useRef(true)
 
   /*
-   * The latch. A stationary sticker decodes on every video frame — dozens of
-   * callbacks for one participant — so acceptance is gated on a ref that flips
+   * The latch. A stationary sticker decodes on every video frame, dozens of
+   * callbacks for one participant, so acceptance is gated on a ref that flips
    * synchronously, before any await. React state cannot do this job: it
    * updates on the next render, by which time five more frames have arrived.
    */
@@ -203,7 +203,7 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
         video,
         onDecode: handleDecode,
         /*
-         * Fatal only. Frames that fail to decode never arrive here — they are
+         * Fatal only. Frames that fail to decode never arrive here; they are
          * the normal condition of a scan loop, and treating them as faults is
          * what previously killed the camera on its first frame.
          */
@@ -224,7 +224,7 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     }
 
     if (!mountedRef.current) {
-      // Unmounted while the permission prompt was open — do not leak the stream.
+      // Unmounted while the permission prompt was open, do not leak the stream.
       void scanner.dispose()
       return
     }

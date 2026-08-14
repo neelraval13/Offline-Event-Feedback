@@ -6,7 +6,7 @@ import type { DuplicateCandidateRow, RunDescriptor } from './types'
  *
  * Participant text is untrusted spreadsheet input. A comment beginning `=` or a
  * phone number beginning `+` is interpreted by Excel, Numbers and Google Sheets
- * as a **formula**, not as text — which at worst can invoke external calls when
+ * as a **formula**, not as text, which at worst can invoke external calls when
  * the recipient opens the file, and at best silently mangles the value into
  * `#NAME?`.
  *
@@ -244,7 +244,7 @@ export function duplicateCandidatesCsv(
 }
 
 /**
- * A filename carrying an event, a kind and a date — never a participant.
+ * A filename carrying an event, a kind and a date, never a participant.
  *
  * Filenames are visible in a downloads folder, an email client and a backup
  * log, long before anyone opens the file.

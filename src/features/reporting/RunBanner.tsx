@@ -30,7 +30,7 @@ export function RunBanner({ overview, context }: RunBannerProps) {
     <>
       {isHistoricalRun && (
         <p className="notice notice--warning" role="status">
-          <strong>Viewing a historical run</strong> — reconciled{' '}
+          <strong>Viewing a historical run</strong>, reconciled{' '}
           {completed}. Every status, count and anomaly on this screen is that
           run&rsquo;s conclusion, not the current one. Names, phone numbers,
           email addresses and answers are the <strong>current</strong> canonical

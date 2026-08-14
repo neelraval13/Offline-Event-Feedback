@@ -58,32 +58,32 @@ export function LocalDataPanel({ refreshToken = 0 }: { readonly refreshToken?: n
         <div>
           <dt>Registrations</dt>
           <dd data-testid="count-registrations">
-            {counts === null ? '—' : format(counts.registrations.total)}
+            {counts === null ? 'Counting…' : format(counts.registrations.total)}
           </dd>
         </div>
         <div>
           <dt>Feedback</dt>
           <dd data-testid="count-feedback">
-            {counts === null ? '—' : format(counts.feedback.total)}
+            {counts === null ? 'Counting…' : format(counts.feedback.total)}
           </dd>
         </div>
         <div>
           <dt>Pending registrations</dt>
           <dd data-testid="count-registrations-pending">
-            {counts === null ? '—' : format(counts.registrations.pending)}
+            {counts === null ? 'Counting…' : format(counts.registrations.pending)}
           </dd>
         </div>
         <div>
           <dt>Pending feedback</dt>
           <dd data-testid="count-feedback-pending">
-            {counts === null ? '—' : format(counts.feedback.pending)}
+            {counts === null ? 'Counting…' : format(counts.feedback.pending)}
           </dd>
         </div>
         <div>
           <dt>Synced</dt>
           <dd data-testid="count-synced">
             {counts === null
-              ? '—'
+              ? 'Counting…'
               : format(counts.registrations.synced + counts.feedback.synced)}
           </dd>
         </div>
@@ -91,7 +91,7 @@ export function LocalDataPanel({ refreshToken = 0 }: { readonly refreshToken?: n
           <dt>Errors</dt>
           <dd data-testid="count-error">
             {counts === null
-              ? '—'
+              ? 'Counting…'
               : format(counts.registrations.error + counts.feedback.error)}
           </dd>
         </div>

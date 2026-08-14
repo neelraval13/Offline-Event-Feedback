@@ -23,7 +23,7 @@ import type { Sql } from 'postgres'
  * The central ingest API.
  *
  * Write-oriented by design. There is no endpoint that returns a record, a
- * participant or a count of them — consolidation is the goal of this phase, and
+ * participant or a count of them: consolidation is the goal of this phase, and
  * reading central data back is a later one with different privacy questions.
  *
  * Nothing here logs a request body, a token, an Authorization header or an
@@ -41,7 +41,7 @@ export interface AppOptions {
   readonly checkDatabase?: () => Promise<boolean>
   /*
    * Reporting is mounted only when a database handle is supplied. It reads
-   * central PII and is entirely separate from ingest — different credential,
+   * central PII and is entirely separate from ingest, different credential,
    * different module, different failure mode. Sync works with or without it.
    */
   readonly sql?: Sql
@@ -169,7 +169,7 @@ export function createApp(options: AppOptions) {
     }
 
     /*
-     * A malformed envelope rejects the whole request — there is no sensible
+     * A malformed envelope rejects the whole request; there is no sensible
      * per-record answer when the batch itself cannot be understood. Individual
      * records inside a well-formed batch are a different matter.
      */

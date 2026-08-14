@@ -9,7 +9,7 @@ import { db, type OfflineEventDb } from '../storage'
  * It is deliberately **excluded from backups**. A credential is not event data:
  * restoring it onto a replacement machine would hand a second device the first
  * one's upload identity, and a backup file would become a reusable server
- * credential in anyone's hands. A replacement enrols itself — see
+ * credential in anyone's hands. A replacement enrols itself, see
  * `EXCLUDED_FROM_BACKUP_KEYS`.
  */
 
@@ -23,7 +23,7 @@ export const LAST_SYNC_ERROR_KEY = 'lastSyncError'
  * `deviceConfig` keys a backup must never carry.
  *
  * Only the credential. `deviceId` stays in the backup exactly as Phase 5
- * requires — it is provenance, and the payload records where data came from.
+ * requires; it is provenance, and the payload records where data came from.
  */
 export const EXCLUDED_FROM_BACKUP_KEYS: readonly string[] = [SYNC_TOKEN_KEY]
 

@@ -47,7 +47,7 @@ import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './types'
  *
  * `run_id` and `record_id` are `uuid` columns and cursors are cast to
  * `timestamptz` and `uuid`. A malformed value handed to Postgres is an error,
- * which surfaces as a 500 — the wrong answer for a bad request, noisy in the
+ * which surfaces as a 500: the wrong answer for a bad request, noisy in the
  * logs, and a channel for probing the schema through error behaviour. A client
  * that sends nonsense gets `400 invalid_request` and learns nothing else.
  */
@@ -61,7 +61,7 @@ const cursor = z
   .max(512)
   .refine((value) => parseCursor(value) !== null, 'not a cursor')
 
-/** Query-string parameters, which are only ever ids — never a search term. */
+/** Query-string parameters, which are only ever ids, never a search term. */
 const idQuerySchema = z.object({
   eventId,
   runId: optionalRunId,
@@ -138,7 +138,7 @@ export function createReportingRoutes(options: ReportingOptions) {
     )
 
     /*
-     * No participant data may be cached anywhere — not by the browser, not by
+     * No participant data may be cached anywhere, not by the browser, not by
      * a proxy, not by a shared machine's disk cache. Set before the handler so
      * the headers are present on error responses too.
      */
@@ -365,7 +365,7 @@ export function createReportingRoutes(options: ReportingOptions) {
     /*
      * The run's own count is the truth about how many pairs exist. Reporting a
      * page of 50 with no hint that there were 300 would read as "that is all of
-     * them" — so the total travels with the page, and the CSV export is the
+     * them", so the total travels with the page, and the CSV export is the
      * complete list.
      */
     const total = run.counts.duplicateRegistrationCandidateCount
@@ -381,7 +381,7 @@ export function createReportingRoutes(options: ReportingOptions) {
   /**
    * Runs reconciliation on demand.
    *
-   * The only writing endpoint in reporting, and it writes nothing itself — it
+   * The only writing endpoint in reporting, and it writes nothing itself; it
    * calls the Phase 7 implementation unchanged. Never automatic: an operator
    * asks for it, having seen that the data has moved.
    */

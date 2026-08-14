@@ -10,8 +10,8 @@ import { FLYING_FLEA_CAMPAIGN } from './config'
 /*
  * `flying-flea-feedback-v1`: draft to stored answers.
  *
- * The four ratings are required — they are the entire point of the campaign's
- * feedback capture — and the two free-text answers are not. A rider who has
+ * The four ratings are required (they are the entire point of the campaign's
+ * feedback capture) and the two free-text answers are not. A rider who has
  * just got off a motorcycle and wants to leave is not going to be held at the
  * tablet for a paragraph.
  *
@@ -63,7 +63,7 @@ export { FLYING_FLEA_FORM_VERSION }
  * Validates a draft and produces the answers to persist.
  *
  * The rating check is `isRating1To7` rather than a null check, so a value that
- * somehow arrived as 2.5 or 8 — a future control, a restored draft, a bug — is
+ * somehow arrived as 2.5 or 8 (a future control, a restored draft, a bug) is
  * refused here instead of becoming an average nobody can explain.
  */
 export function validateCampaignFeedback(

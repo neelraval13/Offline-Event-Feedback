@@ -105,7 +105,7 @@ export async function countFeedback(database: OfflineEventDb): Promise<number> {
  *
  * Scoped to this device on purpose. Point B terminals are independent offline
  * clients with no way to see each other's records, so this catches the mistake
- * that actually happens — the same operator scanning the same sticker twice —
+ * that actually happens, the same operator scanning the same sticker twice,
  * and makes no claim about the event as a whole. Reconciling duplicates across
  * devices is the central server's job after synchronisation.
  */

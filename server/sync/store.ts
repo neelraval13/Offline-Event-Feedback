@@ -8,7 +8,7 @@ import type {
  *
  * The interface exists so the merge semantics can be exercised exhaustively
  * without a database, and so the SQL implementation has one narrow surface to
- * get right. It does not exist to abstract Postgres away — the real
+ * get right. It does not exist to abstract Postgres away: the real
  * implementation leans on Postgres constraints deliberately, because that is
  * what makes concurrent ingest safe.
  */
@@ -36,7 +36,7 @@ export interface EnrolledDevice {
  * Outcome of an attempted insert.
  *
  * `claimed` means a *different* record already owns the participant ID or the
- * public code — a genuine conflict rather than a retry.
+ * public code: a genuine conflict rather than a retry.
  */
 export type InsertOutcome =
   | { readonly outcome: 'inserted' }

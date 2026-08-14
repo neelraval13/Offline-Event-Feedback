@@ -20,13 +20,13 @@ const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const DEVICE_A = deviceId('11111111-2222-4333-8444-555555555555')
 const DEVICE_B = deviceId('99999999-8888-4777-8666-555555555555')
 
-/** Station A1 as operated by device A — issuer B8EFD9. */
+/** Station A1 as operated by device A: issuer B8EFD9. */
 const A1: CodeIssuer = {
   stationId: stationId('A1'),
   issuerCode: deriveIssuerCode(DEVICE_A),
 }
 
-/** The same station, a second physical device — issuer 6091A1. */
+/** The same station, a second physical device: issuer 6091A1. */
 const A1_SECOND_DEVICE: CodeIssuer = {
   stationId: stationId('A1'),
   issuerCode: deriveIssuerCode(DEVICE_B),

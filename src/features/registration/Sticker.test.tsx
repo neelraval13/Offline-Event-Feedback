@@ -25,7 +25,7 @@ describe('Sticker', () => {
   })
 
   it('has no way to receive PII', () => {
-    // The component's props are a code and pre-rendered markup — there is no
+    // The component's props are a code and pre-rendered markup; there is no
     // registration record in scope, so a name cannot reach a label even by
     // accident. This test exists to fail loudly if someone widens the props.
     render(<Sticker qrSvg={QR} publicCode={CODE} />)

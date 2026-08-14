@@ -32,7 +32,7 @@ export interface EventConfig {
  * it as typed configuration rather than inline literals is that every record
  * written in the field is stamped with event/day/station identity, so adding a
  * second event, day or station later is a configuration and data-loading
- * change — not a redesign of participant identity.
+ * change, not a redesign of participant identity.
  *
  * `deviceId` is deliberately NOT here. A station is an operational post that
  * this configuration names; a device is a physical browser installation that

@@ -279,7 +279,7 @@ describeDb('reconciliation against Postgres', () => {
       /*
        * A foreign-key violation part-way through the inserts. The run row, the
        * results written before it and the completion stamp all roll back
-       * together — a half-written run must never look like a finished one.
+       * together: a half-written run must never look like a finished one.
        */
       await seedRegistration()
       const before = await listRuns(sql, EVENT_ID)
@@ -376,7 +376,7 @@ describeDb('reconciliation against Postgres', () => {
       const feedbackId = await seedFeedback({ publicCode: registration.publicCode })
 
       // Hide the registration from the first run by reconciling a different
-      // event, then reveal it — simulating Point A syncing later.
+      // event, then reveal it, simulating Point A syncing later.
       await sql`DELETE FROM registrations WHERE record_id = ${registration.recordId}`
       const first = await runReconciliation(sql, EVENT_ID)
       expect((await getFeedbackResults(sql, first.runId))[0]?.status).toBe(

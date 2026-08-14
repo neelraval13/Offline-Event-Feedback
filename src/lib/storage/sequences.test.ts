@@ -154,7 +154,7 @@ describe('allocatePublicCode', () => {
 describe('two independent devices at station A1', () => {
   /*
    * The scenario Phase 1.1 exists for. Each device has its own IndexedDB and
-   * cannot see the other — exactly the situation at the event — so both count
+   * cannot see the other, exactly the situation at the event, so both count
    * from 1. Before the issuer segment they printed identical codes.
    */
   it('generate large batches with no overlapping public codes', async () => {
@@ -174,7 +174,7 @@ describe('two independent devices at station A1', () => {
       expect(one[0]?.publicCode).toBe('A1-B8EFD9-00001-X')
       expect(two[0]?.publicCode).toBe('A1-6091A1-00001-C')
 
-      // The counters really do collide — both devices work through very nearly
+      // The counters really do collide; both devices work through very nearly
       // the same sequence numbers, because neither can see the other. This is
       // the collision that used to reach the sticker.
       const sequencesFromOne = new Set(one.map((a) => a.sequence))

@@ -9,7 +9,7 @@ import { normalisePastedPhone } from '../registrationForm'
  * The numeric cluster.
  *
  * The reference's version is keypad-only. This one looks the same and behaves
- * like a text field, because Point A is staff-operated with a rider waiting —
+ * like a text field, because Point A is staff-operated with a rider waiting,
  * so the tests that matter most here are the ones about typing, pasting and
  * deleting, none of which the reference supports.
  */
@@ -19,7 +19,7 @@ afterEach(cleanup)
 /**
  * A controlled wrapper, the way the form uses the control.
  *
- * The component is deliberately controlled — the form owns the draft — so a
+ * The component is deliberately controlled, the form owns the draft, so a
  * test that did not re-render on every change would only ever see one keystroke.
  */
 function Harness(props: {
@@ -91,7 +91,7 @@ describe('the control is a real input', () => {
   })
 
   it('is a text input in numeric mode, not a number input', () => {
-    // `type="number"` strips leading zeros — fatal for a pincode — and adds
+    // `type="number"` strips leading zeros, fatal for a pincode, and adds
     // spinners nobody wants on a phone number.
     const { field } = setup({ length: 6, label: 'Pincode' })
 

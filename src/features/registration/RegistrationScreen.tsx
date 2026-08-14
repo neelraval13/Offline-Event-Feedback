@@ -22,7 +22,7 @@ import type { RegistrationFormValues } from './validation'
  * Re-opens a saved registration for correction.
  *
  * Every campaign answer is carried back into the form, so a correction to one
- * field cannot silently blank the rest — `undefined` on a record means "not
+ * field cannot silently blank the rest, `undefined` on a record means "not
  * captured", and a form that started empty would write that back as an erasure.
  */
 function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
@@ -45,7 +45,7 @@ function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
 }
 
 /**
- * Point A — the registration terminal.
+ * Point A: the registration terminal.
  *
  * Two states share the screen: taking a participant's details, and dealing with
  * the sticker for the one just saved. They are kept visually distinct because
@@ -107,7 +107,7 @@ export function RegistrationScreen() {
       {deviceError !== null && (
         <p className="notice notice--error" role="alert">
           This device cannot reach local storage: {deviceError}. Do not register
-          participants until this is resolved — nothing can be saved.
+          participants until this is resolved. Nothing can be saved.
         </p>
       )}
 
@@ -120,7 +120,7 @@ export function RegistrationScreen() {
           {phase.status === 'save-failed' && (
             <p className="notice notice--error" role="alert">
               Could not save this registration: {phase.message}. Nothing was
-              written and no sticker was produced — check the details and try
+              written and no sticker was produced. Check the details and try
               again.
             </p>
           )}
@@ -155,7 +155,7 @@ export function RegistrationScreen() {
           {phase.sticker.status === 'failed' && (
             <div className="notice notice--error" role="alert">
               <p>
-                The registration is saved — do <strong>not</strong> register
+                The registration is saved, so do <strong>not</strong> register
                 this participant again. Only the sticker image failed to
                 render: {phase.sticker.message}
               </p>
@@ -184,7 +184,7 @@ export function RegistrationScreen() {
               />
               <p className="screen__note">
                 Printing cannot be confirmed by the browser. If the label did
-                not come out, or came out badly, print it again — it will be
+                not come out, or came out badly, print it again; it will be
                 the same sticker.
               </p>
             </>
@@ -233,7 +233,7 @@ export function RegistrationScreen() {
                 A registration captured before this campaign has no vehicle, no
                 colour and no venue, because nobody was asked. Correcting it
                 through the campaign form would demand all three and default the
-                colour — so an operator fixing a typo in an email address would
+                colour, so an operator fixing a typo in an email address would
                 save a bike, a colour and a venue that this rider never chose.
                 Legacy records therefore keep the generic contact-details form.
               */}
@@ -281,8 +281,8 @@ interface RecentRegistrationsProps {
 /**
  * Recent local registrations, newest first.
  *
- * This is the recovery path, not a dashboard: after a refresh — or after
- * noticing three participants later that a label never came out — staff needs
+ * This is the recovery path, not a dashboard: after a refresh, or after
+ * noticing three participants later that a label never came out, staff needs
  * to reach an earlier sticker and print it again. It shows public codes and
  * times only. No names, because a list of participant names on a desk-facing
  * screen is a privacy leak that buys nothing here.

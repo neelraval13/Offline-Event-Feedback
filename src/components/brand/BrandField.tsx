@@ -3,8 +3,8 @@ import { useId, type ReactNode } from 'react'
 /*
  * A labelled campaign field.
  *
- * The styling in the supplied design is heavy — uppercase, letter-spaced, muted
- * — and it would be easy to render it as a styled `<div>`. This deliberately
+ * The styling in the supplied design is heavy, uppercase, letter-spaced, muted,
+ * and it would be easy to render it as a styled `<div>`. This deliberately
  * does not: it emits a real `<label for>`, wires `aria-describedby` to the error
  * and hint, and sets `aria-invalid`, so the field stays operable by keyboard and
  * announceable by a screen reader. Brand styling changes what a control looks

@@ -1,4 +1,4 @@
--- Offline Event Feedback — rebase the content-change clock, migration 006.
+-- Offline Event Feedback: rebase the content-change clock, migration 006.
 --
 -- Every `content_changed_at` value written before the ingest fix came from the
 -- API process's clock. Reporting compares that column against
@@ -8,14 +8,14 @@
 -- 14:03:11 looks identical whether the API host was correct or forty seconds
 -- fast.
 --
--- Migration 005 dealt with the half of that problem which is visibly impossible —
+-- Migration 005 dealt with the half of that problem which is visibly impossible,
 -- stamps in the future. This deals with the half that is invisible.
 --
 -- ## The failure being closed
 --
 -- An API clock running BEHIND the database understates a content change: a
 -- revision accepted after a run can carry a timestamp from before it. Freshness
--- then reports `dataChangedSinceRun = false` — the run says it still describes
+-- then reports `dataChangedSinceRun = false`: the run says it still describes
 -- the event when it does not, and an operator exports a report that is quietly
 -- missing a correction. A warning that fails to appear is worse than one that
 -- appears too often, because nothing about the screen invites a second look.

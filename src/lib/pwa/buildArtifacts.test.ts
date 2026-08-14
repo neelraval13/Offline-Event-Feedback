@@ -6,7 +6,7 @@ import { join } from 'node:path'
  * Checks the real production output.
  *
  * `pnpm build` already runs `scripts/verify-pwa-build.mjs`, which is the
- * authoritative gate — a build that cannot cold-start offline fails there. This
+ * authoritative gate: a build that cannot cold-start offline fails there. This
  * mirror exists so the same guarantees show up in the test report, and it is
  * skipped when `dist/` is absent so a clean checkout can still run `pnpm test`.
  *
@@ -21,7 +21,7 @@ const describeBuild = built ? describe : describe.skip
 
 if (!built) {
   console.info(
-    'PWA build artifacts: skipped (no dist/ — run `pnpm build` to include these checks)',
+    'PWA build artifacts: skipped (no dist/; run `pnpm build` to include these checks)',
   )
 }
 
@@ -108,7 +108,7 @@ describeBuild('production PWA artifacts', () => {
     /*
      * Under `/api` the API shares an origin with the app, which is exactly when
      * a stray glob or a navigation fallback could start answering API requests
-     * from the cache — a stale upload result, or a participant's details served
+     * from the cache: a stale upload result, or a participant's details served
      * from disk after the operator signed out.
      */
     const source = sw()
@@ -163,7 +163,7 @@ describeBuild('production PWA artifacts', () => {
 
   it('ships web derivatives rather than photographic masters', () => {
     /*
-     * The supplied banner master is 5913x3140 — about 74 MB of decoded image on
+     * The supplied banner master is 5913x3140: about 74 MB of decoded image on
      * a tablet, to fill a strip a few hundred pixels tall. The master is kept
      * outside the application in `design/assets/`.
      */
@@ -269,7 +269,7 @@ describeBuild('production PWA artifacts', () => {
   it('would notice a secret that had been compiled in', () => {
     /*
      * A guard on the guard, using a synthetic sentinel: the check above is only
-     * worth having if it would actually fail. No real secret is involved — the
+     * worth having if it would actually fail. No real secret is involved: the
      * point is that scanning the bundle for a known string works.
      */
     const sentinel = 'SYNTHETIC_SECRET_DO_NOT_USE_9f3a'
@@ -319,7 +319,7 @@ describeBuild('production PWA artifacts', () => {
      * separately fails a production build that points at plain HTTP.
      *
      * A production build configures it as the same-origin path `/api`, which has
-     * no host at all — there is nothing to exempt, and nothing to parse. Passing
+     * no host at all; there is nothing to exempt, and nothing to parse. Passing
      * it to `new URL()` throws, which is how this test failed the first time a
      * production-shaped build was run through it.
      */

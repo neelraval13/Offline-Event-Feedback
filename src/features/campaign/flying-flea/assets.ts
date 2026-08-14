@@ -6,7 +6,7 @@ import type { FlyingFleaColour } from '../../../types'
  * Plain constants. These files are part of the application: they ship in
  * `public/assets/flying-flea/`, they are precached with the shell, and a build
  * without them is a broken build rather than a degraded one. So there is no
- * existence check, no probe and no fallback — asking at runtime whether an asset
+ * existence check, no probe and no fallback, asking at runtime whether an asset
  * this application owns happens to be present would be answering a question
  * that cannot be yes-or-no in production.
  *

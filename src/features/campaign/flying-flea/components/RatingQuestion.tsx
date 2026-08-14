@@ -5,7 +5,7 @@ import { SevenPointRating } from './SevenPointRating'
 /*
  * One campaign rating question: the wording, the scale, and its error.
  *
- * The prompt carries an id so the scale can point at it with `aria-labelledby` —
+ * The prompt carries an id so the scale can point at it with `aria-labelledby`:
  * the question a rider is answering has to be the question a screen reader
  * announces alongside the lamps.
  */

@@ -14,7 +14,7 @@ import type {
 /*
  * ZXing adapter.
  *
- * `BrowserQRCodeReader` decodes QR only — the multi-format readers try every
+ * `BrowserQRCodeReader` decodes QR only: the multi-format readers try every
  * barcode symbology on every frame, which costs CPU on a tablet and can only
  * produce results this app would reject anyway.
  *
@@ -53,12 +53,12 @@ function scannerError(kind: ScannerErrorKind): ScannerError {
  * looks at. `NotFoundException` means "no QR in this frame", which is the
  * normal state of a camera pointed at a desk; `ChecksumException` and
  * `FormatException` mean a candidate symbol was spotted but could not be
- * validated or decoded — a sticker at a bad angle, half out of frame, or
+ * validated or decoded: a sticker at a bad angle, half out of frame, or
  * blurred by motion. ZXing itself treats all three as retryable.
  *
  * Classification is by `instanceof`, not by name. `@zxing/library` builds its
  * exceptions on `ts-custom-error`, which sets `name` from the *constructor
- * function's* name — so a minified production build reports `name` as whatever
+ * function's* name, so a minified production build reports `name` as whatever
  * single letter the bundler chose, and any string comparison against
  * 'NotFoundException' silently stops matching. That is precisely the bug this
  * replaced.
@@ -228,7 +228,7 @@ class ZxingQrScanner implements QrScanner {
             return
           }
 
-          // Unfamiliar, so worth surfacing — but still not a reason to stop.
+          // Unfamiliar, so worth surfacing, but still not a reason to stop.
           options.onDecodeIssue?.(error)
         },
       )
@@ -245,7 +245,7 @@ class ZxingQrScanner implements QrScanner {
    * The genuine mid-shift fault signal.
    *
    * A camera that is unplugged, or seized by another application, ends its
-   * track. That — not a decoder exception — is what "the camera died" actually
+   * track. That, not a decoder exception, is what "the camera died" actually
    * looks like, and it is the only thing besides a failed start that may reach
    * `onFatalError`.
    */

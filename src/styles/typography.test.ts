@@ -15,8 +15,8 @@ import { join } from 'node:path'
 /**
  * CSS with comments removed.
  *
- * These files explain at length what they deliberately do NOT do — load Anton,
- * reach fonts.googleapis.com — and an assertion that read the prose would fail
+ * These files explain at length what they deliberately do NOT do (load Anton,
+ * reach fonts.googleapis.com), and an assertion that read the prose would fail
  * on its own documentation. Declarations are what is under test.
  */
 function withoutComments(css: string): string {
@@ -138,7 +138,7 @@ describe('components consume the tokens', () => {
   it('keeps the printed sticker off the campaign faces entirely', () => {
     /*
      * The sticker is printed and scanned. It must render identically whether or
-     * not a web font loaded, so it uses a system stack and a monospace code —
+     * not a web font loaded, so it uses a system stack and a monospace code,
      * branding on a label is worth nothing next to a code staff can read back.
      */
     expect(stylesheet).toMatch(
