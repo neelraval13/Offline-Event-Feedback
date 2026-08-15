@@ -34,4 +34,22 @@ describe('AdminScreen diagnostics', () => {
       expect(container.textContent).not.toContain(label)
     }
   })
+
+  it('does not claim reconciliation or reporting are unbuilt', async () => {
+    /*
+     * This screen carried a "Not implemented yet" list naming reconciliation
+     * and central reporting long after both shipped and were run against a real
+     * event. Stale copy on an operator screen is worse than no copy: it is the
+     * one place a member of staff would look to find out whether a feature
+     * exists, and it told them it did not.
+     */
+    const { container } = render(<AdminScreen />)
+    await screen.findByText(/ready/)
+
+    expect(container.textContent).not.toContain('Not implemented yet')
+    expect(container.textContent).not.toContain('Reconciliation of conflicting')
+    expect(container.textContent).not.toContain('Central reporting')
+    // And nothing took its place.
+    expect(container.textContent).not.toContain('Coming soon')
+  })
 })

@@ -35,6 +35,30 @@ involves that button.
 
 There is no backup or export yet. Treat IndexedDB as irreplaceable.
 
+## Preparing a device for the event
+
+The short version, for whoever sets up the tablets. No developer tools, no
+terminal, and nothing below needs doing on a device that is already **Ready for
+offline use**.
+
+1. Connect the device to the Internet.
+2. Open the production app.
+3. Open **Device Admin**.
+4. If **Offline readiness** says *Preparing* after the page has finished
+   loading, reload the page once.
+5. Confirm it reads **Ready for offline use**.
+6. Only then test with Wi-Fi disabled.
+
+That is the whole preparation. If a device will not reach *Ready for offline
+use* after one reload while online, take it out of the rotation and use another;
+do not try to fix it by clearing anything. **Never** clear site data, unregister
+the service worker, or delete Cache Storage or IndexedDB on a device that has
+taken registrations: those records are the event, and they live in IndexedDB
+until they sync.
+
+The rest of this document is the full engineering test, run once per release
+rather than once per device.
+
 ## A. Prepare the device (online)
 
 ```bash
@@ -67,8 +91,13 @@ Open the printed URL in Chrome. Then:
    Application version   0.0.0 · 2026-..-..T..:..:..Z
    ```
 
-   If it says *"Preparing"* or *"Not ready"*, stop. The device is not prepared
-   and the rest of this test will fail for the right reason.
+   If it still says *"Preparing"*, **reload the page once** and read it again.
+   A service worker installs on the first visit and takes control of the page on
+   the next one, so the first load of a fresh device is legitimately
+   uncontrolled; this was verified against the production deployment and one
+   reload resolves it. If it still says *"Preparing"* or says *"Not ready"*
+   after that reload, stop: the device is not prepared and the rest of this test
+   will fail for the right reason.
 
 4. **Visit every surface while still online** (`#/a`, `#/b`, `#/admin`) so no
    browser-lazy behaviour is left unexercised.

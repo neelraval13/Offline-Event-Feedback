@@ -5,6 +5,7 @@ import type {
   FeedbackRow,
 } from '../../lib/reporting/types'
 import { FeedbackDetail } from './FeedbackDetail'
+import { ratingCell } from './ratingCell'
 import { useReportingSession } from './session'
 
 /*
@@ -169,7 +170,9 @@ export function FeedbackTable({
               <td>{row.linkedRegistration?.name ?? 'None'}</td>
               {/* Always a status: a run contains exactly what it classified. */}
               <td>{STATUS_LABELS[row.reconciliationStatus]}</td>
-              <td>{row.overallRating ?? 'None'}</td>
+              {/* Read per questionnaire: the two this build knows do not
+                  share a rating key or a scale. See `ratingCell.ts`. */}
+              <td>{ratingCell(row)}</td>
               <td>
                 <button
                   type="button"

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { PendingCapabilities } from '../../components/PendingCapabilities'
 import { EVENT_CONFIG } from '../../config/event'
 import { BackupPanel } from './BackupPanel'
 import { LocalDataPanel } from './LocalDataPanel'
@@ -65,10 +64,6 @@ export function AdminScreen() {
       <BackupPanel onDataChanged={() => setDataGeneration((n) => n + 1)} />
 
       <SyncPanel onDataChanged={() => setDataGeneration((n) => n + 1)} />
-
-      <PendingCapabilities
-        items={['Reconciliation of conflicting records', 'Central reporting']}
-      />
     </article>
   )
 }

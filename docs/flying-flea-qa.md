@@ -125,6 +125,33 @@ rating must be selectable without a pointer, and each lamp must announce as
 
 ## 3. Offline cold start
 
+### Preparing a device, in order
+
+Do this on every tablet, on the venue's network or any other, **before** the
+event. It takes about a minute per device and needs no developer tools.
+
+1. Connect the device to the Internet.
+2. Open the production app.
+3. Open **Device Admin**.
+4. If **Offline readiness** still says *Preparing* a few seconds after the page
+   has loaded, reload the page once. The service worker installs on the first
+   visit and takes control of the page on the next one; one reload is all that
+   is needed, and this is normal browser behaviour rather than a fault.
+5. Confirm it reads:
+
+   ```
+   Offline readiness   Ready for offline use
+   ```
+
+6. Only then test with Wi-Fi disabled.
+
+Never clear site data, unregister the service worker, or delete Cache Storage or
+IndexedDB on a device that has taken registrations. IndexedDB is where the
+event's records live until they sync, and Chrome's **Clear site data** button
+removes them along with the cache. Nothing in this preparation requires it.
+
+### The test itself
+
 Install the PWA, then put the tablet in aeroplane mode and cold-start it.
 
 Point A and Point B must both open, render the brand marks, generate a QR and
@@ -156,6 +183,11 @@ With the server reachable:
    it. Check the network response in DevTools too, not only the screen.
 7. Open a campaign response: the six questions appear in the campaign's own
    words, not as `rotaryKnobUsage`.
+8. On **Responses**, the Rating column reads `5 / 7` for a campaign response,
+   never `None`. The scale is always shown: a bare `5` would be ambiguous
+   between the two questionnaires this build reads.
+9. Device Admin lists no "Not implemented yet" section. Reconciliation and
+   central reporting both shipped.
 
 ## 6. Exports
 
@@ -169,6 +201,13 @@ Download the registrations CSV, the feedback CSV and the workbook.
   `=cmd|'/c calc'!A0` into a free-text answer at Point B first if you want to see
   the neutralisation work.
 - In the workbook, every participant-derived cell is text.
+- The workbook's **Summary** sheet has three sections in order: event and
+  reconciliation counts, **FLYING FLEA FEEDBACK** with the four questions in the
+  campaign's own words and their averages out of 7, and **LEGACY FEEDBACK**.
+  At a Flying Flea event the legacy section must say the questionnaire was not
+  collected rather than print a block of zeros.
+- **Metadata** lists `readableFormVersions` as `feedback-v1,
+  flying-flea-feedback-v1`, so nobody reads the file as understanding only one.
 
 ## 7. Offline asset audit
 
