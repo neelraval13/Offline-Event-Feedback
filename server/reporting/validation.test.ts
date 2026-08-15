@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isUuid, parseCursor } from './postgres'
+import { isUuid, parseCursor } from './postgres.js'
 
 /*
  * The values that reach a `::uuid` or `::timestamptz` cast.

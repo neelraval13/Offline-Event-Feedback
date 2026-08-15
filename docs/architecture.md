@@ -1890,16 +1890,71 @@ Neon Postgres. Nothing about the API changed to make that work.
 ### The prefix belongs to the deployment
 
 `server/app.ts` defines `/health` and `/v1/...` and knows nothing about how it is
-served. The Vercel function mounts it under `/api`, which is where Vercel routes
-a function; the local Node server binds it to a port unprefixed. Rewriting every
+served. The Vercel function strips `/api`, which is where Vercel routes a
+function; the local Node server binds it to a port unprefixed. Rewriting every
 route to `/api/v1/...` inside the app would have baked one deployment's routing
 into the API, and would have meant the local server and the deployed one no
 longer served the same paths.
 
+### Routing is written down, not inferred
+
+`vercel.json` carries one rewrite:
+
+```json
+"rewrites": [{ "source": "/api/:path*", "destination": "/api/index" }]
+```
+
+That is the only thing routing the API, and it exists because the alternative
+failed in production. The function used to be `api/[...path].ts`, on the
+assumption that Vercel reads that filename as a multi-segment splat. It does
+not. The generated route table read:
+
+```json
+{ "src": "^/api/([^/]+)$", "dest": "/api/[...path]?...path=$1", "check": true },
+{ "src": "^/api(/.*)?$",   "status": 404 }
+```
+
+`[^/]+` is one segment. `/api/health` reached the function; `/api/v1/sync/enroll`
+matched the next rule and got the platform's own 404, before any application code
+ran. Nothing local could see it, because every test called Hono directly.
+
+A plain filename produces no dynamic-segment inference at all, so the rewrite is
+the whole mechanism, and `pnpm verify:vercel` reads the generated table back and
+asserts every public path still reaches the function.
+
+### Node ESM does not guess file extensions
+
+`server/`, `shared/` and `api/` are compiled by Vercel and executed by Node's ESM
+loader, and the package is `"type": "module"`. TypeScript emits import specifiers
+verbatim, so an extensionless `import { createCentralApp } from '../server/centralApp'`
+becomes exactly that in the artifact, and Node refuses it:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/var/task/server/centralApp'
+```
+
+The file was packaged. Node will not look for it under another name. Every
+relative specifier in those three directories therefore ends in `.js`, pointing
+at the emitted file rather than at the TypeScript source. `tsx`, Vitest and
+TypeScript's `bundler` resolution all map it back to the `.ts`, so local
+development is unchanged; `src/` is untouched, because Vite bundles it and it
+never runs under Node ESM.
+
+This is checked against the built artifact, not the source. See
+`scripts/verify-vercel-build.mjs`:
+
+```bash
+pnpm dlx vercel build
+pnpm verify:vercel
+```
+
+It resolves every relative import in the function the way Node does, then imports
+the built function and calls the public contract through it.
+
 ### One configuration, two entry points
 
 `server/config.ts` validates the environment and `server/centralApp.ts` turns the
-result into a running app. `server/index.ts` and `api/[...path].ts` each add only
+result into a running app. `server/index.ts` and `api/index.ts` each add only
 what is genuinely theirs: binding a port and closing connections on a signal, or
 exporting a request handler.
 

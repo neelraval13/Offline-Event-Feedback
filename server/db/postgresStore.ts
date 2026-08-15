@@ -1,11 +1,11 @@
 import type { Sql } from 'postgres'
-import { FLYING_FLEA_FORM_VERSION } from '../../shared/campaign/flyingFlea'
+import { FLYING_FLEA_FORM_VERSION } from '../../shared/campaign/flyingFlea.js'
 import type {
   CentralFeedback,
   CentralRegistration,
   EnrolledDevice,
   SyncStore,
-} from '../sync/store'
+} from '../sync/store.js'
 
 /*
  * The Postgres implementation.

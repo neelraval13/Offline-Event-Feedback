@@ -1,14 +1,14 @@
 import type {
   FeedbackWireRecord,
   RegistrationWireRecord,
-} from '../../shared/sync/protocol'
+} from '../../shared/sync/protocol.js'
 import type {
   CentralFeedback,
   CentralRegistration,
   EnrolledDevice,
   InsertOutcome,
   SyncStore,
-} from '../sync/store'
+} from '../sync/store.js'
 
 /*
  * An in-memory store with the same atomicity contract as the SQL one.

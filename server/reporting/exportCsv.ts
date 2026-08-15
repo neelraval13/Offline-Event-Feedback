@@ -1,5 +1,5 @@
-import type { FeedbackExportRow, RegistrationExportRow } from './postgres'
-import type { DuplicateCandidateRow, RunDescriptor } from './types'
+import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
+import type { DuplicateCandidateRow, RunDescriptor } from './types.js'
 
 /*
  * CSV export.

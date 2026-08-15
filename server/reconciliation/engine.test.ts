@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { reconcile } from './engine'
-import { normalizeEmail, normalizePhone } from './normalize'
+import { reconcile } from './engine.js'
+import { normalizeEmail, normalizePhone } from './normalize.js'
 import type {
   ReconciliationFeedback,
   ReconciliationInput,
   ReconciliationRegistration,
-} from './types'
+} from './types.js'
 
 /*
  * The engine is pure, so these tests are the real specification of Phase 7.

@@ -1,4 +1,4 @@
-import { describeReportingConfigProblem } from './reporting/auth'
+import { describeReportingConfigProblem } from './reporting/auth.js'
 
 /*
  * Server configuration, read once and validated once.

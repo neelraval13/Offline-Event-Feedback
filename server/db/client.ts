@@ -1,5 +1,5 @@
 import postgres, { type Sql } from 'postgres'
-import type { ServerRuntime } from '../config'
+import type { ServerRuntime } from '../config.js'
 
 /*
  * The Postgres client, with the two runtimes' settings written down rather than

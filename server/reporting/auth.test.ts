@@ -5,7 +5,7 @@ import {
   describeReportingConfigProblem,
   describeSecretWeakness,
   REPORTING_SECRET_MIN_LENGTH,
-} from './auth'
+} from './auth.js'
 
 /*
  * The credential boundary between "may upload what I captured" and "may read

@@ -3,14 +3,14 @@ import {
   FLYING_FLEA_FORM_VERSION,
   FLYING_FLEA_RATING_KEYS,
   isCampaignRating,
-} from './campaign'
+} from './campaign.js'
 import type {
   CampaignAnalytics,
   CampaignRatingSummary,
   FeedbackAnalytics,
   ResponseCoverage,
   RunDescriptor,
-} from './types'
+} from './types.js'
 
 /*
  * Reporting analytics.

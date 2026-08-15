@@ -4,15 +4,15 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postgres, { type Sql } from 'postgres'
 import type { Hono } from 'hono'
-import { createApp } from '../app'
-import { createPostgresStore } from '../db/postgresStore'
-import { FLYING_FLEA_FORM_VERSION } from '../../shared/campaign/flyingFlea'
+import { createApp } from '../app.js'
+import { createPostgresStore } from '../db/postgresStore.js'
+import { FLYING_FLEA_FORM_VERSION } from '../../shared/campaign/flyingFlea.js'
 import type {
   SyncBatch,
   SyncBatchResponse,
   SyncRecordResult,
-} from '../../shared/sync/protocol'
-import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures'
+} from '../../shared/sync/protocol.js'
+import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures.js'
 
 /*
  * Ingest against a real Postgres.

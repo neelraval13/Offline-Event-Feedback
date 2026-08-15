@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postgres, { type Sql } from 'postgres'
-import { runReconciliation } from '../reconciliation/postgres'
-import { buildWorkbook } from './exportXlsx'
+import { runReconciliation } from '../reconciliation/postgres.js'
+import { buildWorkbook } from './exportXlsx.js'
 import {
   buildOverview,
   exportFeedbackRows,
@@ -15,7 +15,7 @@ import {
   queryDuplicateCandidates,
   queryFeedback,
   queryRegistrations,
-} from './postgres'
+} from './postgres.js'
 
 /*
  * Reporting at the size of a real event day.

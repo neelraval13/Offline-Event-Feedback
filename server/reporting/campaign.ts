@@ -19,4 +19,4 @@ export {
   isRating1To7 as isCampaignRating,
   type CampaignQuestion,
   type Rating1To7 as CampaignRatingValue,
-} from '../../shared/campaign/flyingFlea'
+} from '../../shared/campaign/flyingFlea.js'

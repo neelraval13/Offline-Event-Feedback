@@ -5,7 +5,7 @@ import postgres from 'postgres'
 import {
   MISSING_MIGRATION_URL_MESSAGE,
   resolveMigrationDatabaseUrl,
-} from './config'
+} from './config.js'
 
 /*
  * Migration runner.

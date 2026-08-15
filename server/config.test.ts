@@ -4,7 +4,7 @@ import {
   MISSING_MIGRATION_URL_MESSAGE,
   readServerConfig,
   resolveMigrationDatabaseUrl,
-} from './config'
+} from './config.js'
 
 /*
  * Configuration, which both runtimes read through this one module.

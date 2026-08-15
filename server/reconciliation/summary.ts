@@ -1,4 +1,4 @@
-import type { ReconciliationCounts } from './types'
+import type { ReconciliationCounts } from './types.js'
 
 /*
  * Counts only.

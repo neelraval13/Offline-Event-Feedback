@@ -1,9 +1,9 @@
 import type { Hono } from 'hono'
 import type { Sql } from 'postgres'
-import { createApp } from './app'
-import { createDatabaseClient } from './db/client'
-import { createPostgresStore } from './db/postgresStore'
-import type { ServerConfig, ServerRuntime } from './config'
+import { createApp } from './app.js'
+import { createDatabaseClient } from './db/client.js'
+import { createPostgresStore } from './db/postgresStore.js'
+import type { ServerConfig, ServerRuntime } from './config.js'
 
 /*
  * The central API, assembled once.

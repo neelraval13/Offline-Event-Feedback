@@ -3,8 +3,8 @@ import type {
   FeedbackWireRecord,
   RegistrationWireRecord,
   SyncBatch,
-} from '../../shared/sync/protocol'
-import { SYNC_PROTOCOL_VERSION } from '../../shared/sync/protocol'
+} from '../../shared/sync/protocol.js'
+import { SYNC_PROTOCOL_VERSION } from '../../shared/sync/protocol.js'
 
 export const EVENT_ID = 'evt-dev-001'
 export const EVENT_DAY = '2026-01-01'

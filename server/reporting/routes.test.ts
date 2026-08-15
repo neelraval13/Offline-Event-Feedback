@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url'
 import ExcelJS from 'exceljs'
 import postgres, { type Sql } from 'postgres'
 import { Hono } from 'hono'
-import { runReconciliation } from '../reconciliation/postgres'
-import { createPostgresStore } from '../db/postgresStore'
-import type { SyncStore } from '../sync/store'
-import { createReportingRoutes } from './routes'
+import { runReconciliation } from '../reconciliation/postgres.js'
+import { createPostgresStore } from '../db/postgresStore.js'
+import type { SyncStore } from '../sync/store.js'
+import { createReportingRoutes } from './routes.js'
 
 /*
  * The reporting API against a real Postgres.

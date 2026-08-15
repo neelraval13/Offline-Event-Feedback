@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { z } from 'zod'
 import type { Sql } from 'postgres'
-import { runReconciliation } from '../reconciliation/postgres'
-import { authorizeReporting } from './auth'
+import { runReconciliation } from '../reconciliation/postgres.js'
+import { authorizeReporting } from './auth.js'
 import {
   buildOverview,
   exportDuplicateCandidateRows,
@@ -18,15 +18,15 @@ import {
   queryDuplicateCandidates,
   queryFeedback,
   queryRegistrations,
-} from './postgres'
+} from './postgres.js'
 import {
   duplicateCandidatesCsv,
   exportFileName,
   feedbackCsv,
   registrationsCsv,
-} from './exportCsv'
-import { buildWorkbook } from './exportXlsx'
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './types'
+} from './exportCsv.js'
+import { buildWorkbook } from './exportXlsx.js'
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './types.js'
 
 /*
  * The protected reporting API.

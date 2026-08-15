@@ -1,24 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
-import { createApp } from '../app'
-import { createMemoryStore, type MemoryStore } from './memoryStore'
-import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures'
-import { SYNC_PROTOCOL_VERSION } from '../../shared/sync/protocol'
+import { createApp } from '../app.js'
+import { createMemoryStore, type MemoryStore } from './memoryStore.js'
+import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures.js'
+import { SYNC_PROTOCOL_VERSION } from '../../shared/sync/protocol.js'
 import type { Sql } from 'postgres'
 
 /*
  * The API as it is mounted for Vercel, tested without deploying anything.
  *
- * The deployment mounts the central app under `/api`, because that is where
- * Vercel routes a function, and mounting is the part most likely to be got
+ * The deployment serves the central app under `/api`, because that is where
+ * Vercel routes a function, and the mount is the part most likely to be got
  * wrong in a way nothing local would notice: routes that answer on the developer
  * machine and 404 in production, or a double prefix that turns
  * `/api/v1/reporting` into `/api/api/v1/reporting`.
  *
- * This reproduces the mount exactly as `api/[...path].ts` performs it, over a
- * memory store, and asks whether the production URLs answer. It never touches a
- * real database and never starts a listener.
+ * This reproduces the mount over a memory store and asks whether the production
+ * URLs answer. It never touches a real database and never starts a listener.
+ *
+ * What it deliberately does NOT prove is that Vercel routes those URLs to the
+ * function at all. Every assertion here calls Hono directly, which is exactly
+ * why a production `/api/v1/sync/enroll` could return the platform's own 404
+ * while this file stayed green. That gap is covered by
+ * `vercelRouting.test.ts` (the generated route table) and
+ * `scripts/verify-vercel-build.mjs` (the generated function artifact).
  */
 
 const ENROLLMENT_SECRET = 'vercel-mount-enrolment-secret'
@@ -58,7 +64,12 @@ beforeEach(() => {
     log: () => {},
   })
 
-  // Exactly what the function does.
+  /*
+   * The same URL shape the function serves. The function itself resolves the
+   * prefix explicitly rather than mounting (see `api/index.ts`); this is the
+   * simplest thing that produces the same public paths, and the real entry
+   * point is exercised at the bottom of this file.
+   */
   mounted = new Hono().route('/api', central)
 })
 
@@ -280,7 +291,7 @@ async function importEntrypoint(
     vi.stubEnv(name, value ?? '')
   }
   vi.resetModules()
-  return (await import('../../api/[...path]')) as VercelModule
+  return (await import('../../api/index.js')) as VercelModule
 }
 
 /** Calls the export the way the platform does. */

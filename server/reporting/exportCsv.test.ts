@@ -8,9 +8,9 @@ import {
   neutralizeFormula,
   REGISTRATION_CSV_HEADER,
   registrationsCsv,
-} from './exportCsv'
-import type { FeedbackExportRow, RegistrationExportRow } from './postgres'
-import type { DuplicateCandidateRow, RunDescriptor } from './types'
+} from './exportCsv.js'
+import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
+import type { DuplicateCandidateRow, RunDescriptor } from './types.js'
 
 const RUN: RunDescriptor = {
   runId: '11111111-1111-4111-8111-111111111111',

@@ -1,4 +1,4 @@
-import { isUsableKey, normalizeEmail, normalizePhone } from './normalize'
+import { isUsableKey, normalizeEmail, normalizePhone } from './normalize.js'
 import {
   RECONCILIATION_ENGINE_VERSION,
   type DuplicateMatchBasis,
@@ -9,7 +9,7 @@ import {
   type ReconciliationOutput,
   type ReconciliationRegistration,
   type RegistrationResult,
-} from './types'
+} from './types.js'
 
 /*
  * The reconciliation engine.

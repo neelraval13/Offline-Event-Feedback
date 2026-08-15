@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server'
-import { createCentralApp, describeConfiguration } from './centralApp'
-import { readServerConfig } from './config'
+import { createCentralApp, describeConfiguration } from './centralApp.js'
+import { readServerConfig } from './config.js'
 
 /*
  * The local Node runtime.

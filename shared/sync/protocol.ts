@@ -8,7 +8,7 @@ import {
   MAX_LOCATION_LENGTH,
   MAX_VEHICLE_LENGTH,
   RATINGS_1_TO_7,
-} from '../campaign/flyingFlea'
+} from '../campaign/flyingFlea.js'
 
 /*
  * The synchronisation wire contract, version 1.

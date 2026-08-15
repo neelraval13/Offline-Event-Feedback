@@ -4,8 +4,8 @@ import {
   type RegistrationWireRecord,
   type SyncRecord,
   type SyncRecordResult,
-} from '../../shared/sync/protocol'
-import type { CentralFeedback, CentralRegistration, SyncStore } from './store'
+} from '../../shared/sync/protocol.js'
+import type { CentralFeedback, CentralRegistration, SyncStore } from './store.js'
 
 /*
  * Ingest semantics.

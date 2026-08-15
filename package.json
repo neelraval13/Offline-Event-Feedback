@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "check:dashes": "node scripts/check-no-em-dash.mjs",
     "verify:pwa": "node scripts/verify-pwa-build.mjs",
+    "verify:vercel": "node scripts/verify-vercel-build.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "server:dev": "tsx watch server/index.ts",
     "server:start": "tsx server/index.ts",

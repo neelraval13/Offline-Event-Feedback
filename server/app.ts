@@ -6,17 +6,17 @@ import {
   SYNC_PROTOCOL_VERSION,
   type SyncBatchResponse,
   type SyncRecordResult,
-} from '../shared/sync/protocol'
+} from '../shared/sync/protocol.js'
 import {
   bearerToken,
   enrollmentSecretMatches,
   generateDeviceToken,
   hashDeviceToken,
   tokensMatch,
-} from './auth/tokens'
-import { ingestBatch } from './sync/ingest'
-import type { SyncStore } from './sync/store'
-import { createReportingRoutes } from './reporting/routes'
+} from './auth/tokens.js'
+import { ingestBatch } from './sync/ingest.js'
+import type { SyncStore } from './sync/store.js'
+import { createReportingRoutes } from './reporting/routes.js'
 import type { Sql } from 'postgres'
 
 /*

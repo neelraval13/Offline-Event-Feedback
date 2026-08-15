@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { createApp } from '../app'
-import { createMemoryStore, type MemoryStore } from './memoryStore'
-import { hashDeviceToken } from '../auth/tokens'
+import { createApp } from '../app.js'
+import { createMemoryStore, type MemoryStore } from './memoryStore.js'
+import { hashDeviceToken } from '../auth/tokens.js'
 import {
   batch,
   DEVICE_A,
@@ -11,16 +11,16 @@ import {
   feedback,
   publicCodeFor,
   registration,
-} from './fixtures'
+} from './fixtures.js'
 import type {
   SyncBatch,
   SyncBatchResponse,
   SyncRecordResult,
-} from '../../shared/sync/protocol'
+} from '../../shared/sync/protocol.js'
 import {
   MAX_BATCH_RECORDS,
   SYNC_PROTOCOL_VERSION,
-} from '../../shared/sync/protocol'
+} from '../../shared/sync/protocol.js'
 
 const ENROLLMENT_SECRET = 'a-shared-enrolment-code'
 const ORIGIN = 'http://localhost:5173'

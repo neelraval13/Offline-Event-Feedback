@@ -1,6 +1,6 @@
 import postgres from 'postgres'
-import { runReconciliation } from './reconciliation/postgres'
-import { formatSummary } from './reconciliation/summary'
+import { runReconciliation } from './reconciliation/postgres.js'
+import { formatSummary } from './reconciliation/summary.js'
 
 /*
  * Reconciliation, invoked deliberately.

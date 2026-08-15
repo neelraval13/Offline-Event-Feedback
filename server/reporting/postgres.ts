@@ -5,8 +5,8 @@ import {
   computeCoverage,
   READABLE_FORM_VERSIONS,
   SUPPORTED_FORM_VERSION,
-} from './analytics'
-import { FLYING_FLEA_FORM_VERSION, FLYING_FLEA_QUESTIONS } from './campaign'
+} from './analytics.js'
+import { FLYING_FLEA_FORM_VERSION, FLYING_FLEA_QUESTIONS } from './campaign.js'
 import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
@@ -20,7 +20,7 @@ import {
   type RegistrationDetail,
   type RegistrationRow,
   type RunDescriptor,
-} from './types'
+} from './types.js'
 
 /*
  * The reporting read layer.

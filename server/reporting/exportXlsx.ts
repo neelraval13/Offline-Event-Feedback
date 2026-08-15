@@ -1,12 +1,12 @@
 import ExcelJS from 'exceljs'
-import { SUPPORTED_FORM_VERSION } from './analytics'
+import { SUPPORTED_FORM_VERSION } from './analytics.js'
 import {
   DUPLICATE_CSV_HEADER,
   FEEDBACK_CSV_HEADER,
   REGISTRATION_CSV_HEADER,
-} from './exportCsv'
-import type { FeedbackExportRow, RegistrationExportRow } from './postgres'
-import type { DuplicateCandidateRow, OverviewResponse } from './types'
+} from './exportCsv.js'
+import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
+import type { DuplicateCandidateRow, OverviewResponse } from './types.js'
 
 /*
  * XLSX workbook.

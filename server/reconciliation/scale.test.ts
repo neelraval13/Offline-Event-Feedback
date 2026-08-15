@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { reconcile } from './engine'
+import { reconcile } from './engine.js'
 import type {
   ReconciliationFeedback,
   ReconciliationRegistration,
-} from './types'
+} from './types.js'
 
 /*
  * A full event through the engine.

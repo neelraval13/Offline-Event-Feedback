@@ -6,9 +6,9 @@ import {
   FLYING_FLEA_FORM_VERSION,
   SUPPORTED_FORM_VERSION,
   type AnalysableResponse,
-} from './analytics'
-import { FLYING_FLEA_QUESTIONS } from './campaign'
-import type { RunDescriptor } from './types'
+} from './analytics.js'
+import { FLYING_FLEA_QUESTIONS } from './campaign.js'
+import type { RunDescriptor } from './types.js'
 
 function response(
   answers: Record<string, unknown>,

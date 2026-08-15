@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Sql, TransactionSql } from 'postgres'
-import { reconcile } from './engine'
+import { reconcile } from './engine.js'
 import {
   RECONCILIATION_ENGINE_VERSION,
   type DuplicateRegistrationCandidate,
@@ -10,7 +10,7 @@ import {
   type ReconciliationOutput,
   type ReconciliationRegistration,
   type RegistrationResult,
-} from './types'
+} from './types.js'
 
 /*
  * Persistence for reconciliation runs.

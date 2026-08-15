@@ -1,7 +1,7 @@
 import type {
   FeedbackWireRecord,
   RegistrationWireRecord,
-} from '../../shared/sync/protocol'
+} from '../../shared/sync/protocol.js'
 
 /*
  * What ingest needs from storage.

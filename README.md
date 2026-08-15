@@ -36,11 +36,19 @@ Vercel
 ```
 
 - **One central app, two runtimes.** `server/centralApp.ts` builds it;
-  `server/index.ts` binds a port locally and `api/[...path].ts` answers requests
-  on Vercel. Neither restates the other's configuration.
-- **`/api` is a deployment fact, not an API fact.** The function mounts the
-  central app under that prefix; no route inside `server/app.ts` was rewritten,
-  and `pnpm server:start` still serves `/health` and `/v1/...` on port 8788.
+  `server/index.ts` binds a port locally and `api/index.ts` answers requests on
+  Vercel. Neither restates the other's configuration.
+- **`/api` is a deployment fact, not an API fact.** The function strips that
+  prefix; no route inside `server/app.ts` was rewritten, and `pnpm server:start`
+  still serves `/health` and `/v1/...` on port 8788.
+- **One rewrite does the routing.** `vercel.json` sends `/api/:path*` to
+  `/api/index`. This is deliberate rather than inferred: a `[...path]` filename
+  is NOT read by Vercel as a multi-segment splat, and relying on it left every
+  nested path answering the platform's own 404. See `docs/architecture.md`.
+- **Server code carries `.js` import specifiers.** `server/`, `shared/` and
+  `api/` are compiled by Vercel and run under Node ESM, which does no extension
+  guessing. `pnpm verify:vercel` checks the built artifact rather than trusting
+  the source.
 - **Same origin in production.** `VITE_SYNC_API_BASE_URL=/api` resolves against
   the page, so there is no CORS to configure and no deployment hostname to
   allow-list. Explicit origins remain for the local split-origin setup.
@@ -434,7 +442,7 @@ server/           Central sync API, reconciliation engine and reporting API
   config.ts       Environment validation, shared by both runtimes
   centralApp.ts   Assembles the app from a validated config
   index.ts        The local Node runtime: binds a port, closes on SIGINT
-api/              The Vercel Function: mounts the central app under /api
+api/              The Vercel Function: index.ts serves the central app under /api
 shared/
   sync/         The wire protocol, shared by client and server
   campaign/     The campaign questionnaire: version, keys, prompts, scale

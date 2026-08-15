@@ -11,7 +11,7 @@ import {
   getRegistrationResults,
   listRuns,
   runReconciliation,
-} from './postgres'
+} from './postgres.js'
 
 /*
  * Reconciliation against a real Postgres.

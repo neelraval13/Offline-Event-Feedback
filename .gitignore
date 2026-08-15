@@ -23,3 +23,6 @@ pnpm-debug.log*
 
 # Font sources are extracted to public/fonts; the archive is not an app asset.
 Fonts.zip
+
+# Vercel CLI local build output and local project link.
+.vercel
