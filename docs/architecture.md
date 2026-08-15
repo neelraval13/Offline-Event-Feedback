@@ -355,7 +355,7 @@ Point B share one versioned identity contract instead of two implicit ones.
 ```json
 {
   "v": 1,
-  "event": "evt-dev-001",
+  "event": "ff-rc-2026-08-23",
   "participant": "0199f5c2-...-7a1b",
   "code": "A1-B8EFD9-00001-X"
 }
@@ -1555,7 +1555,7 @@ hold record IDs, statuses, counts and match bases. A schema test asserts no
 ### Invoked deliberately
 
 ```bash
-pnpm server:reconcile -- --event evt-dev-001
+pnpm server:reconcile -- --event ff-rc-2026-08-23
 ```
 
 Never run after a sync batch. Ingest is a hot path a device is waiting on;

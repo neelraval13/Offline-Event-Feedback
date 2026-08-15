@@ -37,11 +37,35 @@ export interface EventConfig {
  * `deviceId` is deliberately NOT here. A station is an operational post that
  * this configuration names; a device is a physical browser installation that
  * identifies itself. See `src/lib/identity/deviceIdentity.ts`.
+ *
+ * ## The event identity is real, and it is permanent
+ *
+ * These three values are stamped onto every registration and every feedback
+ * response the moment it is written, they travel on the wire, and they are what
+ * a reconciliation run groups by. A build that went to a desk carrying a
+ * placeholder would label the whole day's data as a development event, and
+ * nothing downstream could tell the difference afterwards.
+ *
+ * `eventId` is therefore stable and derived from facts that cannot change:
+ * campaign, venue, day. It is never regenerated, and it is not a UUID, because
+ * an operator reading an export filename or a reconciliation run has to
+ * recognise it.
+ *
+ * It is deliberately ABBREVIATED, though. `ff` is the campaign and `rc` is the
+ * venue, and the reason for the shorthand is physical: this string is encoded
+ * verbatim into every QR sticker, and every character of it costs a byte of
+ * payload on a symbol printed at 26 mm. Spelling the venue out in full took the
+ * payload from 114 bytes to 139 and pushed every sticker from 45 modules to 49,
+ * which is a denser code on every label for information no scanner reads. The
+ * human-readable form of the same three facts is `eventName` above and
+ * `lockedLocation` in the campaign config, neither of which is printed.
+ *
+ * See the measurement note in `src/lib/qr/qrCode.ts` before lengthening it.
  */
 export const EVENT_CONFIG: EventConfig = {
-  eventId: eventId('evt-dev-001'),
-  eventName: 'Development Event',
-  eventDay: eventDay('2026-01-01'),
+  eventId: eventId('ff-rc-2026-08-23'),
+  eventName: 'Flying Flea Test Ride - Richardson & Cruddas',
+  eventDay: eventDay('2026-08-23'),
   registrationStation: {
     role: 'registration',
     stationId: stationId('A1'),

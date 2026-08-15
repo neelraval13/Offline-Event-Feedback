@@ -15,6 +15,7 @@ import {
   validateCampaignRegistration,
 } from './registrationForm'
 import { isCampaignRegistration, needsLegacyCorrection } from './campaignRecord'
+import { stampEventFields } from './eventStamp'
 import { validateCampaignFeedback, EMPTY_CAMPAIGN_DRAFT } from './feedbackForm'
 
 /*
@@ -68,21 +69,41 @@ describe('campaign registration validation', () => {
     }
   })
 
-  it('requires only the five fields the campaign requires', () => {
+  it('asks the operator for only the four fields left to answer', () => {
     const result = validateCampaignRegistration(emptyCampaignDraft())
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      // Vehicle, name, email, location and phone. Gender, test-ride time,
-      // licence and pincode are not invented as requirements.
+      /*
+       * Vehicle, name, email and phone. Gender, licence and pincode are not
+       * invented as requirements. Location is absent from this list not because
+       * it stopped being required but because it is no longer asked: the empty
+       * draft already carries the locked venue.
+       */
       expect(Object.keys(result.errors).sort()).toEqual([
         'email',
-        'location',
         'name',
         'phone',
         'vehicle',
       ])
     }
+  })
+
+  it('starts every draft on the venue this build is locked to', () => {
+    expect(emptyCampaignDraft().location).toBe('Richardson & Cruddas')
+    // And the time is still empty here: it is read at submit, not now.
+    expect(emptyCampaignDraft().testRideAt).toBe('')
+  })
+
+  it('still refuses a registration that would carry no venue', () => {
+    // Only reachable on a misconfigured build, and it must not write a record.
+    const result = validateCampaignRegistration({
+      ...emptyCampaignDraft(),
+      ...RIDER,
+      location: '   ',
+    })
+
+    expect(result.ok).toBe(false)
   })
 
   it('reports a blank optional answer as null, and stores it as absent', async () => {
@@ -196,6 +217,36 @@ describe('campaign registrations in the database', () => {
     // Untouched fields keep their values.
     expect(corrected.name).toBe(RIDER.name)
     expect(corrected.drivingLicence).toBe(RIDER.drivingLicence)
+  })
+
+  it('stores and uploads a stamped registration under the same keys', async () => {
+    /*
+     * The contract check for the change that stopped asking for a venue and a
+     * time. Both are now supplied by `stampEventFields` instead of by the
+     * operator, and the point of this test is that nothing downstream can tell:
+     * same field names, same shapes, same wire schema, no migration.
+     */
+    const stamped = stampEventFields(
+      {
+        name: 'Ada Lovelace',
+        phone: '9876543210',
+        email: 'ada@example.com',
+        vehicle: 'Vehicle 2',
+        interestedColour: 'Storm Black',
+      },
+      new Date('2026-08-23T10:12:00.000Z'),
+    )
+
+    const record = await createRegistration(db, { ...CONTEXT, ...stamped })
+
+    expect(record.location).toBe('Richardson & Cruddas')
+    expect(record.testRideAt).toBe('2026-08-23T15:42')
+
+    const wire = toRegistrationWire(record)
+
+    expect(registrationWireSchema.safeParse(wire).success).toBe(true)
+    expect(wire.location).toBe('Richardson & Cruddas')
+    expect(wire.testRideAt).toBe('2026-08-23T15:42')
   })
 
   it('puts every campaign field on the wire, and validates there', async () => {

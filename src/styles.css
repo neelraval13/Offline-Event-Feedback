@@ -1092,9 +1092,44 @@ textarea.ff-field__control {
   margin: 10px 0 0;
 }
 
-/* Home */
+/* ---------------------------------------------------------------------------
+ * Home: the station menu
+ *
+ * A menu, composed as one. The identity block is deliberately short, because
+ * everything below it is the point: four equal targets, one grid, no second
+ * section and no heading that repeats a card title.
+ *
+ * The intro's spacing is written here rather than left to the default margins
+ * of an eyebrow, a heading and two paragraphs. Stacked defaults are what made
+ * this screen scroll on a phone before anything clickable appeared.
+ * ------------------------------------------------------------------------- */
+.ff-home__intro {
+  margin: clamp(14px, 3vw, 22px) 0 clamp(16px, 3.5vw, 24px);
+}
+
+.ff-home__date {
+  font-family: var(--ff-font-body);
+  color: var(--ff-text);
+  font-size: clamp(15px, 3.5vw, 17px);
+  font-weight: 600;
+  margin: 10px 0 0;
+}
+
+.ff-home__hint {
+  font-family: var(--ff-font-body);
+  color: var(--ff-muted);
+  font-size: 14px;
+  margin: 2px 0 0;
+}
+
 .ff-home__surfaces {
   display: grid;
+  /*
+   * Two columns wherever two fit, one wherever they do not. Inside the reading
+   * measure the container is capped at, that is 2 x 2 on a laptop or a tablet
+   * in landscape and a single column on a phone, decided by the space the grid
+   * actually has rather than by a breakpoint.
+   */
   grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: var(--ff-gap);
   list-style: none;
@@ -1102,15 +1137,34 @@ textarea.ff-field__control {
   margin: 0;
 }
 
+/*
+ * One card. All four use it, including the two operational tools: an operator
+ * looking for the backup screen at the end of a long day should not have to
+ * find a smaller version of the same control.
+ */
 .ff-home__link {
-  display: block;
+  display: flex;
+  flex-direction: column;
   background: var(--ff-surface-elevated);
   border: 1px solid var(--ff-border);
   border-radius: var(--ff-radius-card);
-  padding: 24px;
+  padding: clamp(16px, 3.5vw, 22px);
   text-decoration: none;
   color: var(--ff-text);
+  /* Grid stretches rows; this keeps a short card level with a tall one across
+     rows too, without leaving any of them half empty. */
   height: 100%;
+  min-height: clamp(112px, 20vw, 138px);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+/* Pointer only: on a touch device :hover sticks after a tap and leaves a card
+   looking selected. */
+@media (hover: hover) {
+  .ff-home__link:hover {
+    border-color: var(--ff-interactive-line);
+    background: var(--ff-field);
+  }
 }
 
 .ff-home__link:focus-visible {
@@ -1120,7 +1174,10 @@ textarea.ff-field__control {
 
 .ff-home__title {
   font-family: var(--ff-font-display);
-  font-size: 26px;
+  /* Smaller than it was: at 26px the longer titles wrapped to three lines in a
+     narrow column and set the height of every card beside them. */
+  font-size: clamp(19px, 4.5vw, 22px);
+  line-height: 1.15;
   text-transform: uppercase;
 }
 
@@ -1129,6 +1186,21 @@ textarea.ff-field__control {
   color: var(--ff-muted);
   margin: 8px 0 0;
   font-size: 15px;
+}
+
+.ff-home__note {
+  font-family: var(--ff-font-body);
+  color: var(--ff-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  /* Takes any slack in the card, so it settles at the bottom, and keeps a rule
+     above it either way: this is a condition on reaching the destination, not a
+     second sentence of the description. */
+  margin: auto 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--ff-border);
 }
 
 .visually-hidden {
@@ -1490,6 +1562,41 @@ textarea.ff-field__control {
   position: relative;
   /* Above both the photograph and the scrim. */
   z-index: 2;
+}
+
+/*
+ * Venue and date, under the banner.
+ *
+ * Below the photograph rather than over it, for two reasons: the banner's
+ * height is already tuned so the first field stays on screen at 320px, and text
+ * that has to survive a gradient is text that has to be big. Here it is read
+ * against a solid background at caption size.
+ *
+ * It wraps rather than truncating. A venue name is not something to abbreviate
+ * on the one screen that tells staff which event this device is stamping.
+ */
+.ff-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px clamp(10px, 3vw, 18px);
+  margin: 0;
+  padding: 12px clamp(14px, 3vw, 20px);
+  border-bottom: 1px solid var(--ff-border);
+  font-family: var(--ff-font-body);
+}
+
+.ff-event-meta__venue {
+  color: var(--ff-text);
+  font-size: clamp(15px, 3.5vw, 17px);
+  font-weight: 700;
+}
+
+.ff-event-meta__date {
+  color: var(--ff-muted);
+  font-size: clamp(13px, 3vw, 15px);
+  /* The day is one phrase; breaking "23 August" across lines reads as two dates. */
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------------

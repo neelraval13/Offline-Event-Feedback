@@ -27,8 +27,8 @@ export type { CampaignQuestion }
  * rider ever saw.
  *
  * What is here is deployment and presentation: which bikes are at this venue,
- * which venues exist, what the hero says. All of it can change without changing
- * the meaning of a single stored answer.
+ * which venue that is, what the hero says. All of it can change without
+ * changing the meaning of a single stored answer.
  *
  * No persistence, validation or business logic lives here. This module is data.
  */
@@ -45,9 +45,15 @@ export interface FlyingFleaCampaign {
   readonly vehicles: readonly string[]
   readonly colours: readonly FlyingFleaColour[]
   readonly genders: readonly FlyingFleaGender[]
-  readonly locations: readonly string[]
-  /** The venue this build is deployed to, when a deployment is venue-locked. */
-  readonly lockedLocation: string | null
+  /**
+   * The venue this build is deployed to.
+   *
+   * Not nullable, and there is no list of alternatives beside it: this event
+   * runs at exactly one address, so the venue is a property of the deployment
+   * rather than a question for the operator. It is still persisted on every
+   * registration as `location`; what changed is who supplies it.
+   */
+  readonly lockedLocation: string
   readonly ratingScale: readonly Rating1To7[]
   readonly ratingQuestions: readonly CampaignQuestion[]
   readonly textQuestions: readonly CampaignQuestion[]
@@ -75,8 +81,7 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
   vehicles: ['Vehicle 1', 'Vehicle 2', 'Vehicle 3', 'Vehicle 4'],
   colours: FLYING_FLEA_COLOURS,
   genders: FLYING_FLEA_GENDERS,
-  locations: ['Prestige Shantiniketan', 'Prestige Tech Park'],
-  lockedLocation: null,
+  lockedLocation: 'Richardson & Cruddas',
 
   ratingScale: RATINGS_1_TO_7,
 
@@ -95,6 +100,11 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
  * email, location and phone are refused when blank; gender, test-ride time,
  * licence and pincode are not. Nothing is added to that list: an event desk
  * with a queue is the worst possible place to discover a newly mandatory field.
+ *
+ * `location` stays on the list because a registration without a venue is still
+ * refused. The operator is simply no longer the one who answers it: the venue
+ * is `lockedLocation` and the test-ride time is the clock, both attached at
+ * submit. See `eventStamp.ts`.
  *
  * Colour is absent because it cannot be unanswered: the supplied control is a
  * toggle that always holds one of the two colours.

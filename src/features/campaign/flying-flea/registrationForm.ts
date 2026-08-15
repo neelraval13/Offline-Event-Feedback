@@ -105,6 +105,11 @@ export const MAX_LICENCE_LENGTH = 32
 /**
  * The colour control always holds a value, so the draft starts on the first
  * campaign colour rather than on nothing.
+ *
+ * `location` starts on the locked venue and `testRideAt` starts empty. Neither
+ * is a control any more: the venue is configuration, and the time is read from
+ * the venue clock at submit rather than here, so that a form opened at 14:10
+ * and submitted at 14:13 records 14:13. See `eventStamp.ts`.
  */
 export function emptyCampaignDraft(): CampaignRegistrationDraft {
   return {
@@ -113,7 +118,7 @@ export function emptyCampaignDraft(): CampaignRegistrationDraft {
     email: '',
     vehicle: null,
     interestedColour: FLYING_FLEA_CAMPAIGN.colours[0] as FlyingFleaColour,
-    location: FLYING_FLEA_CAMPAIGN.lockedLocation ?? '',
+    location: FLYING_FLEA_CAMPAIGN.lockedLocation,
     gender: '',
     testRideAt: '',
     drivingLicence: '',
@@ -146,6 +151,15 @@ export function validatePincode(raw: string): string | null {
   return null
 }
 
+/**
+ * Checks a `testRideAt` the form is carrying.
+ *
+ * No longer typed by anyone: a new registration gets it from the venue clock at
+ * submit, and a correction carries back whatever the record already held. The
+ * check stays because both of those still arrive through this function, and the
+ * stored shape is a contract the wire schema and the backup validator enforce
+ * independently.
+ */
 export function validateTestRideAt(raw: string): string | null {
   const trimmed = raw.trim()
 
@@ -195,8 +209,14 @@ export function validateCampaignRegistration(
   if (draft.vehicle === null) {
     errors.vehicle = 'Select the test-ride vehicle.'
   }
+  /*
+   * A registration without a venue is still refused, even though nobody types
+   * one any more. The value comes from `lockedLocation`, so this can only fire
+   * on a misconfigured build, and refusing to write a venue-less record is the
+   * right thing to do when it does.
+   */
   if (draft.location.trim().length === 0) {
-    errors.location = 'Select a location.'
+    errors.location = 'This build has no venue configured.'
   }
   if (draft.drivingLicence.trim().length > MAX_LICENCE_LENGTH) {
     errors.drivingLicence = `Driving licence must be ${MAX_LICENCE_LENGTH} characters or fewer.`

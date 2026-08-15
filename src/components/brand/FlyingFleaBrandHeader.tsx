@@ -5,9 +5,10 @@ import { ParachuteMark } from './marks/ParachuteMark'
  * The campaign topbar: parachute, wordmark, and the venue this device is
  * standing in.
  *
- * The venue badge is not decoration. Two locations run simultaneously in this
- * campaign, and a tablet carried between them that still claims the old venue
- * mislabels every registration taken after the move.
+ * The venue is optional here. Point A and Point B state it, with the event
+ * date, in `EventMeta` under the banner, so they pass nothing and the badge
+ * does not render twice on one screen. The home screen, which has no banner,
+ * still uses it.
  */
 
 interface FlyingFleaBrandHeaderProps {

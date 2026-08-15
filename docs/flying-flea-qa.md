@@ -26,9 +26,11 @@ Open `#/a`.
    selected.
 2. Confirm the colour selector starts on **Flea Green** and switches to **Storm
    Black** cleanly. It must never show both or neither.
-3. Fill Name, Email ID, Location, Phone Number. Leave Gender, Test Ride Date &
-   Time, Driving Licence No and Pincode blank.
-4. Submit.
+3. Confirm the venue and date read **Richardson & Cruddas** and **23 August 2026**
+   under the banner, and that neither is a form control.
+4. Fill Name, Email ID, Phone Number. Leave Gender, Driving Licence No and
+   Pincode blank.
+5. Note the time on a clock, then submit.
 
 **Expect** the registration to save and a sticker to appear. Then:
 
@@ -39,6 +41,34 @@ Open `#/a`.
 The sticker must show no name, phone, email, licence, vehicle, location or
 pincode. Look at it and confirm.
 
+### The venue and the time nobody typed
+
+Open Admin, export a backup, and read the record just written.
+
+- `location` is `Richardson & Cruddas`.
+- `testRideAt` is `2026-08-23T` followed by the clock time you noted at submit,
+  to the minute, in Indian time. Not the time the form was opened, and not the
+  device's calendar date if that differs.
+
+Then register a second rider several minutes later and confirm the two records
+carry different times. Finally use **Correct details** on the first record to fix
+its email address, and confirm `testRideAt` is unchanged afterwards.
+
+This is worth doing on a device whose own timezone is deliberately set to
+something other than India: the stored time must not move.
+
+### QR density
+
+The event ID is encoded into every sticker, so it is kept short on purpose:
+`ff-rc-2026-08-23` gives a 114-byte payload and a 45-module symbol, which is a
+size Point B has already been tested against by hand. Spelling the venue out
+inside the ID would give 139 bytes and 49 modules, a denser code on every label.
+
+Nothing new to check here, then, beyond the usual: the first few printed stickers
+must decode first time at Point B. If a future event lengthens the ID past about
+ten more characters, re-run the physical scan test in
+`docs/point-b-physical-test.md` before the print run.
+
 ### Speed
 
 Time a full registration with a stopwatch, entering a phone number on the
@@ -47,7 +77,8 @@ the redesign is costing throughput and should be reported.
 
 ### Validation, without blocking the desk
 
-- Submit an empty form: five errors (vehicle, name, email, location, phone).
+- Submit an empty form: four errors (vehicle, name, email, phone). Not five: the
+  venue is no longer asked for.
 - Type a 9-digit phone: "Enter a valid 10-digit mobile number."
 - Type a 4-digit pincode: "Pincode must be 6 digits."
 - Type an unusual but real licence (`KA01 2020 0001234`, `DL-0420110149646`).
@@ -201,8 +232,10 @@ Point A:
 - the motorcycle is whole: front wheel, mirror and tail all inside the frame
 - switching to Storm Black does not move anything below it
 - both colour buttons are full width and at least a finger tall
-- every personal detail is one per row; the Location and Gender selects show
-  their native arrow inside the field, and the date and time control is not cut
+- the venue and date sit under the banner on one line, or wrap onto two, with
+  neither clipped at the right edge
+- every personal detail is one per row; the Gender select shows its native arrow
+  inside the field, and the licence field is not cut
 - the phone cluster is a full circle with ten slots, all readable, and the arc
   is round rather than an ellipse
 - every keypad key can be hit without hitting its neighbour

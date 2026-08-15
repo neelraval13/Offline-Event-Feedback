@@ -90,9 +90,9 @@ describe('form behaviour', () => {
 
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
-    // The campaign's five required fields: vehicle, name, email, location and
+    // The four fields the operator still answers: vehicle, name, email and
     // phone. Nothing is saved and no identity is issued.
-    expect(await screen.findAllByRole('alert')).toHaveLength(5)
+    expect(await screen.findAllByRole('alert')).toHaveLength(4)
     expect(screen.queryByTestId('sticker')).toBeNull()
     expect(await countRegistrations(db)).toBe(0)
   })
@@ -492,6 +492,167 @@ describe('correcting contact details', () => {
       expect((await onlyRecord()).name).toBe('Augusta Ada King')
     })
     expect(await countRegistrations(db)).toBe(1)
+  })
+})
+
+describe('the venue and the time the operator no longer types', () => {
+  /*
+   * Two fields became two facts. Neither is a control any more, both are still
+   * on every record, and the whole risk of the change lives in *when* the time
+   * is read and *whether* a later correction overwrites it.
+   *
+   * The instants below are written as UTC so they mean the same moment wherever
+   * this suite runs; the venue is UTC+05:30.
+   */
+
+  /** 14:10 at the venue: the form is opened. */
+  const OPENED = new Date('2026-08-23T08:40:00.000Z')
+  /** 14:13 at the venue: the operator presses Register & Print. */
+  const SUBMITTED = new Date('2026-08-23T08:43:00.000Z')
+  /** 15:49 at the venue: the next rider. */
+  const NEXT_RIDER = new Date('2026-08-23T10:19:00.000Z')
+
+  /*
+   * Only `Date` is faked, deliberately: `setTimeout` and friends stay real, so
+   * IndexedDB, Dexie and user-event keep making progress while the test decides
+   * what "now" is. Faking the whole timer set stalls the save and the sticker
+   * never arrives.
+   */
+  function atVenueTime(instant: Date) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(instant)
+    return userEvent.setup()
+  }
+
+  it('states both above the form instead of asking for them', async () => {
+    render(<RegistrationScreen />)
+
+    expect(await screen.findByText('Richardson & Cruddas')).toBeDefined()
+    expect(screen.getByText('23 August 2026')).toBeDefined()
+
+    expect(screen.queryByLabelText(/^Location/)).toBeNull()
+    expect(screen.queryByLabelText(/^Test Ride Date/)).toBeNull()
+    expect(
+      document.querySelectorAll('input[type="datetime-local"]'),
+    ).toHaveLength(0)
+  })
+
+  it('stores the locked venue on a registration nobody chose one for', async () => {
+    render(<RegistrationScreen />)
+    await registerParticipant()
+
+    expect((await onlyRecord()).location).toBe('Richardson & Cruddas')
+  })
+
+  it('stores the event day with the time the operator pressed the button', async () => {
+    const user = atVenueTime(OPENED)
+    try {
+      render(<RegistrationScreen />)
+      await fillCampaignRegistration(user)
+
+      // Three minutes pass while the rider spells their email address out.
+      vi.setSystemTime(SUBMITTED)
+      await user.click(screen.getByRole('button', { name: 'Register & Print' }))
+      await screen.findByTestId('sticker')
+
+      // 14:13, not the 14:10 the form was opened at.
+      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T14:13')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads the clock again for the next rider at the same desk', async () => {
+    /*
+     * The component is not remounted between riders: "Next rider" clears the
+     * desk in place. A time captured on mount, or when the draft was created,
+     * would give every rider of the session the first one's slot.
+     */
+    const user = atVenueTime(OPENED)
+    try {
+      render(<RegistrationScreen />)
+
+      await fillCampaignRegistration(user)
+      vi.setSystemTime(SUBMITTED)
+      await user.click(screen.getByRole('button', { name: 'Register & Print' }))
+      await screen.findByTestId('sticker')
+
+      await user.click(screen.getByRole('button', { name: 'Next rider' }))
+      vi.setSystemTime(NEXT_RIDER)
+      await fillCampaignRegistration(user, {
+        ...PARTICIPANT,
+        email: 'grace@example.com',
+      })
+      await user.click(screen.getByRole('button', { name: 'Register & Print' }))
+      await screen.findByTestId('sticker')
+
+      const stored = await listRecentRegistrations(db, 10)
+      expect(stored.map((record) => record.testRideAt).sort()).toEqual([
+        '2026-08-23T14:13',
+        '2026-08-23T15:49',
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never stamps the calendar day the device happens to be on', async () => {
+    // Registering while the tablet believes it is some other date entirely.
+    const user = atVenueTime(new Date('2026-08-15T08:43:00.000Z'))
+    try {
+      render(<RegistrationScreen />)
+      await fillCampaignRegistration(user)
+      await user.click(screen.getByRole('button', { name: 'Register & Print' }))
+      await screen.findByTestId('sticker')
+
+      // The date is the event's, the time is the venue clock's.
+      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T14:13')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves the ride time alone when details are corrected later', async () => {
+    /*
+     * A correction is not a new ride. An operator who fixes a misspelt email at
+     * 16:10 must not move the rider's 15:42 test ride, because afterwards
+     * nothing in the record says it was ever anything else.
+     */
+    const user = atVenueTime(new Date('2026-08-23T10:12:00.000Z'))
+    try {
+      render(<RegistrationScreen />)
+      await fillCampaignRegistration(user)
+      await user.click(screen.getByRole('button', { name: 'Register & Print' }))
+      await screen.findByTestId('sticker')
+
+      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T15:42')
+
+      // Half an hour later, at 16:10.
+      vi.setSystemTime(new Date('2026-08-23T10:40:00.000Z'))
+      await user.click(screen.getByRole('button', { name: 'Correct details' }))
+
+      const correction = screen.getByRole('region', {
+        name: 'Correct rider details',
+      })
+      const email = within(correction).getByLabelText(/^Email ID/)
+      await user.clear(email)
+      await user.type(email, 'ada.corrected@example.com')
+      await user.click(
+        within(correction).getByRole('button', { name: 'Save correction' }),
+      )
+
+      await waitFor(async () => {
+        expect((await onlyRecord()).email).toBe('ada.corrected@example.com')
+      })
+
+      const after = await onlyRecord()
+      expect(after.testRideAt).toBe('2026-08-23T15:42')
+      expect(after.testRideAt).not.toBe('2026-08-23T16:10')
+      // And the venue is still the canonical one.
+      expect(after.location).toBe('Richardson & Cruddas')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

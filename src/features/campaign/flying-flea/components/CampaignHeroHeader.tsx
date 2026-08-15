@@ -4,6 +4,7 @@ import {
   REGISTRATION_HEADER_IMAGE,
 } from '../assets'
 import { FLYING_FLEA_CAMPAIGN } from '../config'
+import { EventMeta } from './EventMeta'
 
 /*
  * The top of the registration screen: brand bar, banner, title.
@@ -39,9 +40,9 @@ export function CampaignHeroHeader({
 }: CampaignHeroHeaderProps) {
   return (
     <header className="ff-hero">
-      <FlyingFleaBrandHeader
-        venue={FLYING_FLEA_CAMPAIGN.lockedLocation ?? undefined}
-      />
+      {/* No venue badge here: `EventMeta` below states it once, with the date,
+          and the same venue printed twice on one screen is noise. */}
+      <FlyingFleaBrandHeader />
 
       <div className="ff-hero__banner">
         <img
@@ -63,6 +64,8 @@ export function CampaignHeroHeader({
           <p className="ff-sub">{subtitle}</p>
         </div>
       </div>
+
+      <EventMeta />
     </header>
   )
 }

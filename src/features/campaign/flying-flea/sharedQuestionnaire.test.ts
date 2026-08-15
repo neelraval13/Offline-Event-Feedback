@@ -66,13 +66,13 @@ describe('the campaign screens render the shared questionnaire', () => {
   })
 
   it('keeps presentation config out of the shared definition', () => {
-    // Vehicles, venues and hero copy change without changing what any stored
+    // Vehicles, the venue and hero copy change without changing what any stored
     // answer means, so they stay client-side.
     const sharedExports = Object.keys(FLYING_FLEA_QUESTIONS[0] ?? {})
 
     expect(sharedExports).toEqual(['key', 'prompt', 'kind'])
     expect(FLYING_FLEA_CAMPAIGN.vehicles.length).toBeGreaterThan(0)
-    expect(FLYING_FLEA_CAMPAIGN.locations.length).toBeGreaterThan(0)
+    expect(FLYING_FLEA_CAMPAIGN.lockedLocation.length).toBeGreaterThan(0)
   })
 
   it('pins the form version that every reader branches on', () => {

@@ -20,7 +20,7 @@ is right.
 | Headlamp rating icon | `LAMP_PATH` in `google-hosted/Index.html` |
 | Registration fields and their required-ness | the form's own submit handler |
 | Questionnaire wording | the form's markup, verbatim |
-| Vehicles, colours, venues, thank-you | the `CFG` defaults in the same file |
+| Vehicles, colours, venue, thank-you | the `CFG` defaults in the same file |
 
 All three marks are inlined as React components in `src/components/brand/marks/`
 rather than fetched as files. The supplied page inlines them too, and for the
@@ -81,9 +81,9 @@ wording used to be written out twice, and two copies of a question is one
 question that will eventually disagree with itself, invisibly.
 
 `src/features/campaign/flying-flea/config.ts` owns deployment and presentation:
-vehicles at this venue, the venue list, swatch colours, hero copy. All of it can
-change without changing the meaning of a single stored answer. Neither module
-contains persistence or validation logic.
+vehicles at this venue, which venue that is, swatch colours, hero copy. All of
+it can change without changing the meaning of a single stored answer. Neither
+module contains persistence or validation logic.
 
 The supplied deployment reads these from a Google Sheet so the campaign team can
 edit them without a code change. This application has no Sheet and no network at
@@ -99,9 +99,7 @@ Captured at Point A, in the campaign's own labels.
 | Interested in Color? | Always answered | `interestedColour` | Single-select; the supplied toggle cannot express two |
 | Name | Yes | `name` | Pre-existing field |
 | Email ID | Yes | `email` | Pre-existing field |
-| Location | Yes | `location` | From the campaign's venue list |
 | Gender | No | `gender` | Male / Female / Others |
-| Test Ride Date & Time | No | `testRideAt` | Local wall clock, `YYYY-MM-DDTHH:mm` |
 | Driving Licence No | No | `drivingLicence` | **Sensitive**; no format imposed |
 | Phone Number | Yes | `phone` | 10-digit Indian mobile, the campaign's own rule |
 | Pincode | No | `pincode` | Six digits when given |
@@ -110,9 +108,41 @@ Required-ness is read from the supplied form's submit handler. Nothing was added
 to that list: an event desk with a queue is the worst place to discover a newly
 mandatory field.
 
+### The two fields nobody types
+
+`location` and `testRideAt` are still on every record, under the same keys and in
+the same shapes. They are no longer questions.
+
+| Field | Where the value comes from |
+| --- | --- |
+| `location` | `FLYING_FLEA_CAMPAIGN.lockedLocation`. One venue, fixed at build time |
+| `testRideAt` | `EVENT_CONFIG.eventDay` plus the venue clock at the moment of submit |
+
+Both are attached by `src/features/campaign/flying-flea/eventStamp.ts`, on the
+new-registration path only. The venue and the event date are shown instead as
+static metadata under the hero banner, at Point A and at Point B, by `EventMeta`.
+
+Three properties of that are worth stating, because each one is a defect if it
+slips:
+
+- **The time is read at submit.** Not at mount, not when the draft is created,
+  not when "Next rider" clears the desk. A form opened at 14:10 and submitted at
+  14:13 records 14:13.
+- **The date comes from configuration, never from the device calendar.** A tablet
+  with a wrong date, or a test run in a different month, still stamps the event
+  day.
+- **A correction never restamps.** Fixing a misspelt email at 16:10 leaves a
+  15:42 ride at 15:42. Corrections go through their own path, which carries the
+  form's values through untouched.
+
+The clock is read through `Asia/Kolkata` explicitly (`src/config/eventTime.ts`),
+not through the device's own timezone: a tablet restored from a backup taken
+abroad would otherwise write a time nobody was at the venue, and the stored value
+carries no zone to reveal it.
+
 `testRideAt` is stored as the local wall-clock string, never converted to UTC. It
-is a slot at a venue; shifting it by a timezone would move a 10:00 booking to
-04:30 in an export read by the people who run the venue.
+is a slot at a venue; shifting it by a timezone would move a 15:42 ride to 10:12
+in an export read by the people who run the venue.
 
 ### Mutable versus immutable
 

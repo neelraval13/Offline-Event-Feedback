@@ -4,6 +4,7 @@ import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignH
 import { stationFor } from '../../config/event'
 import { CampaignRegistrationForm } from '../campaign/flying-flea/components/CampaignRegistrationForm'
 import { needsLegacyCorrection } from '../campaign/flying-flea/campaignRecord'
+import { stampEventFields } from '../campaign/flying-flea/eventStamp'
 import { RegistrationForm } from './RegistrationForm'
 import type { CampaignRegistrationDraft } from '../campaign/flying-flea/registrationForm'
 import { emptyCampaignDraft } from '../campaign/flying-flea/registrationForm'
@@ -125,8 +126,15 @@ export function RegistrationScreen() {
             </p>
           )}
 
+          {/*
+            The venue and the test-ride time are attached here, on the way to
+            the store, and nowhere else. This is the new-registration path: the
+            correction path below calls `handleCorrection`, which never stamps,
+            so fixing an email address at 16:10 cannot rewrite a ride that
+            happened at 15:42.
+          */}
           <CampaignRegistrationForm
-            onSubmit={(values) => void submit(values)}
+            onSubmit={(values) => void submit(stampEventFields(values))}
             busy={phase.status === 'saving'}
             resetKey={formGeneration}
           />

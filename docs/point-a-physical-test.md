@@ -160,7 +160,7 @@ Point B, which does not exist yet.
 Read the decoded text the camera shows. It must be exactly this shape:
 
 ```json
-{"v":1,"event":"evt-dev-001","participant":"<uuid>","code":"A1-B8EFD9-00001-X"}
+{"v":1,"event":"ff-rc-2026-08-23","participant":"<uuid>","code":"A1-B8EFD9-00001-X"}
 ```
 
 Four fields. **No name, no phone number, no email address.** Anyone who picks up

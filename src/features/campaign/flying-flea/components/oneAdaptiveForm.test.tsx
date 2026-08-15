@@ -41,18 +41,16 @@ describe('Point A renders one of everything', () => {
     for (const label of [
       'Name',
       'Email ID',
-      'Location',
       'Gender',
-      'Test Ride Date & Time',
       'Driving Licence No',
     ]) {
       expect(screen.getAllByLabelText(new RegExp(`^${label}`))).toHaveLength(1)
     }
   })
 
-  it('keeps the six personal details in one grid', () => {
+  it('keeps the four personal details in one grid', () => {
     /*
-     * The two-into-one-column behaviour is `auto-fit`, which needs all six
+     * The two-into-one-column behaviour is `auto-fit`, which needs all the
      * fields to be siblings in the same grid. Splitting them across two
      * containers to force a layout would freeze the column count.
      */
@@ -60,7 +58,7 @@ describe('Point A renders one of everything', () => {
 
     const grids = document.querySelectorAll('.ff-grid2')
     expect(grids).toHaveLength(1)
-    expect(grids[0]?.querySelectorAll('.ff-field')).toHaveLength(6)
+    expect(grids[0]?.querySelectorAll('.ff-field')).toHaveLength(4)
   })
 
   it('offers every vehicle and every colour once', () => {
@@ -71,6 +69,44 @@ describe('Point A renders one of everything', () => {
     }
     for (const colour of FLYING_FLEA_CAMPAIGN.colours) {
       expect(screen.getAllByRole('button', { name: colour })).toHaveLength(1)
+    }
+  })
+})
+
+describe('what Point A no longer asks', () => {
+  /*
+   * There is one venue and one day, and the ride is happening now. Both values
+   * are still stored on every registration; they are attached at submit from
+   * configuration and the venue clock instead of being typed. What must not
+   * come back is a control: a disabled or read-only input holding an answer the
+   * operator cannot change still costs a tab stop and a glance, several hundred
+   * times a day.
+   */
+
+  it('offers no venue control of any kind', () => {
+    renderRegistration()
+
+    expect(screen.queryByLabelText(/^Location/)).toBeNull()
+    expect(document.querySelectorAll('select')).toHaveLength(1) // Gender only.
+    expect(screen.queryByText('Select location')).toBeNull()
+  })
+
+  it('offers no date or time control of any kind', () => {
+    renderRegistration()
+
+    expect(screen.queryByLabelText(/^Test Ride Date/)).toBeNull()
+
+    for (const type of ['datetime-local', 'date', 'time']) {
+      expect(document.querySelectorAll(`input[type="${type}"]`)).toHaveLength(0)
+    }
+  })
+
+  it('leaves no read-only or disabled field standing in for them', () => {
+    renderRegistration()
+
+    for (const control of document.querySelectorAll('input, select, textarea')) {
+      expect(control.hasAttribute('readonly')).toBe(false)
+      expect(control.hasAttribute('disabled')).toBe(false)
     }
   })
 })

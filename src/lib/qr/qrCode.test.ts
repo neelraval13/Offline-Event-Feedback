@@ -15,7 +15,8 @@ import {
 import { formatPublicCode } from '../identity/publicCode'
 import { deriveIssuerCode } from '../identity/issuerCode'
 import { newParticipantId } from '../identity/uuid'
-import { deviceId, eventId, stationId } from '../../types'
+import { deviceId, eventId, participantId, stationId } from '../../types'
+import { EVENT_CONFIG } from '../../config/event'
 
 const EVENT = eventId('evt-dev-001')
 const ISSUER = {
@@ -228,6 +229,60 @@ describe('the identity contract survives rendering', () => {
     const symbol = createQrSymbol(payload)
     expect(symbol.size).toBeGreaterThan(41)
     expect(symbol.svg).not.toContain('stroke')
+  })
+
+  it('prints the configured event at a known, pinned density', () => {
+    /*
+     * The event ID is encoded verbatim into every sticker, so its length has a
+     * printed cost. With `ff-rc-2026-08-23` the payload is 114 bytes and the
+     * symbol is version 7: 45 modules, 0.49 mm each inside 26 mm counting the
+     * quiet zone, about 3.9 printer dots each at 203 dpi. That is a size Point B
+     * has been physically tested against.
+     *
+     * Pinned here rather than left to be discovered on a print run. If this
+     * fails, the payload changed size and the sticker got denser or sparser than
+     * the one that was last scanned by hand.
+     *
+     * The participant ID is fixed rather than generated: the encoder packs
+     * digit-heavy UUIDs into numeric segments, so about one in two thousand
+     * random UUIDs compresses far enough to fit version 6. A random ID here
+     * would make this test fail once in a very long while, for no defect.
+     */
+    const payload = serializeQrPayload(
+      buildQrPayload({
+        eventId: EVENT_CONFIG.eventId,
+        participantId: participantId('019ffc65-4559-7125-9453-e230415644f1'),
+        publicCode: formatPublicCode(ISSUER, 1),
+      }),
+    )
+
+    expect(payload.length).toBe(114)
+    // Under the 124-byte boundary where the symbol grows to 49 modules.
+    expect(payload.length).toBeLessThan(124)
+
+    const symbol = createQrSymbol(payload)
+    expect(symbol.size).toBe(45)
+    expect(symbol.version).toBe(7)
+    // Whatever the density, it must still be filled geometry, never strokes.
+    expect(symbol.svg).not.toContain('stroke')
+  })
+
+  it('would grow the symbol if the event ID spelled the venue out', () => {
+    /*
+     * The measurement behind keeping the ID short. Not a rule about this build
+     * so much as a demonstration of the cost, so the next person to lengthen an
+     * event ID sees what it does to the label.
+     */
+    const spelledOut = serializeQrPayload(
+      buildQrPayload({
+        eventId: eventId('flying-flea-richardson-cruddas-2026-08-23'),
+        participantId: participantId('019ffc65-4559-7125-9453-e230415644f1'),
+        publicCode: formatPublicCode(ISSUER, 1),
+      }),
+    )
+
+    expect(spelledOut.length).toBe(139)
+    expect(createQrSymbol(spelledOut).size).toBe(49)
   })
 
   it('uses error correction level M', () => {

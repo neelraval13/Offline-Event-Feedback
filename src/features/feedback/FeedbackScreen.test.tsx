@@ -116,6 +116,20 @@ async function onlyRecord(): Promise<FeedbackRecord> {
   return records[0] as FeedbackRecord
 }
 
+describe('the event this station belongs to', () => {
+  it('names the venue and the day, as Point A does', () => {
+    /*
+     * Point B's operator scans stickers all day and never opens the
+     * registration form. They get the same confirmation of where and when they
+     * are, from the same component, so the two stations cannot disagree.
+     */
+    renderScreen()
+
+    expect(screen.getByText('Richardson & Cruddas')).toBeDefined()
+    expect(screen.getByText('23 August 2026')).toBeDefined()
+  })
+})
+
 describe('scanning a valid sticker', () => {
   it('opens the feedback form for the scanned participant', async () => {
     const sticker = makeSticker()

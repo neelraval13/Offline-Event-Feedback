@@ -63,20 +63,20 @@ Every request below must be refused. Run each one and read the status code.
 ```bash
 # No credential at all
 curl -s -o /dev/null -w '%{http_code}\n' \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23"
 
 # A wrong secret
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Authorization: Bearer wrong' \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23"
 
 # The ENROLMENT secret: valid for enrolling a device, useless here
 curl -s -o /dev/null -w '%{http_code}\n' \
   -H "Authorization: Bearer $SYNC_ENROLLMENT_SECRET" \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23"
 
 # A device token issued by /v1/sync/enroll: valid for uploading, useless here
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Authorization: Bearer <device token>' \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23"
 ```
 
 **Expect `401` for all four.** A device token that can upload this event's
@@ -86,7 +86,7 @@ Then confirm the correct secret works:
 
 ```bash
 curl -s -i -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001" | head -8
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23" | head -8
 ```
 
 **Expect `200`, and in the headers:**
@@ -110,12 +110,12 @@ The startup line must end with `reporting: disabled`. Then:
 ```bash
 # Reporting refuses even with the correct secret: there is nothing to match
 curl -s -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001"
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23"
 
 # Sync is completely unaffected
 curl -s http://localhost:8788/health
 curl -s -X POST -H 'Content-Type: application/json' \
-  -d "{\"eventId\":\"evt-dev-001\",\"deviceId\":\"<a uuid>\",\"enrollmentSecret\":\"$SYNC_ENROLLMENT_SECRET\"}" \
+  -d "{\"eventId\":\"ff-rc-2026-08-23\",\"deviceId\":\"<a uuid>\",\"enrollmentSecret\":\"$SYNC_ENROLLMENT_SECRET\"}" \
   http://localhost:8788/v1/sync/enroll
 ```
 
@@ -138,7 +138,7 @@ Restart with the real secret before continuing.
 
 ```bash
 curl -s -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  "http://localhost:8788/v1/reporting/overview?eventId=evt-dev-001" | python3 -m json.tool
+  "http://localhost:8788/v1/reporting/overview?eventId=ff-rc-2026-08-23" | python3 -m json.tool
 ```
 
 Check these relationships rather than any particular value:
@@ -198,12 +198,12 @@ With a run selected, sync a new registration and a new response, then:
 # Absent from the selected run's browsers
 curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
   -H 'Content-Type: application/json' \
-  -d '{"eventId":"evt-dev-001","runId":"<older run>"}' \
+  -d '{"eventId":"ff-rc-2026-08-23","runId":"<older run>"}' \
   http://localhost:8788/v1/reporting/registrations/query
 
 # Absent from its detail view: 404 under the older run, 200 under a new one
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  "http://localhost:8788/v1/reporting/registrations/<new record>?eventId=evt-dev-001&runId=<older run>"
+  "http://localhost:8788/v1/reporting/registrations/<new record>?eventId=ff-rc-2026-08-23&runId=<older run>"
 ```
 
 Then check the arithmetic on the exports for that run:
@@ -220,10 +220,10 @@ state of the event that never existed.
 
 ```bash
 for path in \
-  "overview?eventId=evt-dev-001&runId=not-a-uuid" \
-  "duplicates?eventId=evt-dev-001&runId=not-a-uuid" \
-  "registrations/not-a-uuid?eventId=evt-dev-001" \
-  "feedback/12345?eventId=evt-dev-001" \
+  "overview?eventId=ff-rc-2026-08-23&runId=not-a-uuid" \
+  "duplicates?eventId=ff-rc-2026-08-23&runId=not-a-uuid" \
+  "registrations/not-a-uuid?eventId=ff-rc-2026-08-23" \
+  "feedback/12345?eventId=ff-rc-2026-08-23" \
   "overview"; do
   curl -s -o /dev/null -w "%{http_code} $path\n" \
     -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
@@ -239,7 +239,7 @@ Do the same for a cursor:
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" -H 'Content-Type: application/json' \
-  -d '{"eventId":"evt-dev-001","cursor":"rubbish"}' \
+  -d '{"eventId":"ff-rc-2026-08-23","cursor":"rubbish"}' \
   http://localhost:8788/v1/reporting/registrations/query
 ```
 
@@ -260,7 +260,7 @@ the panels are unmounted and that nothing was written to storage on the way out.
 # A participant with several responses
 curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
   -H 'Content-Type: application/json' \
-  -d '{"eventId":"evt-dev-001","status":"multiple_feedback"}' \
+  -d '{"eventId":"ff-rc-2026-08-23","status":"multiple_feedback"}' \
   http://localhost:8788/v1/reporting/registrations/query | python3 -m json.tool
 ```
 
@@ -275,7 +275,7 @@ full, with their individual ratings, and that nothing marks one as preferred.
 # Responses that matched no registration
 curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
   -H 'Content-Type: application/json' \
-  -d '{"eventId":"evt-dev-001","status":"without_registration"}' \
+  -d '{"eventId":"ff-rc-2026-08-23","status":"without_registration"}' \
   http://localhost:8788/v1/reporting/feedback/query | python3 -m json.tool
 ```
 
@@ -296,7 +296,7 @@ access log.
 ```bash
 curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
   -H 'Content-Type: application/json' \
-  -d '{"eventId":"evt-dev-001","limit":2}' \
+  -d '{"eventId":"ff-rc-2026-08-23","limit":2}' \
   http://localhost:8788/v1/reporting/registrations/query
 ```
 
@@ -316,7 +316,7 @@ SELECT md5(string_agg(record_id||answers::text||revision, '|'
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  -H 'Content-Type: application/json' -d '{"eventId":"evt-dev-001"}' \
+  -H 'Content-Type: application/json' -d '{"eventId":"ff-rc-2026-08-23"}' \
   http://localhost:8788/v1/reporting/reconcile
 ```
 
@@ -330,14 +330,14 @@ and never rewrites history.
 ```bash
 for kind in registrations.csv feedback.csv duplicate-candidates.csv report.xlsx; do
   curl -s -D - -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-    "http://localhost:8788/v1/reporting/export/$kind?eventId=evt-dev-001" \
+    "http://localhost:8788/v1/reporting/export/$kind?eventId=ff-rc-2026-08-23" \
     -o "$kind" | grep -i -E 'content-disposition|cache-control'
 done
 ```
 
 For each file, confirm:
 
-- the filename is `evt-dev-001-<kind>-<date>.<ext>`: **no participant name,
+- the filename is `ff-rc-2026-08-23-<kind>-<date>.<ext>`: **no participant name,
   code, phone number or email in the filename**
 - `cache-control: no-store, private` is present on the download too
 - the row count matches the run: registrations CSV has one row per registration,
@@ -385,7 +385,7 @@ as a 1–5 answer would move an average by an amount nobody can see.
 
 ```bash
 curl -s -H "Authorization: Bearer $REPORTING_ADMIN_SECRET" \
-  "http://localhost:8788/v1/reporting/duplicates?eventId=evt-dev-001" | python3 -m json.tool
+  "http://localhost:8788/v1/reporting/duplicates?eventId=ff-rc-2026-08-23" | python3 -m json.tool
 ```
 
 Both sides of each pair are shown with their public codes. There is no merge
@@ -424,7 +424,7 @@ Auth failures log a reason and a path, never the credential:
 
 ```
 reporting auth failed reason=rejected path=/v1/reporting/overview
-reporting overview event=evt-dev-001 run=<uuid> ms=5
+reporting overview event=ff-rc-2026-08-23 run=<uuid> ms=5
 reporting export kind=xlsx registrations=13 feedback=6 run=<uuid> ms=35
 ```
 

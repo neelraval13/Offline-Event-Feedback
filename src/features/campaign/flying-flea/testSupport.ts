@@ -12,14 +12,18 @@ import { FLYING_FLEA_CAMPAIGN } from './config'
  * every test that happens to need a participant.
  */
 
+/*
+ * Venue and test-ride time are absent on purpose. They are no longer controls:
+ * the venue is `lockedLocation` and the time is the venue clock at submit, both
+ * attached by `eventStamp.ts`. A helper that could still "fill" them would let
+ * a test claim to exercise an input that does not exist.
+ */
 export interface CampaignRiderInput {
   readonly name: string
   readonly phone: string
   readonly email: string
   readonly vehicle?: string
-  readonly location?: string
   readonly gender?: string
-  readonly testRideAt?: string
   readonly drivingLicence?: string
   readonly pincode?: string
 }
@@ -57,19 +61,8 @@ export async function fillCampaignRegistration(
   await user.clear(phone)
   await user.type(phone, rider.phone)
 
-  await user.selectOptions(
-    scope.getByLabelText(/^Location/),
-    rider.location ?? (FLYING_FLEA_CAMPAIGN.locations[0] as string),
-  )
-
   if (rider.gender !== undefined) {
     await user.selectOptions(scope.getByLabelText('Gender'), rider.gender)
-  }
-  if (rider.testRideAt !== undefined) {
-    await user.type(
-      scope.getByLabelText('Test Ride Date & Time'),
-      rider.testRideAt,
-    )
   }
   if (rider.drivingLicence !== undefined) {
     await user.type(

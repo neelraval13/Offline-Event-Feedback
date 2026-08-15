@@ -145,7 +145,7 @@ central registrations + feedback  ->  reconciliation run  ->  derived results
   printed by the CLI, or logged.
 
 ```bash
-pnpm server:reconcile -- --event evt-dev-001
+pnpm server:reconcile -- --event ff-rc-2026-08-23
 ```
 
 See [docs/reconciliation-test.md](docs/reconciliation-test.md) for the
@@ -366,7 +366,7 @@ pnpm icons       # regenerate the temporary PWA icons
 cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
 pnpm server:migrate    # apply the schema deliberately; never on startup
 pnpm server:start      # serve the ingest API on :8788, unprefixed
-pnpm server:reconcile -- --event evt-dev-001   # classify central data
+pnpm server:reconcile -- --event ff-rc-2026-08-23   # classify central data
 pnpm server:typecheck
 pnpm server:test
 ```

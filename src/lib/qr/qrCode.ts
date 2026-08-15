@@ -29,20 +29,41 @@ import QRCode from 'qrcode'
  * modules in a row merged into one rectangle each. Output stays vector, and CSS
  * still sizes the finished symbol to 26 mm.
  *
- * Error correction level **M** (~15%). Measured against the real payload
- * (109 bytes) at the 26 mm printed size:
+ * Error correction level **M** (~15%). Measured against the real payload, which
+ * with the configured event ID (`ff-rc-2026-08-23`) is **114 bytes**. Module
+ * size is the 26 mm printed width divided by the matrix plus its four-module
+ * quiet zone on each side:
  *
- *   L -> version 5, 37 modules, 0.58 mm each
- *   M -> version 6, 41 modules, 0.53 mm each   <- chosen
- *   Q -> version 8, 49 modules, 0.46 mm each
- *   H -> version 10, 57 modules, 0.40 mm each
+ *   L -> version 6, 41 modules, 0.53 mm each, 4.2 dots at 203 dpi
+ *   M -> version 7, 45 modules, 0.49 mm each, 3.9 dots at 203 dpi   <- chosen
+ *   Q -> version 9, 53 modules, 0.43 mm each, 3.4 dots at 203 dpi
+ *   H -> version 10, 57 modules, 0.40 mm each, 3.2 dots at 203 dpi
  *
  * Higher correction means more modules in the same 26 mm, so each module gets
  * smaller and the code gets *harder* to scan: at 203 dpi, H would give barely
- * 3 printer dots per module against M's 4.2. The usual reason to accept that
+ * 3 printer dots per module against M's 3.9. The usual reason to accept that
  * trade is damage tolerance, but this system already has a designed answer for
  * a QR too damaged to read: the public code printed underneath it, which staff
  * types instead.
+ *
+ * ## Why the event ID is kept short
+ *
+ * The event ID is encoded verbatim, so its length is paid on every label. This
+ * was measured, not guessed:
+ *
+ *   evt-dev-001 (the old placeholder, 11 chars)   109 bytes   41 or 45 modules
+ *   ff-rc-2026-08-23 (configured, 16 chars)       114 bytes   45 modules
+ *   the venue spelled out (41 chars)              139 bytes   49 modules
+ *
+ * 45 modules is a size production already printed and Point B was physically
+ * tested against; 49 is not, and at 0.46 mm it approaches the density this
+ * module rejected when it chose M over Q. The venue's full name buys nothing
+ * inside a symbol no human reads, so it lives in `EVENT_CONFIG.eventName` and
+ * `FLYING_FLEA_CAMPAIGN.lockedLocation` instead.
+ *
+ * The boundary is 124 bytes: past it the symbol grows to 49 modules. That is
+ * about ten characters of headroom on the current event ID, and it is the reason
+ * to think before lengthening one.
  */
 
 /** Error correction level. See the note above before changing it. */

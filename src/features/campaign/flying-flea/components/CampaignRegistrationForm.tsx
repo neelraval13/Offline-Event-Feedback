@@ -34,6 +34,12 @@ import { VehicleSelector } from './VehicleSelector'
  *     on a rendered keypad instead of a number typed on the tablet's own
  *     keyboard, with no paste and no autofill. The fields are `inputMode`
  *     numeric inputs, which raise the same keypad the dial imitates.
+ *   - Location and Test Ride Date & Time are NOT asked. There is one venue and
+ *     one day, and the ride is happening now; both are attached at submit from
+ *     configuration and the venue clock (see `eventStamp.ts`), and shown as
+ *     event metadata above the form instead. A read-only input holding an
+ *     answer the operator cannot change is still a control they have to look at
+ *     and tab past, several hundred times a day.
  *
  * Name is focused on arrival, tab order runs down the fields to the button, and
  * validation runs on submit, errors that appear while someone is still typing
@@ -92,8 +98,6 @@ export function CampaignRegistrationForm({
     setErrors({})
     onSubmit(result.values)
   }
-
-  const venueLocked = FLYING_FLEA_CAMPAIGN.lockedLocation !== null
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -168,28 +172,6 @@ export function CampaignRegistrationForm({
             )}
           </BrandField>
 
-          <BrandField label="Location" required error={errors.location}>
-            {(field) =>
-              venueLocked ? (
-                <input {...field} type="text" value={draft.location} readOnly />
-              ) : (
-                <select
-                  {...field}
-                  value={draft.location}
-                  disabled={busy}
-                  onChange={(event) => patch({ location: event.target.value })}
-                >
-                  <option value="">Select location</option>
-                  {FLYING_FLEA_CAMPAIGN.locations.map((location) => (
-                    <option key={location} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-              )
-            }
-          </BrandField>
-
           <BrandField label="Gender">
             {(field) => (
               <select
@@ -207,18 +189,6 @@ export function CampaignRegistrationForm({
                   </option>
                 ))}
               </select>
-            )}
-          </BrandField>
-
-          <BrandField label="Test Ride Date & Time" error={errors.testRideAt}>
-            {(field) => (
-              <input
-                {...field}
-                type="datetime-local"
-                value={draft.testRideAt}
-                disabled={busy}
-                onChange={(event) => patch({ testRideAt: event.target.value })}
-              />
             )}
           </BrandField>
 

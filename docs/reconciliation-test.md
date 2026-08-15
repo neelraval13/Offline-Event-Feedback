@@ -45,7 +45,7 @@ Five relations: three result tables, the runs table, and the
 ## 1. Run it
 
 ```bash
-pnpm server:reconcile -- --event evt-dev-001
+pnpm server:reconcile -- --event ff-rc-2026-08-23
 ```
 
 The output is counts only: no name, phone number, email address, comment or
@@ -99,20 +99,20 @@ LIMIT 5;
 -- The run itself
 SELECT run_id, engine_version, started_at, completed_at,
        registration_count, feedback_count
-FROM reconciliation_latest_runs WHERE event_id = 'evt-dev-001';
+FROM reconciliation_latest_runs WHERE event_id = 'ff-rc-2026-08-23';
 
 -- Registration outcomes
 SELECT status, count(*)
 FROM reconciliation_registration_results
 WHERE run_id = (SELECT run_id FROM reconciliation_latest_runs
-                WHERE event_id = 'evt-dev-001')
+                WHERE event_id = 'ff-rc-2026-08-23')
 GROUP BY 1 ORDER BY 1;
 
 -- Feedback outcomes
 SELECT status, match_method, count(*)
 FROM reconciliation_feedback_results
 WHERE run_id = (SELECT run_id FROM reconciliation_latest_runs
-                WHERE event_id = 'evt-dev-001')
+                WHERE event_id = 'ff-rc-2026-08-23')
 GROUP BY 1, 2 ORDER BY 1;
 ```
 
@@ -125,7 +125,7 @@ records:
 SELECT registration_record_id, count(*) AS responses
 FROM reconciliation_feedback_results
 WHERE run_id = (SELECT run_id FROM reconciliation_latest_runs
-                WHERE event_id = 'evt-dev-001')
+                WHERE event_id = 'ff-rc-2026-08-23')
   AND status = 'multiple_feedback'
 GROUP BY 1;
 ```
@@ -147,12 +147,12 @@ INSERT INTO registrations (
   source_device_id, name, phone, email, created_at, updated_at, revision,
   first_received_at, last_received_at, last_uploader_device_id
 ) VALUES
- (gen_random_uuid(), gen_random_uuid(), 'A1-DUPE01-00001-X', 'evt-dev-001',
+ (gen_random_uuid(), gen_random_uuid(), 'A1-DUPE01-00001-X', 'ff-rc-2026-08-23',
   '2026-01-01', 'A1', (SELECT source_device_id FROM registrations LIMIT 1),
   'Test Duplicate', '+91 98765 43210', 'Dupe@Example.com',
   now(), now(), 1, now(), now(),
   (SELECT last_uploader_device_id FROM registrations LIMIT 1)),
- (gen_random_uuid(), gen_random_uuid(), 'A1-DUPE01-00002-X', 'evt-dev-001',
+ (gen_random_uuid(), gen_random_uuid(), 'A1-DUPE01-00002-X', 'ff-rc-2026-08-23',
   '2026-01-01', 'A1', (SELECT source_device_id FROM registrations LIMIT 1),
   'Test Duplicate Again', '919876543210', ' dupe@example.com ',
   now(), now(), 1, now(), now(),
@@ -166,7 +166,7 @@ and padding in the email. Re-run reconciliation, then:
 SELECT left_registration_record_id, right_registration_record_id, match_basis
 FROM reconciliation_duplicate_registration_candidates
 WHERE run_id = (SELECT run_id FROM reconciliation_latest_runs
-                WHERE event_id = 'evt-dev-001');
+                WHERE event_id = 'ff-rc-2026-08-23');
 ```
 
 **Expected:** exactly one row, `match_basis = phone_and_email`, and the pair
@@ -193,7 +193,7 @@ INSERT INTO feedback (
   station_id, source_device_id, form_version, answers, created_at, updated_at,
   revision, first_received_at, last_received_at, last_uploader_device_id
 ) VALUES (
-  gen_random_uuid(), NULL, 'A1-ORPHAN-00001-X', 'manual', 'evt-dev-001',
+  gen_random_uuid(), NULL, 'A1-ORPHAN-00001-X', 'manual', 'ff-rc-2026-08-23',
   '2026-01-01', 'B1', (SELECT source_device_id FROM feedback LIMIT 1),
   'feedback-v1', '{"overall_rating":4,"experience":"good","recommend":true}',
   now(), now(), 1, now(), now(),
@@ -226,7 +226,7 @@ they were taken.
 
 ```sql
 SELECT run_id, started_at, completed_at, registration_count, feedback_count
-FROM reconciliation_runs WHERE event_id = 'evt-dev-001'
+FROM reconciliation_runs WHERE event_id = 'ff-rc-2026-08-23'
 ORDER BY started_at;
 ```
 
@@ -234,7 +234,7 @@ Every run you have made is listed. The view returns only the most recent
 **completed** one:
 
 ```sql
-SELECT run_id FROM reconciliation_latest_runs WHERE event_id = 'evt-dev-001';
+SELECT run_id FROM reconciliation_latest_runs WHERE event_id = 'ff-rc-2026-08-23';
 ```
 
 To confirm an unfinished run is never mistaken for a result, insert one and
@@ -242,10 +242,10 @@ check the view is unchanged:
 
 ```sql
 INSERT INTO reconciliation_runs (run_id, event_id, engine_version, started_at)
-VALUES (gen_random_uuid(), 'evt-dev-001', 'reconciliation-v1',
+VALUES (gen_random_uuid(), 'ff-rc-2026-08-23', 'reconciliation-v1',
         now() + interval '1 hour');
 
-SELECT run_id FROM reconciliation_latest_runs WHERE event_id = 'evt-dev-001';
+SELECT run_id FROM reconciliation_latest_runs WHERE event_id = 'ff-rc-2026-08-23';
 -- unchanged: completed_at IS NULL is excluded
 
 DELETE FROM reconciliation_runs WHERE completed_at IS NULL;
