@@ -9,6 +9,12 @@ import {
   FEEDBACK_CSV_HEADER,
   REGISTRATION_CSV_HEADER,
 } from './exportCsv.js'
+import {
+  compileParticipantFeedback,
+  participantFeedbackCells,
+  PARTICIPANT_FEEDBACK_HEADER,
+  PARTICIPANT_FEEDBACK_WIDTHS,
+} from './participantFeedback.js'
 import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
 import type { DuplicateCandidateRow, OverviewResponse } from './types.js'
 
@@ -195,6 +201,34 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
   }
   summary.getColumn(1).width = 64
   summary.getColumn(2).width = 44
+
+  /* ---- Participant Feedback ----
+   *
+   * Second, directly after Summary, because it is the sheet most readers want
+   * and the three that follow are audit sheets. It is a view over them and
+   * never a source of truth: see `participantFeedback.ts`.
+   */
+  const participants = workbook.addWorksheet('Participant Feedback')
+  addHeader(participants, PARTICIPANT_FEEDBACK_HEADER)
+
+  for (const row of compileParticipantFeedback(
+    run.runId,
+    input.registrations,
+    input.feedback,
+  )) {
+    appendTextRow(participants, participantFeedbackCells(row))
+  }
+
+  PARTICIPANT_FEEDBACK_WIDTHS.forEach((width, index) => {
+    participants.getColumn(index + 1).width = width
+  })
+
+  // Filter the header, so an organiser can narrow to one status or one vehicle
+  // without writing anything.
+  participants.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: PARTICIPANT_FEEDBACK_HEADER.length },
+  }
 
   /* ---- Registrations ---- */
   const registrations = workbook.addWorksheet('Registrations')

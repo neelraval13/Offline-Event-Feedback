@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs'
 import { FLYING_FLEA_QUESTIONS } from './campaign.js'
 import { buildWorkbook } from './exportXlsx.js'
 import { FEEDBACK_CSV_HEADER, REGISTRATION_CSV_HEADER, DUPLICATE_CSV_HEADER } from './exportCsv.js'
+import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
 import type { CampaignAnalytics, FeedbackAnalytics, OverviewResponse, RunDescriptor } from './types.js'
 
 /*
@@ -161,11 +162,17 @@ function overview(
 }
 
 /** Builds the workbook and reads it back, as an organiser's spreadsheet would. */
-async function readBack(input: OverviewResponse): Promise<ExcelJS.Workbook> {
+async function readBack(
+  input: OverviewResponse,
+  rows: {
+    registrations?: readonly RegistrationExportRow[]
+    feedback?: readonly FeedbackExportRow[]
+  } = {},
+): Promise<ExcelJS.Workbook> {
   const buffer = await buildWorkbook({
     overview: input,
-    registrations: [],
-    feedback: [],
+    registrations: rows.registrations ?? [],
+    feedback: rows.feedback ?? [],
     duplicates: [],
     generatedAt: new Date('2026-08-23T13:00:00.000Z'),
   })
@@ -192,11 +199,12 @@ const FLYING_FLEA_ONLY = overview(NO_LEGACY, CAMPAIGN, {
 })
 
 describe('a Flying Flea workbook', () => {
-  it('keeps the five sheets an export has always had', async () => {
+  it('keeps every sheet an export has, with the readable one near the front', async () => {
     const workbook = await readBack(FLYING_FLEA_ONLY)
 
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
       'Summary',
+      'Participant Feedback',
       'Registrations',
       'Feedback',
       'Duplicate Candidates',
@@ -431,5 +439,521 @@ describe('an event that collected both questionnaires', () => {
     expect(summary.get('Responses by questionnaire')).toBe(
       'flying-flea-feedback-v1: 11, feedback-v1: 4',
     )
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Participant Feedback
+ *
+ * The convenience join. Every case below is one the reconciliation engine can
+ * actually produce, and the point of each is that the sheet reports what the
+ * run decided rather than deciding anything itself.
+ * ------------------------------------------------------------------ */
+
+function registration(
+  overrides: Partial<RegistrationExportRow> & { recordId: string },
+): RegistrationExportRow {
+  return {
+    participantId: `participant-${overrides.recordId}`,
+    publicCode: 'A1-B8EFD9-00001-X',
+    name: 'Ada Lovelace',
+    phone: '9876543210',
+    email: 'ada@example.com',
+    vehicle: 'Vehicle 2',
+    interestedColour: 'Storm Black',
+    location: 'Richardson & Cruddas',
+    gender: 'Female',
+    testRideAt: '2026-08-23T15:42',
+    drivingLicence: 'KA0120200001234',
+    pincode: '560048',
+    createdAt: '2026-08-23T10:12:00.000Z',
+    revision: 1,
+    status: 'matched',
+    validFeedbackCount: 1,
+    potentialDuplicate: false,
+    feedbackRecordId: null,
+    captureMethod: null,
+    overallRating: null,
+    experience: null,
+    recommend: null,
+    comments: null,
+    ...overrides,
+  }
+}
+
+function response(
+  overrides: Partial<FeedbackExportRow> & { recordId: string },
+): FeedbackExportRow {
+  return {
+    publicCode: 'A1-B8EFD9-00001-X',
+    participantId: null,
+    captureMethod: 'qr',
+    formVersion: 'flying-flea-feedback-v1',
+    createdAt: '2026-08-23T16:00:00.000Z',
+    revision: 1,
+    status: 'matched',
+    matchMethod: 'qr_identity',
+    registrationRecordId: null,
+    registrationPublicCode: null,
+    registrationName: null,
+    registrationPhone: null,
+    registrationEmail: null,
+    overallRating: null,
+    experience: null,
+    recommend: null,
+    comments: null,
+    testRideExperienceRating: '6',
+    rotaryKnobRating: '5',
+    rideModesRating: '6',
+    overallExperienceRating: '7',
+    topThreeFeatures: 'Torque, silence, weight',
+    overallExperienceComments: 'Best thing I have ridden.',
+    ...overrides,
+  }
+}
+
+/** The sheet as `column name -> value` per row, in sheet order. */
+function participantRows(
+  workbook: ExcelJS.Workbook,
+): Map<string, string>[] {
+  const sheet = workbook.getWorksheet('Participant Feedback')
+  const header = ((sheet?.getRow(1).values ?? []) as unknown[])
+    .slice(1)
+    .map((value) => String(value))
+  const rows: Map<string, string>[] = []
+
+  sheet?.eachRow((row, index) => {
+    if (index === 1) return
+    const entry = new Map<string, string>()
+    header.forEach((name, column) => {
+      entry.set(name, String(row.getCell(column + 1).value ?? ''))
+    })
+    rows.push(entry)
+  })
+
+  return rows
+}
+
+describe('Participant Feedback: a matched rider', () => {
+  const REG = registration({ recordId: 'reg-1' })
+  const RES = response({ recordId: 'res-1', registrationRecordId: 'reg-1' })
+
+  it('puts Point A and Point B on one row', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [RES],
+      }),
+    )
+
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Status')).toBe('Matched')
+    expect(row.get('Public Code')).toBe('A1-B8EFD9-00001-X')
+    expect(row.get('Name')).toBe('Ada Lovelace')
+    expect(row.get('Phone')).toBe('9876543210')
+    expect(row.get('Email')).toBe('ada@example.com')
+    expect(row.get('Driving Licence')).toBe('KA0120200001234')
+    expect(row.get('Gender')).toBe('Female')
+    expect(row.get('Pincode')).toBe('560048')
+    expect(row.get('Vehicle')).toBe('Vehicle 2')
+    expect(row.get('Interested Colour')).toBe('Storm Black')
+    expect(row.get('Location')).toBe('Richardson & Cruddas')
+    expect(row.get('Test Ride Date & Time')).toBe('2026-08-23T15:42')
+  })
+
+  it('carries all six Flying Flea answers', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [RES],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Feedback Capture Method')).toBe('qr')
+    expect(row.get('Feedback Form Version')).toBe('flying-flea-feedback-v1')
+    expect(row.get('Test Ride Experience / 7')).toBe('6')
+    expect(row.get('Rotary Knob Usage / 7')).toBe('5')
+    expect(row.get('Ride Modes Experience / 7')).toBe('6')
+    expect(row.get('Overall Experience / 7')).toBe('7')
+    expect(row.get('Top 3 Features')).toBe('Torque, silence, weight')
+    expect(row.get('Overall Experience Comments')).toBe(
+      'Best thing I have ridden.',
+    )
+  })
+
+  it('carries both record identities and both timestamps', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [RES],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Reconciliation Run')).toBe(RUN.runId)
+    expect(row.get('Registration Record ID')).toBe('reg-1')
+    expect(row.get('Feedback Record ID')).toBe('res-1')
+    expect(row.get('Registration Created At')).toBe('2026-08-23T10:12:00.000Z')
+    expect(row.get('Feedback Created At')).toBe('2026-08-23T16:00:00.000Z')
+  })
+})
+
+describe('Participant Feedback: a rider who did not respond', () => {
+  it('still appears, with the answer columns blank', async () => {
+    /*
+     * Dropping these would turn the sheet into "riders who answered", which is
+     * a different and much less useful question. Response coverage is a number
+     * on the Summary sheet; this is the list behind it.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [
+          registration({
+            recordId: 'reg-2',
+            status: 'without_feedback',
+            validFeedbackCount: 0,
+            name: 'Grace Hopper',
+          }),
+        ],
+      }),
+    )
+
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Status')).toBe('No response')
+    expect(row.get('Name')).toBe('Grace Hopper')
+    expect(row.get('Vehicle')).toBe('Vehicle 2')
+
+    for (const column of [
+      'Feedback Capture Method',
+      'Feedback Form Version',
+      'Test Ride Experience / 7',
+      'Overall Experience / 7',
+      'Top 3 Features',
+      'Overall Experience Comments',
+      'Feedback Record ID',
+      'Feedback Created At',
+    ]) {
+      expect(row.get(column)).toBe('')
+    }
+  })
+})
+
+describe('Participant Feedback: a rider with several responses', () => {
+  const REG = registration({
+    recordId: 'reg-3',
+    status: 'multiple_feedback',
+    validFeedbackCount: 2,
+    name: 'Katherine Johnson',
+  })
+  const FIRST = response({
+    recordId: 'res-a',
+    registrationRecordId: 'reg-3',
+    status: 'multiple_feedback',
+    overallExperienceRating: '4',
+    createdAt: '2026-08-23T16:00:00.000Z',
+  })
+  const SECOND = response({
+    recordId: 'res-b',
+    registrationRecordId: 'reg-3',
+    status: 'multiple_feedback',
+    overallExperienceRating: '7',
+    createdAt: '2026-08-23T16:30:00.000Z',
+  })
+
+  it('renders one row per response, with the rider repeated', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [FIRST, SECOND],
+      }),
+    )
+
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row.get('Status')).toBe('Multiple responses')
+      expect(row.get('Name')).toBe('Katherine Johnson')
+      expect(row.get('Registration Record ID')).toBe('reg-3')
+    }
+  })
+
+  it('chooses no winner between them', async () => {
+    /*
+     * The run refused to pick one, and so does this sheet. Both answers are
+     * present, distinguishable by their own record IDs, and neither is marked
+     * as the participant's.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [FIRST, SECOND],
+      }),
+    )
+
+    expect(rows.map((row) => row.get('Feedback Record ID'))).toEqual([
+      'res-a',
+      'res-b',
+    ])
+    expect(rows.map((row) => row.get('Overall Experience / 7'))).toEqual([
+      '4',
+      '7',
+    ])
+  })
+
+  it('keeps the rows adjacent', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [
+          registration({ recordId: 'reg-early', createdAt: '2026-08-23T09:00:00.000Z' }),
+          REG,
+          registration({
+            recordId: 'reg-late',
+            createdAt: '2026-08-23T11:00:00.000Z',
+            status: 'without_feedback',
+          }),
+        ],
+        feedback: [
+          response({ recordId: 'res-early', registrationRecordId: 'reg-early' }),
+          FIRST,
+          SECOND,
+        ],
+      }),
+    )
+
+    expect(rows.map((row) => row.get('Registration Record ID'))).toEqual([
+      'reg-early',
+      'reg-3',
+      'reg-3',
+      'reg-late',
+    ])
+  })
+})
+
+describe('Participant Feedback: responses with no registration', () => {
+  it('keeps a response whose rider was never registered', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [],
+        feedback: [
+          response({
+            recordId: 'res-orphan',
+            status: 'without_registration',
+            registrationRecordId: null,
+            captureMethod: 'manual',
+            publicCode: 'A1-B8EFD9-00042-K',
+          }),
+        ],
+      }),
+    )
+
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Status')).toBe('No registration')
+    // The code the operator typed, which is the thing worth seeing.
+    expect(row.get('Public Code')).toBe('A1-B8EFD9-00042-K')
+    expect(row.get('Overall Experience / 7')).toBe('7')
+
+    for (const column of ['Name', 'Phone', 'Email', 'Vehicle', 'Registration Record ID']) {
+      expect(row.get(column)).toBe('')
+    }
+  })
+
+  it('keeps an identity conflict without inventing a rider for it', async () => {
+    /*
+     * The engine sets `registration_record_id` to null for a conflict: it is
+     * refusing to name a registration. This sheet honours the refusal rather
+     * than re-deriving a relationship from the public code.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [registration({ recordId: 'reg-4' })],
+        feedback: [
+          response({
+            recordId: 'res-conflict',
+            status: 'identity_conflict',
+            registrationRecordId: null,
+          }),
+        ],
+      }),
+    )
+
+    const conflict = rows.find((row) => row.get('Feedback Record ID') === 'res-conflict')
+    expect(conflict).toBeDefined()
+    expect(conflict?.get('Status')).toBe('Identity conflict')
+
+    for (const column of ['Name', 'Phone', 'Email', 'Registration Record ID']) {
+      expect(conflict?.get(column)).toBe('')
+    }
+
+    // And it did not get attached to the registration that is also in the run.
+    const registered = rows.find((row) => row.get('Registration Record ID') === 'reg-4')
+    expect(registered?.get('Feedback Record ID')).toBe('')
+  })
+
+  it('places orphan responses after every registered rider', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [
+          registration({ recordId: 'reg-5', status: 'without_feedback' }),
+        ],
+        feedback: [
+          response({
+            recordId: 'res-orphan',
+            status: 'without_registration',
+            registrationRecordId: null,
+            // Earlier than the registration, to prove ordering is by section
+            // rather than by timestamp across the whole sheet.
+            createdAt: '2026-08-23T08:00:00.000Z',
+          }),
+        ],
+      }),
+    )
+
+    expect(rows.map((row) => row.get('Status'))).toEqual([
+      'No response',
+      'No registration',
+    ])
+  })
+})
+
+describe('Participant Feedback: questionnaire safety', () => {
+  it('leaves the campaign columns blank for a feedback-v1 response', async () => {
+    /*
+     * Those columns are headed "out of 7". A `feedback-v1` rating is out of 5,
+     * and printing one under a 7-point heading is a misreading this sheet must
+     * not make possible.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [registration({ recordId: 'reg-6' })],
+        feedback: [
+          response({
+            recordId: 'res-legacy',
+            registrationRecordId: 'reg-6',
+            formVersion: 'feedback-v1',
+            overallRating: '4',
+            experience: 'good',
+            comments: 'Enjoyed it.',
+          }),
+        ],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Feedback Form Version')).toBe('feedback-v1')
+    expect(row.get('Status')).toBe('Matched')
+
+    for (const column of [
+      'Test Ride Experience / 7',
+      'Rotary Knob Usage / 7',
+      'Ride Modes Experience / 7',
+      'Overall Experience / 7',
+      'Top 3 Features',
+      'Overall Experience Comments',
+    ]) {
+      expect(row.get(column)).toBe('')
+    }
+  })
+
+  it('leaves them blank for a questionnaire this build has never seen', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [registration({ recordId: 'reg-7' })],
+        feedback: [
+          response({
+            recordId: 'res-future',
+            registrationRecordId: 'reg-7',
+            // A future questionnaire that happens to reuse the key names on a
+            // different scale.
+            formVersion: 'some-future-questionnaire-v3',
+          }),
+        ],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Feedback Form Version')).toBe('some-future-questionnaire-v3')
+    expect(row.get('Overall Experience / 7')).toBe('')
+    expect(row.get('Top 3 Features')).toBe('')
+  })
+})
+
+describe('Participant Feedback: spreadsheet safety', () => {
+  const HOSTILE = "=cmd|'/c calc'!A0"
+
+  it('writes every participant-derived cell as text, never as a formula', async () => {
+    const workbook = await readBack(FLYING_FLEA_ONLY, {
+      registrations: [
+        registration({
+          recordId: 'reg-8',
+          name: HOSTILE,
+          phone: '+919876543210',
+          publicCode: '+A1-B8EFD9-00001-X',
+          drivingLicence: '=KA0120200001234',
+        }),
+      ],
+      feedback: [
+        response({
+          recordId: 'res-8',
+          registrationRecordId: 'reg-8',
+          topThreeFeatures: '@SUM(1,1)',
+          overallExperienceComments: '-1+1',
+        }),
+      ],
+    })
+
+    const sheet = workbook.getWorksheet('Participant Feedback')
+    const header = ((sheet?.getRow(1).values ?? []) as unknown[])
+      .slice(1)
+      .map((value) => String(value))
+    const row = sheet?.getRow(2)
+
+    for (const column of [
+      'Name',
+      'Phone',
+      'Public Code',
+      'Driving Licence',
+      'Top 3 Features',
+      'Overall Experience Comments',
+    ]) {
+      const cell = row?.getCell(header.indexOf(column) + 1)
+
+      expect(cell?.type).toBe(ExcelJS.ValueType.String)
+      expect(cell?.formula).toBeUndefined()
+      // Text format, so Excel does not coerce it back on entry either.
+      expect(cell?.numFmt).toBe('@')
+    }
+  })
+
+  it('does not truncate a rider’s comment', async () => {
+    const long = 'It was brilliant. '.repeat(100).trim()
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [registration({ recordId: 'reg-9' })],
+        feedback: [
+          response({
+            recordId: 'res-9',
+            registrationRecordId: 'reg-9',
+            overallExperienceComments: long,
+          }),
+        ],
+      }),
+    )
+
+    expect(rows[0]?.get('Overall Experience Comments')).toBe(long)
+  })
+
+  it('freezes the header and offers a filter', async () => {
+    const sheet = (await readBack(FLYING_FLEA_ONLY)).getWorksheet(
+      'Participant Feedback',
+    )
+
+    expect(sheet?.views?.[0]?.state).toBe('frozen')
+    expect(sheet?.autoFilter).toBeDefined()
   })
 })
