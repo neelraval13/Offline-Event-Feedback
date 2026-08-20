@@ -11,7 +11,16 @@ import type { CapturedParticipantIdentity } from '../../types'
  * reads storage, and in particular nothing reads Point A's registrations.
  * Point B has no copy of them and must not need one (invariant 2). A scan is
  * accepted or rejected on the strength of the sticker alone.
+ *
+ * The third Point B path, a rider with no sticker at all, is not here: it has
+ * no sticker to parse. See `contactCapture.ts`.
  */
+
+/** An identity that came from a sticker: the two this module can produce. */
+export type StickerIdentity = Extract<
+  CapturedParticipantIdentity,
+  { captureMethod: 'qr' | 'manual' }
+>
 
 /** The station whose stickers Point B accepts: the registration desk, A1. */
 const ISSUING_STATION = stationFor('registration').stationId
@@ -24,7 +33,7 @@ export type IdentityRejectionReason =
   | 'invalid-code'
 
 export type IdentityCaptureResult =
-  | { readonly ok: true; readonly identity: CapturedParticipantIdentity }
+  | { readonly ok: true; readonly identity: StickerIdentity }
   | {
       readonly ok: false
       readonly reason: IdentityRejectionReason

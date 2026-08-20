@@ -101,6 +101,7 @@ const feedbackQuerySchema = z.object({
     .enum([
       'matched',
       'without_registration',
+      'standalone',
       'identity_conflict',
       'multiple_feedback',
       'all',

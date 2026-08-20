@@ -9,6 +9,11 @@ import {
   MAX_VEHICLE_LENGTH,
   RATINGS_1_TO_7,
 } from '../campaign/flyingFlea.js'
+import {
+  MAX_PERSON_EMAIL_LENGTH,
+  MAX_PERSON_NAME_LENGTH,
+  MAX_PERSON_PHONE_LENGTH,
+} from '../identity/contactBounds.js'
 
 /*
  * The synchronisation wire contract, version 1.
@@ -55,6 +60,19 @@ const identifier = z.string().min(1).max(128)
 const revision = z.number().int().min(1)
 
 /*
+ * Contact details, wherever they appear.
+ *
+ * Storage bounds, not rules about people: the desk decides what a well-formed
+ * name or phone number is, with the human standing in front of it. Defined once
+ * because a registration's contact fields and a contact capture's respondent
+ * fields are the same kind of value, and a bound that differed between them
+ * would be a record one end accepts and the other refuses.
+ */
+const personName = z.string().min(1).max(MAX_PERSON_NAME_LENGTH)
+const personPhone = z.string().min(1).max(MAX_PERSON_PHONE_LENGTH)
+const personEmail = z.string().min(1).max(MAX_PERSON_EMAIL_LENGTH)
+
+/*
  * Registration.
  *
  * PII travels here deliberately, consolidating it centrally is the entire
@@ -72,9 +90,9 @@ export const registrationWireSchema = z.object({
   /** The device that *captured* this record, not the one uploading it. */
   deviceId: uuid,
 
-  name: z.string().min(1).max(200),
-  phone: z.string().min(1).max(64),
-  email: z.string().min(1).max(320),
+  name: personName,
+  phone: personPhone,
+  email: personEmail,
 
   /*
    * Campaign fields, all optional.
@@ -154,16 +172,45 @@ export const flyingFleaFeedbackAnswersSchema = z.object({
 /*
  * Feedback.
  *
- * `participantId` is optional on purpose: a manually typed public code cannot
- * yield one, and inventing it would be fabricating data. Reconciliation is a
- * later phase and a central concern.
+ * Every identity field is optional in the object and none of them is optional
+ * in fact: `checkCaptureIdentity` below requires exactly the set that the
+ * declared `captureMethod` can have, and forbids the rest. Optionality here is
+ * how three shapes share one object; it is not permission to omit things.
+ *
+ * `participantId` is absent for a manually typed public code, which cannot
+ * yield one. `publicCode` is absent for a contact capture, which never had a
+ * sticker. Inventing either would be fabricating data. Deciding whether a
+ * contact capture belongs to a registration is reconciliation's job, centrally,
+ * after synchronisation.
+ *
+ * ## Why this is still protocol version 1
+ *
+ * Purely additive, and additive is what keeps devices in the field working. An
+ * enum gained a member and three optional fields appeared; every record an
+ * older build produces is a `qr` or `manual` record with a `publicCode`, and
+ * parses under this schema exactly as it did before. A tablet that has been
+ * offline all day, running the previous build, with unsynced responses on it,
+ * uploads them to the new server unchanged.
+ *
+ * Bumping the version would have made that tablet's records unacceptable until
+ * somebody found it and updated it, which is the one thing an offline-first
+ * system must never require. See docs/architecture.md.
  */
 const feedbackWireObject = z.object({
     kind: z.literal('feedback'),
     recordId: uuid,
     participantId: uuid.optional(),
-    publicCode,
-    captureMethod: z.enum(['qr', 'manual']),
+    publicCode: publicCode.optional(),
+    captureMethod: z.enum(['qr', 'manual', 'contact']),
+
+    /*
+     * The rider's own details, for a contact capture only. This is the one
+     * shape in which PII reaches the server from Point B, and it travels for
+     * the same reason a registration's does: it is the identity of the record.
+     */
+    respondentName: personName.optional(),
+    respondentPhone: personPhone.optional(),
+    respondentEmail: personEmail.optional(),
 
     eventId: identifier,
     eventDay,
@@ -183,26 +230,106 @@ const feedbackWireObject = z.object({
 })
 
 /**
- * The Phase 3 identity rule, enforced on the wire.
+ * The identity rule, enforced on the wire.
  *
- * A QR scan yields a participant ID; a manually typed public code cannot, and
- * claiming one would be fabricating data the device never had.
+ * Each capture method has exactly one legitimate set of identity fields, and
+ * this checks for that set and against every other. Requiring the right fields
+ * is only half of it: forbidding the wrong ones is what stops a hybrid record,
+ * and a hybrid record is the dangerous shape. A `contact` record carrying a
+ * `publicCode` would claim a sticker nobody scanned and would then be joined to
+ * whichever registration holds that code, silently, by a query that had every
+ * right to trust the column.
+ *
+ * The three shapes:
+ *
+ *   qr       participantId + publicCode, no respondent fields
+ *   manual   publicCode only, no participantId, no respondent fields
+ *   contact  all three respondent fields, no participantId, no publicCode
  */
 function checkCaptureIdentity(
-  record: { captureMethod: string; participantId?: string | undefined },
+  record: {
+    captureMethod: string
+    participantId?: string | undefined
+    publicCode?: string | undefined
+    respondentName?: string | undefined
+    respondentPhone?: string | undefined
+    respondentEmail?: string | undefined
+  },
   ctx: z.RefinementCtx,
 ): void {
-  const consistent =
-    record.captureMethod === 'qr'
-      ? record.participantId !== undefined
-      : record.participantId === undefined
+  const has = (value: string | undefined): boolean => value !== undefined
+  const contact =
+    has(record.respondentName) ||
+    has(record.respondentPhone) ||
+    has(record.respondentEmail)
 
-  if (!consistent) {
+  const problem = ((): { message: string; path: string } | null => {
+    switch (record.captureMethod) {
+      case 'qr':
+        if (!has(record.participantId) || !has(record.publicCode)) {
+          return {
+            message: 'a qr capture must carry both a participantId and a publicCode',
+            path: 'participantId',
+          }
+        }
+        return contact
+          ? {
+              message: 'a qr capture must not carry respondent contact details',
+              path: 'respondentName',
+            }
+          : null
+
+      case 'manual':
+        if (has(record.participantId)) {
+          return {
+            message: 'a manual capture must not carry a participantId',
+            path: 'participantId',
+          }
+        }
+        if (!has(record.publicCode)) {
+          return {
+            message: 'a manual capture must carry a publicCode',
+            path: 'publicCode',
+          }
+        }
+        return contact
+          ? {
+              message: 'a manual capture must not carry respondent contact details',
+              path: 'respondentName',
+            }
+          : null
+
+      case 'contact':
+        if (has(record.participantId) || has(record.publicCode)) {
+          return {
+            message:
+              'a contact capture must not carry a participantId or a publicCode',
+            path: 'publicCode',
+          }
+        }
+        if (
+          !has(record.respondentName) ||
+          !has(record.respondentPhone) ||
+          !has(record.respondentEmail)
+        ) {
+          return {
+            message:
+              'a contact capture must carry a respondent name, phone and email',
+            path: 'respondentName',
+          }
+        }
+        return null
+
+      default:
+        return { message: 'unknown captureMethod', path: 'captureMethod' }
+    }
+  })()
+
+  if (problem !== null) {
     ctx.addIssue({
       code: 'custom',
-      message:
-        'a qr capture must carry a participantId and a manual capture must not',
-      path: ['participantId'],
+      message: problem.message,
+      path: [problem.path],
     })
   }
 }

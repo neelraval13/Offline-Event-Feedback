@@ -167,6 +167,21 @@ export const FEEDBACK_CSV_HEADER = [
   'overall_experience_rating',
   'top_three_features',
   'overall_experience_comments',
+  /*
+   * Contact identity, appended rather than inserted.
+   *
+   * Every existing column keeps its name and its position, because a CSV header
+   * is a contract with whatever is already reading these files: a script that
+   * indexes by column number, a saved spreadsheet import, a pivot table
+   * somebody built last week. Appending is invisible to all of them; inserting
+   * in a tidier place would silently shift every column after it and nothing
+   * would report an error.
+   *
+   * Blank for a qr or manual response, which never had them.
+   */
+  'respondent_name',
+  'respondent_phone',
+  'respondent_email',
 ] as const
 
 export function feedbackCsv(
@@ -201,6 +216,9 @@ export function feedbackCsv(
       row.overallExperienceRating,
       row.topThreeFeatures,
       row.overallExperienceComments,
+      row.respondentName,
+      row.respondentPhone,
+      row.respondentEmail,
     ]),
   )
 }

@@ -153,12 +153,20 @@ export function computeAnalytics(
 }
 
 /**
- * Response coverage: participants who gave any valid response.
+ * Response coverage: registered participants who gave any valid response.
  *
  * Includes registrations with several responses: the participant did answer,
  * even though the run cannot say which answer is theirs. This is why coverage
  * is usually a larger number than the analytics sample, and why the two are
  * reported separately rather than as one "response rate".
+ *
+ * Standalone direct responses are deliberately absent from both sides of the
+ * fraction. Coverage asks what proportion of the registration list responded,
+ * and a rider who never registered is not on that list. Counting them in the
+ * numerator would answer a different question with this question's label, and
+ * at an event where the contact path is popular it could report coverage above
+ * 100%, which is the kind of number that makes an organiser stop trusting the
+ * whole report. They are carried alongside instead, as `directResponses`.
  */
 export function computeCoverage(run: RunDescriptor): ResponseCoverage {
   const withFeedback =
@@ -169,6 +177,7 @@ export function computeCoverage(run: RunDescriptor): ResponseCoverage {
     registrationsWithFeedback: withFeedback,
     totalRegistrations: total,
     percentage: total === 0 ? null : Math.round((withFeedback / total) * 1000) / 10,
+    directResponses: run.counts.standaloneFeedback,
   }
 }
 

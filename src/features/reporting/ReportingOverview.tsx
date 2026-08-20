@@ -132,7 +132,7 @@ export function ReportingOverview({
           <h3 className="section-title">Response coverage</h3>
           <dl className="station-badge">
             <div>
-              <dt>Participants who responded</dt>
+              <dt>Registered participants who responded</dt>
               <dd>
                 {overview.coverage.registrationsWithFeedback.toLocaleString()} of{' '}
                 {overview.coverage.totalRegistrations.toLocaleString()}
@@ -146,7 +146,27 @@ export function ReportingOverview({
               <dt>No response</dt>
               <dd>{overview.run.counts.registrationsWithoutFeedback.toLocaleString()}</dd>
             </div>
+            {/*
+              Beside the fraction, never inside it. These riders have no
+              registration, so they belong to neither half: adding them to the
+              top would report coverage above 100% at an event where the
+              contact path was popular, and adding them to the bottom would
+              invent registrations to divide by.
+            */}
+            <div>
+              <dt>Direct responses (no registration)</dt>
+              <dd>{overview.coverage.directResponses.toLocaleString()}</dd>
+            </div>
           </dl>
+          {overview.coverage.directResponses > 0 && (
+            <p className="screen__note">
+              {overview.coverage.directResponses.toLocaleString()} rider(s) gave
+              feedback at Point B without a Point A registration, identifying
+              themselves by contact details. Their answers are included in the
+              figures below and are deliberately outside the coverage fraction
+              above, which measures the registration list.
+            </p>
+          )}
 
           {/*
             Which questionnaires this run actually holds. An event that ran both
@@ -185,8 +205,10 @@ export function ReportingOverview({
                 response(s))
               </h3>
               <p className="screen__note">
-                Computed from responses this run matched to exactly one rider.
-                Each question is averaged on its own 1–7 scale.
+                Computed from every response this run could attribute
+                unambiguously: matched to exactly one rider, plus direct
+                responses from riders with no registration. Each question is
+                averaged on its own 1–7 scale.
               </p>
 
               {overview.campaignAnalytics.ratings.map((rating) => (
@@ -241,10 +263,12 @@ export function ReportingOverview({
           <h3 className="section-title">Answers (feedback-v1)</h3>
           <p className="screen__note">
             Computed from the {overview.analytics.analysedResponses.toLocaleString()}{' '}
-            response(s) this run matched to exactly one participant. Responses in
-            a multiple-response group, identity conflicts and responses with no
-            registration are excluded, because none of them can be attributed to one
-            person with confidence.
+            response(s) this run could attribute unambiguously: matched to one
+            participant, or direct feedback from a rider with no registration.
+            Responses in a multiple-response group, identity conflicts and
+            responses whose sticker code resolved to no registration are
+            excluded, because none of them can be attributed to one person with
+            confidence.
             {overview.analytics.unreadableFormVersions > 0 && (
               <>
                 {' '}
@@ -297,10 +321,16 @@ export function ReportingOverview({
             </>
           )}
 
+          {/*
+            Needs review is a list of things that went wrong. Direct responses
+            are deliberately absent from it, and from every total in it: a rider
+            who never registered and said so is not a fault, and putting them
+            here would bury the mistyped codes that genuinely need somebody.
+          */}
           <h3 className="section-title">Needs review</h3>
           <dl className="station-badge">
             <div>
-              <dt>Responses with no registration</dt>
+              <dt>Responses with a code that matched no registration</dt>
               <dd>{overview.run.counts.feedbackWithoutRegistration.toLocaleString()}</dd>
             </div>
             <div>

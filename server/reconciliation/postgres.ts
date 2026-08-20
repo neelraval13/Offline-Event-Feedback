@@ -40,6 +40,28 @@ function toIso(value: unknown): string {
   return value instanceof Date ? value.toISOString() : String(value)
 }
 
+/**
+ * The stored capture method, read rather than guessed at.
+ *
+ * Throws on an unrecognised value instead of defaulting to one of the three.
+ * The column is constrained by `feedback_identity_shape` (migration 008), so
+ * an unknown value can only mean this build is older than the database: a
+ * deployment rolled back under a schema that has moved on. Silently treating a
+ * capture method this build has never heard of as `manual` would classify a
+ * whole class of responses under rules that were never meant for them, and
+ * write those conclusions into a run somebody will read as fact.
+ */
+function readCaptureMethod(value: unknown): ReconciliationFeedback['captureMethod'] {
+  const method = String(value)
+
+  if (method === 'qr' || method === 'manual' || method === 'contact') {
+    return method
+  }
+
+  // The method only, never the record, never the respondent.
+  throw new Error(`Unknown feedback capture_method in the database: ${method}`)
+}
+
 function mapRun(row: Row): PersistedRun {
   return {
     runId: String(row['run_id']),
@@ -60,6 +82,9 @@ function mapRun(row: Row): PersistedRun {
       ),
       matchedFeedback: Number(row['matched_feedback']),
       feedbackWithoutRegistration: Number(row['feedback_without_registration']),
+      // Zero on a run recorded before migration 008 added the column, which is
+      // the true count for an engine that could not classify one.
+      standaloneFeedback: Number(row['standalone_feedback'] ?? 0),
       feedbackIdentityConflicts: Number(row['feedback_identity_conflicts']),
       feedbackInMultipleGroups: Number(row['feedback_in_multiple_groups']),
       duplicateRegistrationCandidateCount: Number(
@@ -101,7 +126,8 @@ export async function runReconciliation(
         WHERE event_id = ${eventId}
       `
       const feedbackRows = await tx<Row[]>`
-        SELECT record_id, capture_method, participant_id, public_code
+        SELECT record_id, capture_method, participant_id, public_code,
+               respondent_phone, respondent_email
         FROM feedback
         WHERE event_id = ${eventId}
       `
@@ -117,14 +143,18 @@ export async function runReconciliation(
         }),
       )
 
+      /** NULL columns stay null: the engine branches on `captureMethod`. */
+      const text = (value: unknown): string | null =>
+        value === null || value === undefined ? null : String(value)
+
       const feedback: ReconciliationFeedback[] = feedbackRows.map((row) => ({
         recordId: String(row['record_id']),
-        captureMethod: String(row['capture_method']) === 'qr' ? 'qr' : 'manual',
-        participantId:
-          row['participant_id'] === null || row['participant_id'] === undefined
-            ? null
-            : String(row['participant_id']),
-        publicCode: String(row['public_code']),
+        captureMethod: readCaptureMethod(row['capture_method']),
+        participantId: text(row['participant_id']),
+        publicCode: text(row['public_code']),
+        // Matched on, in memory, and never written to a reconciliation table.
+        respondentPhone: text(row['respondent_phone']),
+        respondentEmail: text(row['respondent_email']),
       }))
 
       const classified = reconcile({ eventId, registrations, feedback })
@@ -150,6 +180,7 @@ export async function runReconciliation(
           registrations_with_multiple_feedback = ${counts.registrationsWithMultipleFeedback},
           matched_feedback = ${counts.matchedFeedback},
           feedback_without_registration = ${counts.feedbackWithoutRegistration},
+          standalone_feedback = ${counts.standaloneFeedback},
           feedback_identity_conflicts = ${counts.feedbackIdentityConflicts},
           feedback_in_multiple_groups = ${counts.feedbackInMultipleGroups},
           duplicate_registration_candidate_count = ${counts.duplicateRegistrationCandidateCount}

@@ -8,6 +8,7 @@ import {
   DEVICE_A,
   DEVICE_B,
   EVENT_ID,
+  contactFeedback,
   feedback,
   publicCodeFor,
   registration,
@@ -826,5 +827,226 @@ describe('protocol v1 across mixed builds', () => {
      * device. It is a deployment ordering rule, and it is written down.
      */
     expect(SYNC_PROTOCOL_VERSION).toBe(1)
+  })
+})
+
+describe('contact feedback ingest', () => {
+  it('accepts a response identified only by the rider’s details', async () => {
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    const { body } = await postBatch(token, batch([record]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.feedback.get(record.recordId)).toMatchObject({
+      captureMethod: 'contact',
+      respondentName: 'Grace Hopper',
+      respondentPhone: '9876543210',
+      respondentEmail: 'grace@example.com',
+    })
+  })
+
+  it('creates no registration for a rider who only completed Point B', async () => {
+    /*
+     * The architectural line this whole path rests on. Fabricating a
+     * registration would put a participant in the event who never registered,
+     * carrying a code that was never printed and never on anybody's sticker,
+     * and every count downstream would be wrong in a way nothing could detect.
+     */
+    const token = await enrolledToken()
+
+    await postBatch(token, batch([contactFeedback()]))
+
+    expect(store.registrations.size).toBe(0)
+    expect(store.feedback.size).toBe(1)
+  })
+
+  it('stores no public code and no participant ID for it', async () => {
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    await postBatch(token, batch([record]))
+
+    const stored = store.feedback.get(record.recordId) as unknown as Record<
+      string,
+      unknown
+    >
+    // Absent, not null and not an empty string: an empty code would join
+    // against every other empty code the moment somebody trusted the column.
+    expect(stored['publicCode']).toBeUndefined()
+    expect(stored['participantId']).toBeUndefined()
+  })
+
+  it('is idempotent: a re-delivery is acknowledged, not duplicated', async () => {
+    // The ordinary event in this system. A device that never gets a response
+    // retries forever, and the second delivery must be recognised.
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    const first = await postBatch(token, batch([record]))
+    const second = await postBatch(token, batch([record]))
+
+    expect(statusOf(first.body, record.recordId).status).toBe('accepted')
+    expect(statusOf(second.body, record.recordId).status).toBe('already_current')
+    expect(store.feedback.size).toBe(1)
+  })
+
+  it('keeps the contact details through a retry', async () => {
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    await postBatch(token, batch([record]))
+    await postBatch(token, batch([record]))
+
+    expect(store.feedback.get(record.recordId)).toMatchObject({
+      respondentName: 'Grace Hopper',
+      respondentEmail: 'grace@example.com',
+    })
+  })
+
+  it('accepts a higher revision that corrects the answers', async () => {
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    await postBatch(token, batch([record]))
+    const corrected = {
+      ...record,
+      answers: { ...record.answers, overall_rating: 3 },
+      updatedAt: '2026-01-01T12:00:00.000Z',
+      revision: 2,
+    } as typeof record
+
+    const { body } = await postBatch(token, batch([corrected]))
+
+    expect(statusOf(body, record.recordId).status).toBe('accepted')
+    expect(store.feedback.get(record.recordId)?.revision).toBe(2)
+  })
+
+  it('refuses a resend at the same revision with different contact details', async () => {
+    /*
+     * Two different records under one ID. The respondent fields are the
+     * identity of a contact response, so this is not an idempotent retry; if
+     * they were treated as ordinary mutable contents, the two would race and
+     * arrival order would decide whose response it was.
+     */
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    await postBatch(token, batch([record]))
+    const impostor = {
+      ...record,
+      respondentEmail: 'someone.else@example.com',
+    } as typeof record
+
+    const { body } = await postBatch(token, batch([impostor]))
+
+    expect(statusOf(body, record.recordId)).toMatchObject({
+      status: 'conflict',
+      code: 'IMMUTABLE_FIELD_MISMATCH',
+    })
+    // The stored record is untouched.
+    expect(store.feedback.get(record.recordId)?.respondentEmail).toBe(
+      'grace@example.com',
+    )
+  })
+
+  it('refuses a resend that changes the capture method', async () => {
+    const token = await enrolledToken()
+    const record = contactFeedback()
+
+    await postBatch(token, batch([record]))
+    const { body } = await postBatch(
+      token,
+      batch([
+        {
+          ...record,
+          captureMethod: 'manual',
+          publicCode: publicCodeFor(7),
+          respondentName: undefined,
+          respondentPhone: undefined,
+          respondentEmail: undefined,
+        } as never,
+      ]),
+    )
+
+    expect(statusOf(body, record.recordId).status).toBe('conflict')
+  })
+
+  it('rejects a hybrid record before it reaches the store', async () => {
+    // The whole batch is refused by schema validation, so nothing lands.
+    const token = await enrolledToken()
+
+    const response = await app.request('/v1/sync/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(
+        batch([
+          contactFeedback({ publicCode: publicCodeFor(3) } as never),
+        ]),
+      ),
+    })
+
+    expect(response.status).toBe(400)
+    expect(store.feedback.size).toBe(0)
+  })
+
+  it('travels in one batch beside qr and manual responses', async () => {
+    // A real Point B device's outbox: whatever riders happened to bring.
+    const token = await enrolledToken()
+    const records = [
+      feedback(),
+      feedback({ captureMethod: 'manual' }),
+      contactFeedback(),
+    ]
+
+    const { body } = await postBatch(token, batch(records))
+
+    for (const record of records) {
+      expect(statusOf(body, record.recordId).status).toBe('accepted')
+    }
+    expect(store.feedback.size).toBe(3)
+  })
+
+  it('logs no respondent name, phone or email', async () => {
+    /*
+     * Point B now legitimately holds PII, and logs are the easiest place for it
+     * to escape: they are shipped off the host, retained, and read by people
+     * who never touched the event.
+     */
+    const lines: string[] = []
+    const logged = createApp({
+      store,
+      enrollmentSecret: ENROLLMENT_SECRET,
+      allowedOrigins: [ORIGIN],
+      log: (line) => lines.push(line),
+    })
+
+    const enrolment = await logged.request('/v1/sync/enroll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventId: EVENT_ID,
+        deviceId: DEVICE_A,
+        enrollmentSecret: ENROLLMENT_SECRET,
+      }),
+    })
+    const { deviceToken } = (await enrolment.json()) as { deviceToken: string }
+
+    await logged.request('/v1/sync/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${deviceToken}`,
+      },
+      body: JSON.stringify(batch([contactFeedback()])),
+    })
+
+    const all = lines.join('\n')
+    expect(all).not.toContain('Grace Hopper')
+    expect(all).not.toContain('9876543210')
+    expect(all).not.toContain('grace@example.com')
   })
 })

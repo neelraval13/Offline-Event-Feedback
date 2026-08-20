@@ -132,25 +132,49 @@ async function seedRegistration(
 }
 
 async function seedFeedback(options: {
-  publicCode: string
+  publicCode?: string | null
   participantId?: string | null
-  captureMethod?: 'qr' | 'manual'
+  captureMethod?: 'qr' | 'manual' | 'contact'
+  respondentName?: string
+  respondentPhone?: string
+  respondentEmail?: string
   answers?: Record<string, string | number | boolean>
   formVersion?: string
 }): Promise<string> {
   const recordId = randomUUID()
 
+  /*
+   * The capture method is derived from the identity the caller supplied rather
+   * than defaulting to `manual`.
+   *
+   * It used to default unconditionally, so a caller passing a participant ID
+   * seeded a manual row that carried one: a shape no device can produce and
+   * that `feedback_identity_shape` (migration 008) now refuses outright. The
+   * tests passed because nothing checked. Deriving it means a fixture describes
+   * a capture that could actually have happened.
+   */
+  const captureMethod =
+    options.captureMethod ??
+    (options.respondentEmail !== undefined
+      ? 'contact'
+      : options.participantId != null
+        ? 'qr'
+        : 'manual')
+
   await sql`
     INSERT INTO feedback (
       record_id, participant_id, public_code, capture_method,
+      respondent_name, respondent_phone, respondent_email,
       event_id, event_day, station_id, source_device_id,
       form_version, answers,
       created_at, updated_at, revision,
       first_received_at, last_received_at, last_uploader_device_id,
       content_changed_at
     ) VALUES (
-      ${recordId}, ${options.participantId ?? null}, ${options.publicCode},
-      ${options.captureMethod ?? 'manual'},
+      ${recordId}, ${options.participantId ?? null}, ${options.publicCode ?? null},
+      ${captureMethod},
+      ${options.respondentName ?? null}, ${options.respondentPhone ?? null},
+      ${options.respondentEmail ?? null},
       ${EVENT_ID}, '2026-01-01', 'B1', ${DEVICE},
       ${options.formVersion ?? 'feedback-v1'},
       ${sql.json(
@@ -1470,6 +1494,7 @@ describeDb('reporting API', () => {
 
       expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
         'Summary',
+        'Participant Feedback',
         'Registrations',
         'Feedback',
         'Duplicate Candidates',
@@ -1506,6 +1531,365 @@ describeDb('reporting API', () => {
       )
 
       expect(response.status).toBe(404)
+    })
+  })
+
+  /* ---------------------------------------------------------------- *
+   * Contact identity, end to end
+   *
+   * A response goes in as a device would send it, reconciliation runs, and
+   * the browse, detail, overview and export surfaces are asked what they make
+   * of it. Every layer between them is real: real SQL, real joins, real
+   * reconciliation. The pure suites prove each rule; this proves they add up.
+   * ---------------------------------------------------------------- */
+
+  describe('direct responses', () => {
+    const RIDER = {
+      respondentName: 'Grace Hopper',
+      respondentPhone: '9876543210',
+      respondentEmail: 'grace@example.com',
+    }
+
+    /** A rider who never went through Point A. */
+    async function seedDirect(
+      overrides: Partial<typeof RIDER> = {},
+    ): Promise<string> {
+      return seedFeedback({
+        captureMethod: 'contact',
+        ...RIDER,
+        ...overrides,
+        formVersion: 'flying-flea-feedback-v1',
+        answers: {
+          testRideExperience: 7,
+          rotaryKnobUsage: 6,
+          rideModesExperience: 5,
+          overallExperienceRating: 7,
+        },
+      })
+    }
+
+    it('classifies as standalone, not as a missing registration', async () => {
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/feedback/query`, {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID, runId }),
+        }),
+      )
+
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({
+        reconciliationStatus: 'standalone',
+        captureMethod: 'contact',
+        publicCode: null,
+        respondentName: 'Grace Hopper',
+      })
+    })
+
+    it('matches a registration on phone and email together', async () => {
+      const rider = await seedRegistration({
+        name: 'Grace Hopper',
+        phone: '9876543210',
+        email: 'grace@example.com',
+      })
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/feedback/query`, {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID, runId }),
+        }),
+      )
+
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      expect(rows[0]).toMatchObject({
+        reconciliationStatus: 'matched',
+        matchMethod: 'contact_identity',
+      })
+      expect(
+        (rows[0]?.['linkedRegistration'] as Record<string, unknown>)['recordId'],
+      ).toBe(rider.recordId)
+    })
+
+    it('will not match on the phone number alone', async () => {
+      // Families share phone numbers. One half matching is a coincidence.
+      await seedRegistration({ phone: '9876543210', email: 'other@example.com' })
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/feedback/query`, {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID, runId }),
+        }),
+      )
+
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      expect(rows[0]).toMatchObject({
+        reconciliationStatus: 'standalone',
+        linkedRegistration: null,
+      })
+    })
+
+    it('refuses to guess when two registrations share the pair', async () => {
+      await seedRegistration({ phone: '9876543210', email: 'grace@example.com' })
+      await seedRegistration({ phone: '9876543210', email: 'grace@example.com' })
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/feedback/query`, {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID, runId, status: 'identity_conflict' }),
+        }),
+      )
+
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ linkedRegistration: null })
+    })
+
+    it('counts towards the campaign averages', async () => {
+      /*
+       * The inclusion decision, proved through the real query rather than
+       * asserted about it. A direct response is unambiguous: excluding it
+       * would make every average describe registered riders rather than riders.
+       */
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/overview?eventId=${EVENT_ID}`, {
+          headers: AUTH,
+        }),
+      )
+
+      const campaign = body['campaignAnalytics'] as unknown as Record<string, unknown>
+      expect(campaign['analysedResponses']).toBe(1)
+      const ratings = campaign['ratings'] as Record<string, unknown>[]
+      const overall = ratings.find((entry) => entry['key'] === 'overallExperienceRating')
+      expect(overall?.['average']).toBe(7)
+    })
+
+    it('does not move response coverage in either direction', async () => {
+      /*
+       * Coverage asks what proportion of the registration list responded, and
+       * this rider is not on that list. Counting them into the numerator could
+       * report coverage above 100%, which is the kind of number that makes an
+       * organiser stop trusting the whole report.
+       */
+      const rider = await seedRegistration()
+      await seedFeedback({ publicCode: rider.publicCode })
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/overview?eventId=${EVENT_ID}`, {
+          headers: AUTH,
+        }),
+      )
+
+      const coverage = body['coverage'] as unknown as Record<string, unknown>
+      expect(coverage).toMatchObject({
+        registrationsWithFeedback: 1,
+        totalRegistrations: 1,
+        percentage: 100,
+        directResponses: 1,
+      })
+    })
+
+    it('is not counted as a response without a registration', async () => {
+      // The two are different findings and the counts keep them apart, so a
+      // pile of good direct responses cannot bury a mistyped code.
+      const rider = await seedRegistration()
+      await seedFeedback({ publicCode: `A1-B8EFD9-99999-X` })
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/overview?eventId=${EVENT_ID}`, {
+          headers: AUTH,
+        }),
+      )
+
+      const counts = (body['run'] as unknown as Record<string, unknown>)[
+        'counts'
+      ] as Record<string, unknown>
+      expect(counts['standaloneFeedback']).toBe(1)
+      expect(counts['feedbackWithoutRegistration']).toBe(1)
+      expect(rider.recordId).toBeDefined()
+    })
+
+    it('is findable by the rider’s name, phone or email', async () => {
+      /*
+       * Without this, a direct response is unfindable by any term an organiser
+       * would actually type: the name of the person standing in front of them
+       * asking about their feedback.
+       */
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      for (const term of ['Grace', '9876543210', 'grace@example.com']) {
+        const body = await json(
+          await app.request(`/v1/reporting/feedback/query`, {
+            method: 'POST',
+            headers: { ...AUTH, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId: EVENT_ID, search: term }),
+          }),
+        )
+        expect((body['rows'] as unknown as unknown[]).length).toBe(1)
+      }
+    })
+
+    it('still finds a sticker response by its code', async () => {
+      const rider = await seedRegistration()
+      await seedFeedback({ publicCode: rider.publicCode })
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(`/v1/reporting/feedback/query`, {
+          method: 'POST',
+          headers: { ...AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: EVENT_ID, search: rider.publicCode }),
+        }),
+      )
+
+      const rows = body['rows'] as unknown as Record<string, unknown>[]
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.['publicCode']).toBe(rider.publicCode)
+    })
+
+    it('shows the contact identity on the detail view, with no conflict diagnostics', async () => {
+      const recordId = await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+
+      const body = await json(
+        await app.request(
+          `/v1/reporting/feedback/${recordId}?eventId=${EVENT_ID}`,
+          { headers: AUTH },
+        ),
+      )
+
+      const detail = body['feedback'] as unknown as Record<string, unknown>
+      expect(detail).toMatchObject({
+        respondentName: 'Grace Hopper',
+        respondentPhone: '9876543210',
+        respondentEmail: 'grace@example.com',
+        publicCode: null,
+      })
+      // The sticker diagnostics ask what each identifier resolves to, and this
+      // response has neither. A different kind of conflict, explained in words.
+      expect(detail['diagnostics']).toBeNull()
+    })
+
+    it('carries the contact columns into the raw feedback CSV', async () => {
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const csv = await (
+        await app.request(
+          `/v1/reporting/export/feedback.csv?eventId=${EVENT_ID}&runId=${runId}`,
+          { headers: AUTH },
+        )
+      ).text()
+      const [header, row] = csv.trimEnd().split('\r\n')
+
+      expect((header ?? '').split(',').slice(-3)).toEqual([
+        'respondent_name',
+        'respondent_phone',
+        'respondent_email',
+      ])
+      expect(row).toContain('Grace Hopper')
+      expect(row).toContain('grace@example.com')
+      expect(row).toContain('standalone')
+    })
+
+    it('appears on the compiled Participant Feedback sheet, named', async () => {
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const response = await app.request(
+        `/v1/reporting/export/report.xlsx?eventId=${EVENT_ID}&runId=${runId}`,
+        { headers: AUTH },
+      )
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(await response.arrayBuffer())
+
+      const sheet = workbook.getWorksheet('Participant Feedback')
+      const header = ((sheet?.getRow(1).values ?? []) as unknown[])
+        .slice(1)
+        .map((value) => String(value))
+      const cell = (name: string) =>
+        String(sheet?.getRow(2).getCell(header.indexOf(name) + 1).value ?? '')
+
+      expect(cell('Status')).toBe('Direct feedback')
+      expect(cell('Identity Source')).toBe('Contact details, direct')
+      expect(cell('Name')).toBe('Grace Hopper')
+      expect(cell('Email')).toBe('grace@example.com')
+      expect(cell('Public Code')).toBe('')
+      expect(cell('Vehicle')).toBe('')
+      expect(cell('Overall Experience / 7')).toBe('7')
+    })
+
+    it('joins Point A and Point B on one compiled row when it matched', async () => {
+      await seedRegistration({
+        name: 'Ada Lovelace',
+        phone: '9876543210',
+        email: 'grace@example.com',
+        vehicle: 'Vehicle 3',
+      })
+      await seedDirect()
+      const { runId } = await runReconciliation(sql, EVENT_ID)
+
+      const response = await app.request(
+        `/v1/reporting/export/report.xlsx?eventId=${EVENT_ID}&runId=${runId}`,
+        { headers: AUTH },
+      )
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(await response.arrayBuffer())
+
+      const sheet = workbook.getWorksheet('Participant Feedback')
+      const header = ((sheet?.getRow(1).values ?? []) as unknown[])
+        .slice(1)
+        .map((value) => String(value))
+      const cell = (name: string) =>
+        String(sheet?.getRow(2).getCell(header.indexOf(name) + 1).value ?? '')
+
+      expect(cell('Status')).toBe('Matched')
+      expect(cell('Identity Source')).toBe('Contact details, matched to Point A')
+      // Point A on the left, the rider's own details preserved on the right.
+      expect(cell('Name')).toBe('Ada Lovelace')
+      expect(cell('Vehicle')).toBe('Vehicle 3')
+      expect(cell('Respondent Name (as entered)')).toBe('Grace Hopper')
+      expect(cell('Overall Experience / 7')).toBe('7')
+    })
+
+    it('logs no respondent name, phone or email', async () => {
+      // Reporting reads the whole event's PII by design. Its logs must stay
+      // identifier and count oriented, exactly as they were.
+      await seedDirect()
+      await runReconciliation(sql, EVENT_ID)
+      logLines = []
+
+      await app.request(`/v1/reporting/feedback/query`, {
+        method: 'POST',
+        headers: { ...AUTH, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: EVENT_ID, search: 'Grace' }),
+      })
+
+      const all = logLines.join('\n')
+      expect(all).not.toContain('Grace')
+      expect(all).not.toContain('9876543210')
+      expect(all).not.toContain('grace@example.com')
     })
   })
 })

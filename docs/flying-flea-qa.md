@@ -117,6 +117,34 @@ Then:
   participant ID, as it always has.
 - Turn Wi-Fi off entirely and repeat the whole flow. Everything must work.
 
+### A rider with no sticker and no code
+
+Press **Continue without QR or code**. Confirm it is offered from the start
+screen, the running scanner, the camera-error screen and manual entry: a rider
+who never registered has nothing to scan and nothing to type, and nobody should
+have to break the camera to reach this button.
+
+Give a name, a phone number and an email address, answer all six questions,
+submit.
+
+- Blank fields are refused, with the same messages Point A gives for the same
+  three fields. A nine-digit phone number is refused for the same reason.
+- The saved record has `captureMethod: 'contact'` and the three respondent
+  fields, and **no `publicCode` and no `participantId` at all**. Check in
+  DevTools: the keys must be absent, not empty.
+- No registration appears in the `registrations` store.
+- Submitting the same name, phone and email a second time is **accepted**. There
+  is no code to be a duplicate of, and one tablet must not decide that two
+  humans are one.
+- With Wi-Fi off, all of the above still works. This path makes no network
+  request at any point, which is the property most worth checking because a
+  lookup is the obvious thing to have added.
+
+Make a save fail deliberately if you can (DevTools, throttle storage, or just
+trust the automated test): every field and every answer must still be on screen
+afterwards. A rider asked to retype their email address and six answers will
+usually decline.
+
 ### Accessibility
 
 With a keyboard attached, Tab through a rating question and press Enter. The
@@ -189,6 +217,33 @@ With the server reachable:
 9. Device Admin lists no "Not implemented yet" section. Reconciliation and
    central reporting both shipped.
 
+### Direct responses
+
+If any rider used **Continue without QR or code**, check these too:
+
+10. On **Responses**, that row's Captured column reads **Contact details**, its
+    Code column reads **No code** rather than being blank, and its Participant
+    column shows the rider's own name rather than `None`.
+11. Its status reads **Direct feedback**, not "No registration". They mean
+    opposite things: one is the contact path working and the other is a sticker
+    code that led nowhere.
+12. Search by the rider's name, phone number or email. The response must be
+    findable by each. Searching by a public code must still work exactly as
+    before.
+13. Open it: the rider's name, phone and email appear under **Details given by
+    the rider**, with a note saying nothing was looked up.
+14. **Needs review** must NOT list it. Confirm the count of *"Responses with a
+    code that matched no registration"* did not go up.
+15. On the overview, **Direct responses (no registration)** shows the count, and
+    the coverage fraction above it is unchanged by them. Coverage measures the
+    registration list, and these riders are not on it.
+16. The campaign averages **include** them: a direct response is unambiguous, and
+    excluding it would make the figures describe registered riders rather than
+    riders.
+17. If a rider gave contact details that match exactly one registration, the
+    response reads **Matched**, matched by *"Phone and email (both matched one
+    registration)"*.
+
 ## 6. Exports
 
 Download the registrations CSV, the feedback CSV and the workbook.
@@ -200,7 +255,21 @@ Download the registrations CSV, the feedback CSV and the workbook.
 - Open both CSVs in Excel or Numbers. No cell may evaluate as a formula. Type
   `=cmd|'/c calc'!A0` into a free-text answer at Point B first if you want to see
   the neutralisation work.
+- Feedback rows carry `respondent_name`, `respondent_phone` and
+  `respondent_email` as the last three columns, populated only for a contact
+  response. Confirm no earlier column moved: they were appended precisely so a
+  script indexing by column number keeps working.
 - In the workbook, every participant-derived cell is text.
+- On **Participant Feedback**, a direct response is one row with **Direct
+  feedback** as its status, the rider's own name, phone and email in the Name,
+  Phone and Email columns, a blank Public Code, and every Point A-only column
+  (vehicle, colour, licence, gender, pincode, ride time) blank. All six answers
+  are present.
+- A contact response that matched a registration shows the **registration's**
+  name in the main columns and what the rider typed in the three
+  **(as entered)** columns at the far right. The **Identity Source** column
+  distinguishes the four cases: QR sticker, typed code, contact details matched
+  to Point A, and contact details direct.
 - The workbook's **Summary** sheet has three sections in order: event and
   reconciliation counts, **FLYING FLEA FEEDBACK** with the four questions in the
   campaign's own words and their averages out of 7, and **LEGACY FEEDBACK**.

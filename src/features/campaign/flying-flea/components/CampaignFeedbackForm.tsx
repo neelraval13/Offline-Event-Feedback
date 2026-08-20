@@ -2,17 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { BrandButton } from '../../../../components/brand/BrandButton'
 import { BrandCard } from '../../../../components/brand/BrandCard'
 import { BrandSectionHeading } from '../../../../components/brand/BrandSectionHeading'
-import type { FlyingFleaFeedbackV1Answers, Rating1To7 } from '../../../../types'
+import type { FlyingFleaFeedbackV1Answers } from '../../../../types'
 import {
   EMPTY_CAMPAIGN_DRAFT,
-  RATING_QUESTIONS,
-  TEXT_QUESTIONS,
   validateCampaignFeedback,
   type CampaignFeedbackErrors,
   type FlyingFleaFeedbackDraft,
 } from '../feedbackForm'
-import { RatingQuestion } from './RatingQuestion'
-import { TextQuestion } from './TextQuestion'
+import { CampaignFeedbackFields } from './CampaignFeedbackFields'
 
 /*
  * The Flying Flea questionnaire at Point B.
@@ -66,30 +63,12 @@ export function CampaignFeedbackForm({
           title="Feedback"
         />
 
-        {RATING_QUESTIONS.map((question) => (
-          <RatingQuestion
-            key={question.key}
-            prompt={question.prompt}
-            value={draft[question.key]}
-            error={errors[question.key]}
-            disabled={busy}
-            onChange={(rating: Rating1To7) =>
-              setDraft((current) => ({ ...current, [question.key]: rating }))
-            }
-          />
-        ))}
-
-        {TEXT_QUESTIONS.map((question) => (
-          <TextQuestion
-            key={question.key}
-            prompt={question.prompt}
-            value={draft[question.key]}
-            disabled={busy}
-            onChange={(value: string) =>
-              setDraft((current) => ({ ...current, [question.key]: value }))
-            }
-          />
-        ))}
+        <CampaignFeedbackFields
+          draft={draft}
+          errors={errors}
+          disabled={busy}
+          onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+        />
       </BrandCard>
 
       <BrandButton type="submit" block disabled={busy}>

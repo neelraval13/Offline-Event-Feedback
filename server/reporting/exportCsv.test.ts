@@ -26,6 +26,7 @@ const RUN: RunDescriptor = {
     registrationsWithMultipleFeedback: 0,
     matchedFeedback: 0,
     feedbackWithoutRegistration: 0,
+    standaloneFeedback: 0,
     feedbackIdentityConflicts: 0,
     feedbackInMultipleGroups: 0,
     duplicateRegistrationCandidateCount: 0,
@@ -70,6 +71,10 @@ function feedbackRow(overrides: Partial<FeedbackExportRow> = {}): FeedbackExport
     publicCode: 'A1-B8EFD9-00001-X',
     participantId: 'p1',
     captureMethod: 'qr',
+    // A sticker capture never carries these; the database refuses one that does.
+    respondentName: null,
+    respondentPhone: null,
+    respondentEmail: null,
     formVersion: 'feedback-v1',
     createdAt: '2026-01-01T10:00:00.000Z',
     revision: 1,
@@ -215,6 +220,84 @@ describe('feedbackCsv', () => {
     expect(lines[0]).toBe(FEEDBACK_CSV_HEADER.join(','))
     expect(lines).toHaveLength(3)
     expect(lines[2]).toContain('without_registration')
+  })
+})
+
+describe('contact identity in the raw feedback export', () => {
+  const DIRECT: Partial<FeedbackExportRow> = {
+    recordId: 'f-direct',
+    publicCode: null,
+    participantId: null,
+    captureMethod: 'contact',
+    status: 'standalone',
+    matchMethod: null,
+    registrationRecordId: null,
+    registrationPublicCode: null,
+    registrationName: null,
+    registrationPhone: null,
+    registrationEmail: null,
+    respondentName: 'Grace Hopper',
+    respondentPhone: '9876543210',
+    respondentEmail: 'grace@example.com',
+  }
+
+  it('appends the three columns to the end, moving nothing', () => {
+    /*
+     * A CSV header is a contract with whatever is already reading these files:
+     * a script indexing by column number, a saved spreadsheet import, a pivot
+     * table somebody built last week. Appending is invisible to all of them;
+     * inserting somewhere tidier would shift every column after it and nothing
+     * would report an error.
+     */
+    const header = [...FEEDBACK_CSV_HEADER]
+
+    expect(header.slice(-3)).toEqual([
+      'respondent_name',
+      'respondent_phone',
+      'respondent_email',
+    ])
+    // The columns that existed before are exactly where they were.
+    expect(header.indexOf('public_code')).toBe(2)
+    expect(header.indexOf('capture_method')).toBe(4)
+    expect(header.indexOf('overall_experience_comments')).toBe(header.length - 4)
+  })
+
+  it('carries the rider’s details on a direct response', () => {
+    const csv = feedbackCsv(RUN, [feedbackRow(DIRECT)])
+    const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
+
+    expect(cells.slice(-3)).toEqual([
+      'Grace Hopper',
+      // Neutralised: a leading digit is safe, but the value is quoted whenever
+      // the formula guard touched it. Here it did not.
+      '9876543210',
+      'grace@example.com',
+    ])
+  })
+
+  it('leaves the columns blank on a scanned response', () => {
+    const csv = feedbackCsv(RUN, [feedbackRow()])
+    const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
+
+    expect(cells.slice(-3)).toEqual(['', '', ''])
+  })
+
+  it('leaves the public code blank rather than inventing one', () => {
+    const csv = feedbackCsv(RUN, [feedbackRow(DIRECT)])
+    const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
+
+    // Column 2 is public_code. Empty, because this response never had one.
+    expect(cells[2]).toBe('')
+  })
+
+  it('neutralises a respondent name that a spreadsheet would evaluate', () => {
+    // Participant text is untrusted spreadsheet input, whichever field it
+    // arrived in. The guard is not new; this proves it reaches the new columns.
+    const csv = feedbackCsv(RUN, [
+      feedbackRow({ ...DIRECT, respondentName: '=cmd|calc' }),
+    ])
+
+    expect(csv).toContain('"\'=cmd|calc"')
   })
 })
 

@@ -12,6 +12,7 @@ import { chunkRecords, collectEligible, runSync } from './syncWorker'
 import { storeSyncCredential } from './syncCredentials'
 import { toFeedbackWire, toRegistrationWire } from './wire'
 import {
+  feedbackWireSchema,
   MAX_BATCH_RECORDS,
   SYNC_PROTOCOL_VERSION,
   type SyncBatch,
@@ -410,6 +411,79 @@ describe('wire records', () => {
 
     const wire = toFeedbackWire(feedback) as Record<string, unknown>
     expect('participantId' in wire).toBe(false)
+  })
+
+  it('carry the rider’s details, and only those, for a contact capture', async () => {
+    const deviceId = await getOrCreateDeviceId(database)
+    const feedback = await createFeedback(database, {
+      ...recordContextFor('feedback', deviceId),
+      identity: {
+        captureMethod: 'contact',
+        respondentName: 'Grace Hopper',
+        respondentPhone: '9876543210',
+        respondentEmail: 'grace@example.com',
+      },
+      formVersion: 'feedback-v1',
+      answers: { overall_rating: 5, experience: 'excellent', recommend: true },
+    })
+
+    const wire = toFeedbackWire(feedback) as Record<string, unknown>
+
+    expect(wire).toMatchObject({
+      captureMethod: 'contact',
+      respondentName: 'Grace Hopper',
+      respondentPhone: '9876543210',
+      respondentEmail: 'grace@example.com',
+    })
+    /*
+     * Absent keys, not keys holding undefined. The server's identity check
+     * refuses a contact record that carries either identifier, so a spread of
+     * `undefined` would be a batch rejected in the field with no way to
+     * diagnose it from the tablet.
+     */
+    expect('publicCode' in wire).toBe(false)
+    expect('participantId' in wire).toBe(false)
+  })
+
+  it('validate against the shared wire contract, all three of them', async () => {
+    /*
+     * The client's mapper and the server's schema are the two halves of one
+     * contract, and this is where they are checked against each other without a
+     * network. A record this build produces that the server would refuse is a
+     * record stranded on a tablet at an event.
+     */
+    const registration = await captureRegistration()
+    const deviceId = await getOrCreateDeviceId(database)
+
+    const identities = [
+      {
+        captureMethod: 'qr' as const,
+        publicCode: registration.publicCode,
+        participantId: registration.participantId,
+      },
+      { captureMethod: 'manual' as const, publicCode: registration.publicCode },
+      {
+        captureMethod: 'contact' as const,
+        respondentName: 'Grace Hopper',
+        respondentPhone: '9876543210',
+        respondentEmail: 'grace@example.com',
+      },
+    ]
+
+    for (const identity of identities) {
+      const record = await createFeedback(database, {
+        ...recordContextFor('feedback', deviceId),
+        identity,
+        formVersion: 'feedback-v1',
+        answers: { overall_rating: 4, experience: 'good', recommend: true },
+      })
+
+      const parsed = feedbackWireSchema.safeParse(toFeedbackWire(record))
+      expect(
+        parsed.success ||
+          parsed.error.issues.map((issue) => issue.message).join(' | '),
+      ).toBe(true)
+    }
   })
 })
 

@@ -32,6 +32,7 @@ const RUN: RunDescriptor = {
     registrationsWithMultipleFeedback: 1,
     matchedFeedback: 11,
     feedbackWithoutRegistration: 1,
+    standaloneFeedback: 0,
     feedbackIdentityConflicts: 0,
     feedbackInMultipleGroups: 2,
     duplicateRegistrationCandidateCount: 1,
@@ -157,6 +158,7 @@ function overview(
       registrationsWithFeedback: 12,
       totalRegistrations: 14,
       percentage: 85.7,
+      directResponses: 0,
     },
   }
 }
@@ -488,6 +490,9 @@ function response(
     publicCode: 'A1-B8EFD9-00001-X',
     participantId: null,
     captureMethod: 'qr',
+    respondentName: null,
+    respondentPhone: null,
+    respondentEmail: null,
     formVersion: 'flying-flea-feedback-v1',
     createdAt: '2026-08-23T16:00:00.000Z',
     revision: 1,
@@ -955,5 +960,492 @@ describe('Participant Feedback: spreadsheet safety', () => {
 
     expect(sheet?.views?.[0]?.state).toBe('frozen')
     expect(sheet?.autoFilter).toBeDefined()
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Participant Feedback: contact identity
+ * ------------------------------------------------------------------ */
+
+const RIDER_CONTACT = {
+  respondentName: 'Grace Hopper',
+  respondentPhone: '9876543210',
+  respondentEmail: 'grace@example.com',
+} as const
+
+/** A response whose identity is the rider's own details. */
+function contactResponse(
+  overrides: Partial<FeedbackExportRow> & { recordId: string },
+): FeedbackExportRow {
+  return response({
+    // No sticker, so neither identifier exists. Not empty strings.
+    publicCode: null,
+    participantId: null,
+    captureMethod: 'contact',
+    ...RIDER_CONTACT,
+    ...overrides,
+  })
+}
+
+describe('Participant Feedback: a direct response', () => {
+  const DIRECT = contactResponse({
+    recordId: 'res-direct',
+    status: 'standalone',
+    matchMethod: null,
+    registrationRecordId: null,
+  })
+
+  it('names the rider rather than reporting them as anonymous', async () => {
+    /*
+     * The point of the whole path. A registration-first sheet would either drop
+     * this rider or show them as a blank row, and they are the least anonymous
+     * feedback the event collected: they typed their own name.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [DIRECT] }),
+    )
+
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Status')).toBe('Direct feedback')
+    expect(row.get('Name')).toBe('Grace Hopper')
+    expect(row.get('Phone')).toBe('9876543210')
+    expect(row.get('Email')).toBe('grace@example.com')
+  })
+
+  it('leaves the code blank and every Point A-only field blank', async () => {
+    /*
+     * Not an oversight to tidy up later. Nothing in this system knows this
+     * rider's vehicle, licence, gender, pincode or ride slot, because nobody
+     * ever asked them. A blank cell says exactly that.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [DIRECT] }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Public Code')).toBe('')
+    for (const column of [
+      'Driving Licence',
+      'Gender',
+      'Pincode',
+      'Vehicle',
+      'Interested Colour',
+      'Test Ride Date & Time',
+      'Registration Record ID',
+      'Registration Created At',
+    ]) {
+      expect(row.get(column)).toBe('')
+    }
+  })
+
+  it('carries all six answers and its own record ID', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [DIRECT] }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Test Ride Experience / 7')).toBe('6')
+    expect(row.get('Rotary Knob Usage / 7')).toBe('5')
+    expect(row.get('Ride Modes Experience / 7')).toBe('6')
+    expect(row.get('Overall Experience / 7')).toBe('7')
+    expect(row.get('Top 3 Features')).toBe('Torque, silence, weight')
+    expect(row.get('Feedback Record ID')).toBe('res-direct')
+  })
+
+  it('says where its identity came from', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [DIRECT] }),
+    )
+
+    expect((rows[0] as Map<string, string>).get('Identity Source')).toBe(
+      'Contact details, direct',
+    )
+  })
+
+  it('reads differently from a sticker that resolved to nobody', async () => {
+    /*
+     * Two rows that look almost identical and mean opposite things: one is the
+     * contact path working, the other is a code that led nowhere. If the sheet
+     * could not tell them apart, an organiser would either chase riders who are
+     * fine or ignore responses that need attention.
+     */
+    const orphanSticker = response({
+      recordId: 'res-orphan',
+      status: 'without_registration',
+      matchMethod: null,
+      registrationRecordId: null,
+    })
+
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [DIRECT, orphanSticker] }),
+    )
+
+    const statuses = rows.map((row) => row.get('Status'))
+    expect(statuses).toContain('Direct feedback')
+    expect(statuses).toContain('No registration')
+
+    const orphan = rows.find(
+      (row) => row.get('Feedback Record ID') === 'res-orphan',
+    ) as Map<string, string>
+    // A sticker response names nobody: its identity is a code, and the code
+    // led nowhere. There is no person attached to it to name.
+    expect(orphan.get('Name')).toBe('')
+    expect(orphan.get('Public Code')).toBe('A1-B8EFD9-00001-X')
+    expect(orphan.get('Identity Source')).toBe('QR sticker')
+  })
+})
+
+describe('Participant Feedback: a contact response matched to Point A', () => {
+  const REG = registration({
+    recordId: 'reg-matched',
+    name: 'Ada Lovelace',
+    phone: '9876543210',
+    email: 'ada@example.com',
+  })
+  const MATCHED = contactResponse({
+    recordId: 'res-matched',
+    status: 'matched',
+    matchMethod: 'contact_identity',
+    registrationRecordId: 'reg-matched',
+    respondentName: 'Ada L',
+    respondentPhone: '9876543210',
+    respondentEmail: 'ada@example.com',
+  })
+
+  it('joins Point A and Point B on one row, like any other match', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [MATCHED],
+      }),
+    )
+
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Status')).toBe('Matched')
+    expect(row.get('Public Code')).toBe('A1-B8EFD9-00001-X')
+    expect(row.get('Vehicle')).toBe('Vehicle 2')
+    expect(row.get('Overall Experience / 7')).toBe('7')
+    expect(row.get('Registration Record ID')).toBe('reg-matched')
+    expect(row.get('Feedback Record ID')).toBe('res-matched')
+  })
+
+  it('shows the registration’s name in the main columns', async () => {
+    // A compiled row about a rider shows what the event recorded about that
+    // rider. The registration is what the event recorded.
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [MATCHED],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Name')).toBe('Ada Lovelace')
+    expect(row.get('Email')).toBe('ada@example.com')
+  })
+
+  it('keeps what the rider actually typed, in the audit columns', async () => {
+    /*
+     * The two are usually identical, and the times they are not are exactly the
+     * times somebody needs both: a rider who gave a different name at the two
+     * desks, a number transposed at one of them. Keeping only the
+     * registration's copy hides the difference that explains the match.
+     */
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [MATCHED],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Respondent Name (as entered)')).toBe('Ada L')
+    expect(row.get('Respondent Phone (as entered)')).toBe('9876543210')
+    expect(row.get('Respondent Email (as entered)')).toBe('ada@example.com')
+  })
+
+  it('is traceable back to how it matched', async () => {
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG],
+        feedback: [MATCHED],
+      }),
+    )
+
+    expect((rows[0] as Map<string, string>).get('Identity Source')).toBe(
+      'Contact details, matched to Point A',
+    )
+  })
+
+  it('is distinguishable from a scanned match at a glance', async () => {
+    const scanned = response({
+      recordId: 'res-scanned',
+      registrationRecordId: 'reg-scanned',
+    })
+    const scannedReg = registration({ recordId: 'reg-scanned' })
+
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [REG, scannedReg],
+        feedback: [MATCHED, scanned],
+      }),
+    )
+
+    const sources = rows.map((row) => row.get('Identity Source'))
+    expect(sources).toContain('Contact details, matched to Point A')
+    expect(sources).toContain('QR sticker')
+    // Both are matches, and the sheet says so without hiding how it knows.
+    expect(rows.every((row) => row.get('Status') === 'Matched')).toBe(true)
+  })
+
+  it('leaves the audit columns blank on a sticker match', async () => {
+    const scannedReg = registration({ recordId: 'reg-scanned' })
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [scannedReg],
+        feedback: [
+          response({ recordId: 'res-scanned', registrationRecordId: 'reg-scanned' }),
+        ],
+      }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    for (const column of [
+      'Respondent Name (as entered)',
+      'Respondent Phone (as entered)',
+      'Respondent Email (as entered)',
+    ]) {
+      expect(row.get(column)).toBe('')
+    }
+  })
+})
+
+describe('Participant Feedback: an ambiguous contact identity', () => {
+  const CONFLICT = contactResponse({
+    recordId: 'res-conflict',
+    status: 'identity_conflict',
+    matchMethod: null,
+    registrationRecordId: null,
+  })
+
+  it('keeps the rider’s details and invents no registration', async () => {
+    /*
+     * The phone and email pair matched more than one registration, so there is
+     * no single rider this could be from. The run refused to choose and so does
+     * the sheet, but the response is not thereby anonymous: the rider typed
+     * their details and those are still the best account of who they are.
+     */
+    const unrelated = registration({ recordId: 'reg-unrelated' })
+
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [unrelated],
+        feedback: [CONFLICT],
+      }),
+    )
+
+    const row = rows.find(
+      (entry) => entry.get('Feedback Record ID') === 'res-conflict',
+    ) as Map<string, string>
+
+    expect(row.get('Status')).toBe('Identity conflict')
+    expect(row.get('Name')).toBe('Grace Hopper')
+    expect(row.get('Phone')).toBe('9876543210')
+    expect(row.get('Email')).toBe('grace@example.com')
+    expect(row.get('Registration Record ID')).toBe('')
+    expect(row.get('Vehicle')).toBe('')
+  })
+
+  it('keeps the answers visible', async () => {
+    // The response is preserved in full. It is the attribution that is in
+    // doubt, not what the rider said.
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, { feedback: [CONFLICT] }),
+    )
+    const row = rows[0] as Map<string, string>
+
+    expect(row.get('Overall Experience / 7')).toBe('7')
+    expect(row.get('Top 3 Features')).toBe('Torque, silence, weight')
+    expect(row.get('Feedback Record ID')).toBe('res-conflict')
+  })
+
+  it('does not attach itself to an unrelated registration in the run', async () => {
+    // The run's own status for a registration with nothing attached to it.
+    const unrelated = registration({
+      recordId: 'reg-unrelated',
+      status: 'without_feedback',
+      validFeedbackCount: 0,
+    })
+
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [unrelated],
+        feedback: [CONFLICT],
+      }),
+    )
+
+    const registrationRow = rows.find(
+      (entry) => entry.get('Registration Record ID') === 'reg-unrelated',
+    ) as Map<string, string>
+
+    expect(registrationRow.get('Status')).toBe('No response')
+    expect(registrationRow.get('Feedback Record ID')).toBe('')
+  })
+})
+
+describe('Participant Feedback: all three paths in one sheet', () => {
+  it('orders registered riders first and every orphan last', async () => {
+    /*
+     * A direct response timestamped before every registration still sorts to
+     * the end. Ordering is by section, not by clock: the sheet's shape is what
+     * makes it readable, and device clocks are never aligned anyway.
+     */
+    const reg = registration({
+      recordId: 'reg-1',
+      createdAt: '2026-08-23T12:00:00.000Z',
+    })
+    const scanned = response({
+      recordId: 'res-scanned',
+      registrationRecordId: 'reg-1',
+      createdAt: '2026-08-23T13:00:00.000Z',
+    })
+    const early = contactResponse({
+      recordId: 'res-early',
+      status: 'standalone',
+      matchMethod: null,
+      registrationRecordId: null,
+      createdAt: '2026-08-23T09:00:00.000Z',
+    })
+
+    const rows = participantRows(
+      await readBack(FLYING_FLEA_ONLY, {
+        registrations: [reg],
+        feedback: [early, scanned],
+      }),
+    )
+
+    expect(rows.map((row) => row.get('Feedback Record ID'))).toEqual([
+      'res-scanned',
+      'res-early',
+    ])
+  })
+
+  it('is deterministic: the same run produces the same sheet', async () => {
+    const reg = registration({ recordId: 'reg-1' })
+    const input = {
+      registrations: [reg],
+      feedback: [
+        response({ recordId: 'res-a', registrationRecordId: 'reg-1' }),
+        contactResponse({
+          recordId: 'res-b',
+          status: 'standalone',
+          matchMethod: null,
+          registrationRecordId: null,
+        }),
+      ],
+    }
+
+    const first = participantRows(await readBack(FLYING_FLEA_ONLY, input))
+    const second = participantRows(await readBack(FLYING_FLEA_ONLY, input))
+
+    expect(second.map((row) => [...row])).toEqual(first.map((row) => [...row]))
+  })
+
+  it('writes the contact columns as text, with the formula guard applied', async () => {
+    // Participant text is untrusted spreadsheet input whichever field it
+    // arrived in. `=cmd|...` in a name must not become a formula.
+    const workbook = await readBack(FLYING_FLEA_ONLY, {
+      feedback: [
+        contactResponse({
+          recordId: 'res-hostile',
+          status: 'standalone',
+          matchMethod: null,
+          registrationRecordId: null,
+          respondentName: "=cmd|'/c calc'!A0",
+          respondentPhone: '+919876543210',
+        }),
+      ],
+    })
+
+    const sheet = workbook.getWorksheet('Participant Feedback')
+    const header = ((sheet?.getRow(1).values ?? []) as unknown[])
+      .slice(1)
+      .map((value) => String(value))
+
+    for (const column of ['Name', 'Phone']) {
+      const cell = sheet?.getRow(2).getCell(header.indexOf(column) + 1)
+      expect(cell?.type).toBe(ExcelJS.ValueType.String)
+      expect(cell?.formula).toBeUndefined()
+      expect(cell?.numFmt).toBe('@')
+    }
+  })
+
+  it('keeps the auto-filter across every column, new ones included', async () => {
+    /*
+     * Read back from a real file, where exceljs reports the filter as an A1
+     * range rather than as the row/column object it was written with. The
+     * assertion is on the width, which is the thing that would silently be
+     * wrong: a filter stopping short of the new columns leaves them
+     * unfilterable with nothing on screen to show it.
+     */
+    const workbook = await readBack(FLYING_FLEA_ONLY, { feedback: [] })
+    const sheet = workbook.getWorksheet('Participant Feedback')
+    const header = ((sheet?.getRow(1).values ?? []) as unknown[]).slice(1)
+    const lastColumn = sheet?.getColumn(header.length).letter
+
+    expect(sheet?.autoFilter).toBe(`A1:${lastColumn}1`)
+  })
+})
+
+describe('the workbook explains where direct responses sit', () => {
+  it('reports them on Summary, outside the coverage fraction', async () => {
+    const withDirect = overview(NO_LEGACY, CAMPAIGN, {
+      'flying-flea-feedback-v1': 11,
+    })
+    const summary = pairs(
+      (
+        await readBack({
+          ...withDirect,
+          run: { ...RUN, counts: { ...RUN.counts, standaloneFeedback: 3 } },
+          coverage: { ...withDirect.coverage, directResponses: 3 },
+        })
+      ).getWorksheet('Summary'),
+    )
+
+    expect(summary.get('Direct responses (no Point A registration)')).toBe('3')
+    // Coverage is untouched by them: 12 of 14 registrations, as before.
+    expect(
+      summary.get('Response coverage (registrations with any valid feedback)'),
+    ).toBe('12')
+    expect(summary.get('Response coverage %')).toBe('85.7')
+  })
+
+  it('states the inclusion rule in Metadata, in words', async () => {
+    const metadata = pairs(
+      (await readBack(FLYING_FLEA_ONLY)).getWorksheet('Metadata'),
+    )
+
+    expect(metadata.get('analyticsInclusionRule')).toContain('standalone')
+    expect(metadata.get('standaloneRule')).toContain('not a reconciliation failure')
+    expect(metadata.get('contactMatchRule')).toContain('Names are never matched on')
+    expect(metadata.get('coverageRule')).toContain('neither the numerator')
+  })
+
+  it('reports the matched and standalone counts separately', async () => {
+    const metadata = pairs(
+      (
+        await readBack({
+          ...FLYING_FLEA_ONLY,
+          run: { ...RUN, counts: { ...RUN.counts, standaloneFeedback: 3 } },
+        })
+      ).getWorksheet('Metadata'),
+    )
+
+    expect(metadata.get('matchedResponses')).toBe('11')
+    expect(metadata.get('standaloneResponses')).toBe('3')
   })
 })

@@ -13,6 +13,14 @@ import { RegistrationTable } from './RegistrationTable'
  *
  * What an organiser does with an anomaly is human work, find the person, ask
  * at the desk, accept the loss.
+ *
+ * Direct feedback is deliberately not a tab here. A rider who identified
+ * themselves by contact details and matched no registration did not go through
+ * Point A, which is what the contact path is for; nothing about it needs
+ * reviewing. Those responses are browsed under Responses with everything else,
+ * filtered by their own status. The `without_registration` tab below is a
+ * different finding entirely: a sticker code that led nowhere, which usually
+ * means a typo at Point B or a Point A device that has not synced.
  */
 
 type Anomaly =
@@ -24,15 +32,15 @@ type Anomaly =
 const TABS: readonly { readonly key: Anomaly; readonly label: string; readonly explanation: string }[] = [
   {
     key: 'without_registration',
-    label: 'Responses with no registration',
+    label: 'Codes that matched no registration',
     explanation:
-      'The code on the response matches no registration in this event. Usually a mistyped code at Point B, or a registration that has not been uploaded yet. The response is kept in full.',
+      'The code on the response matches no registration in this event. Usually a mistyped code at Point B, or a registration that has not been uploaded yet. The response is kept in full. Direct feedback from riders who never registered is not listed here: nothing went wrong for them, and they appear under Responses.',
   },
   {
     key: 'identity_conflict',
     label: 'Identity conflicts',
     explanation:
-      'The scanned participant ID and the printed code point at different registrations. Open a response to see what each identifier resolves to now.',
+      'Identifiers that should describe one person do not. For a scanned sticker, the participant ID and the printed code point at different registrations; open a response to see what each resolves to now. For contact details, the phone and email pair belongs to more than one registration, so there is no single rider the response could be from.',
   },
   {
     key: 'multiple_feedback',

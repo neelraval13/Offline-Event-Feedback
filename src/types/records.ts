@@ -87,17 +87,50 @@ export interface RegistrationRecord
   readonly email: string
 }
 
-/** How Point B obtained the participant's identity from the sticker. */
-export type IdentityCaptureMethod = 'qr' | 'manual'
+/**
+ * Where a Point B response's identity came from.
+ *
+ * Three origins, and the third is not a fallback for the first two. `qr` and
+ * `manual` both read a sticker that Point A issued; `contact` is a rider who
+ * never went through Point A, or whose sticker is gone, giving their own
+ * details instead. Their response is not a degraded version of a scanned one:
+ * it is a complete response whose identity has a different source.
+ */
+export type IdentityCaptureMethod = 'qr' | 'manual' | 'contact'
 
 /**
- * Identity as read at Point B. Every field originates from the sticker
- * physically present on the participant, never from a lookup against Point A
- * (invariant 2 / invariants A–D).
+ * Contact details a rider gave at Point B, as their own identity.
  *
- * A QR scan yields both identifiers; a manually typed fallback code yields
- * only the public code, and `participantId` is then absent. Re-joining the two
- * is a central-server concern, performed after synchronisation.
+ * This is the one place Point B holds PII, and it is deliberate: these fields
+ * ARE the identity of the record. Everything else about the privacy boundary is
+ * unchanged, in particular that Point B still never reads Point A. Whether
+ * these details happen to match a registration is a central question answered
+ * after synchronisation, by reconciliation, and never at the desk.
+ */
+export interface RespondentContact {
+  readonly respondentName: string
+  readonly respondentPhone: string
+  readonly respondentEmail: string
+}
+
+/**
+ * Identity as captured at Point B.
+ *
+ * Every field originates from something physically in front of the operator:
+ * the sticker on the participant, or the details the rider gave. Never from a
+ * lookup against Point A (invariant 2 / invariants A-D).
+ *
+ * A discriminated union rather than a bag of optionals, because the three
+ * shapes have no overlap and the combinations between them are all nonsense. A
+ * `contact` capture with a `publicCode` would be claiming a sticker nobody
+ * scanned; a `qr` capture without a `participantId` would be claiming a scan
+ * that produced half a payload. Neither compiles.
+ *
+ * Note what a `contact` identity does NOT have: no participant ID and no public
+ * code, absent rather than empty. An empty string is a value someone supplied;
+ * this is the absence of one, and an empty-string public code would join
+ * against every other empty-string public code the moment somebody wrote a
+ * careless query.
  */
 export type CapturedParticipantIdentity =
   | {
@@ -109,11 +142,12 @@ export type CapturedParticipantIdentity =
       readonly captureMethod: 'manual'
       readonly publicCode: PublicParticipantCode
     }
+  | ({ readonly captureMethod: 'contact' } & RespondentContact)
 
 /*
  * Identity fields are stored flat rather than nested so IndexedDB can index
- * them directly. `participantId` is absent, not null, when staff typed the
- * fallback code, which keeps it out of the sparse IndexedDB index.
+ * them directly. Fields a capture method does not have are absent, not null,
+ * which keeps those records out of the sparse IndexedDB indexes.
  */
 /**
  * A feedback submission captured at Point B.
@@ -122,14 +156,27 @@ export type CapturedParticipantIdentity =
  * {@link FeedbackQuestionnairePayload}: the questionnaire a record declares and
  * the answers it carries are one fact, and a type that let them be set
  * independently let them disagree.
+ *
+ * The identity arrives the same way, as {@link CapturedParticipantIdentity}.
+ * Intersecting a union distributes, so this is three record shapes, and a
+ * reader that wants `publicCode` has to narrow on `captureMethod` first. That
+ * is the intended friction: a reader that would have silently read `undefined`
+ * as a code now fails to compile instead.
  */
 export type FeedbackRecord = OfflineRecordMetadata &
-  FeedbackQuestionnairePayload & {
+  FeedbackQuestionnairePayload &
+  CapturedParticipantIdentity & {
     readonly kind: 'feedback'
-    readonly captureMethod: IdentityCaptureMethod
-    readonly publicCode: PublicParticipantCode
-    readonly participantId?: ParticipantId
   }
+
+/** The public code a response carries, or null for a contact capture. */
+export function feedbackPublicCode(
+  record: Pick<FeedbackRecord, 'captureMethod'> & {
+    readonly publicCode?: PublicParticipantCode
+  },
+): PublicParticipantCode | null {
+  return record.captureMethod === 'contact' ? null : (record.publicCode ?? null)
+}
 
 /** Any record produced in the field and awaiting synchronisation. */
 export type OfflineRecord = RegistrationRecord | FeedbackRecord

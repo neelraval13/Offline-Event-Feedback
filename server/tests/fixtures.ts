@@ -82,6 +82,28 @@ export function feedback(
   return merged as FeedbackWireRecord
 }
 
+/**
+ * A response identified by the rider's own contact details.
+ *
+ * Takes no registration and produces no code, deliberately: this rider may
+ * never have been to Point A. A fixture that accepted one would make every
+ * contact test a test about somebody who had already registered.
+ */
+export function contactFeedback(
+  overrides: Partial<FeedbackWireRecord> = {},
+): FeedbackWireRecord {
+  const { participantId: _dropped, publicCode: _code, ...base } = feedback()
+
+  return {
+    ...base,
+    captureMethod: 'contact',
+    respondentName: 'Grace Hopper',
+    respondentPhone: '9876543210',
+    respondentEmail: 'grace@example.com',
+    ...overrides,
+  } as FeedbackWireRecord
+}
+
 export function batch(
   records: readonly (RegistrationWireRecord | FeedbackWireRecord)[],
   overrides: Partial<SyncBatch> = {},

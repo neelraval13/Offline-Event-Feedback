@@ -424,9 +424,14 @@ describe('persistence', () => {
     await submitFeedback(user)
 
     const record = await onlyRecord()
-    expect(record.captureMethod).toBe('qr')
-    expect(record.participantId).toBe(sticker.participantId)
-    expect(record.publicCode).toBe(sticker.publicCode)
+    // The whole identity at once: `FeedbackRecord` is a union of three shapes,
+    // so reading `record.publicCode` needs narrowing first, which is exactly
+    // the friction the union exists to create in production code.
+    expect(record).toMatchObject({
+      captureMethod: 'qr',
+      participantId: sticker.participantId,
+      publicCode: sticker.publicCode,
+    })
   })
 
   it('stores a manual capture with no participant ID', async () => {
@@ -442,9 +447,7 @@ describe('persistence', () => {
     await submitFeedback(user)
 
     const record = await onlyRecord()
-    expect(record.captureMethod).toBe('manual')
-    expect(record.publicCode).toBe(code)
-    expect(record.participantId).toBeUndefined()
+    expect(record).toMatchObject({ captureMethod: 'manual', publicCode: code })
     expect(Object.hasOwn(record, 'participantId')).toBe(false)
   })
 
@@ -623,8 +626,10 @@ describe('storage failure', () => {
     await submitFeedback(user)
 
     const record = await onlyRecord()
-    expect(record.publicCode).toBe(sticker.publicCode)
-    expect(record.participantId).toBe(sticker.participantId)
+    expect(record).toMatchObject({
+      publicCode: sticker.publicCode,
+      participantId: sticker.participantId,
+    })
   })
 })
 
@@ -834,6 +839,400 @@ describe('privacy at Point B', () => {
     await answerAll(user)
     await submitFeedback(user)
 
+    expect(await countFeedback(db)).toBe(1)
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * The third path: a rider with no QR and no code
+ * ------------------------------------------------------------------ */
+
+const RIDER = {
+  name: 'Grace Hopper',
+  phone: '9876543210',
+  email: 'grace@example.com',
+} as const
+
+const CONTACT_BUTTON = 'Continue without QR or code'
+
+async function openContactForm(): Promise<ReturnType<typeof userEvent.setup>> {
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: CONTACT_BUTTON }))
+  await screen.findByLabelText(/^Name/)
+  return user
+}
+
+async function fillContact(
+  user: ReturnType<typeof userEvent.setup>,
+  rider: { name?: string; phone?: string; email?: string } = {},
+): Promise<void> {
+  const values = { ...RIDER, ...rider }
+
+  // An empty override means "leave this blank", which is a clear and nothing
+  // else: `user.type` with an empty string is not a no-op, it throws.
+  const fill = async (label: RegExp, value: string) => {
+    const field = screen.getByLabelText(label)
+    await user.clear(field)
+    if (value.length > 0) {
+      await user.type(field, value)
+    }
+  }
+
+  await fill(/^Name/, values.name)
+  await fill(/^Email ID/, values.email)
+  await fill(/^Phone Number/, values.phone)
+}
+
+describe('reaching the no-sticker path', () => {
+  it('is offered on the start screen, beside the other two', async () => {
+    /*
+     * A first-class path, not a fallback. A rider who never registered has
+     * nothing to scan and nothing to type, and making an operator break the
+     * camera to find their way to this button would be absurd.
+     */
+    renderScreen()
+
+    expect(screen.getByRole('button', { name: CONTACT_BUTTON })).toBeDefined()
+  })
+
+  it('stays reachable from the scanner', async () => {
+    renderScreen()
+    await startScanner()
+
+    expect(screen.getByRole('button', { name: CONTACT_BUTTON })).toBeDefined()
+  })
+
+  it('stays reachable when the camera fails', async () => {
+    scanner.startFailure = {
+      kind: 'permission-denied',
+      message: 'Camera access was refused.',
+    }
+    renderScreen()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await screen.findByText('Camera unavailable')
+
+    expect(screen.getByRole('button', { name: CONTACT_BUTTON })).toBeDefined()
+  })
+
+  it('stays reachable from manual code entry', async () => {
+    renderScreen()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+
+    // A rider whose code will not type in because there is no code.
+    expect(
+      screen.getByRole('button', { name: 'No code either? Take their details' }),
+    ).toBeDefined()
+  })
+})
+
+describe('the contact-details form', () => {
+  it('asks for a name, a phone number and an email, and the questionnaire', async () => {
+    renderScreen()
+    await openContactForm()
+
+    expect(screen.getByLabelText(/^Name/)).toBeDefined()
+    expect(screen.getByLabelText(/^Phone Number/)).toBeDefined()
+    expect(screen.getByLabelText(/^Email ID/)).toBeDefined()
+    // The same six questions every other rider answers, from one definition.
+    expect(screen.getAllByRole('radiogroup')).toHaveLength(4)
+  })
+
+  it('refuses to submit with all three fields blank', async () => {
+    renderScreen()
+    const user = await openContactForm()
+
+    await answerAll(user)
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    expect(await screen.findAllByRole('alert')).toHaveLength(3)
+    expect(await countFeedback(db)).toBe(0)
+  })
+
+  it.each([
+    ['name', { name: '' }],
+    ['phone', { phone: '' }],
+    ['email', { email: '' }],
+  ])('refuses to submit without a %s', async (_field, missing) => {
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user, missing)
+    await answerAll(user)
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    expect(await screen.findAllByRole('alert')).toHaveLength(1)
+    expect(await countFeedback(db)).toBe(0)
+  })
+
+  it('applies Point A’s phone rule, not a second one of its own', async () => {
+    /*
+     * If the two desks accepted different phone formats, the same rider typing
+     * the same number at both would produce values that normalise differently
+     * and never match, and the failure would be invisible from either screen.
+     */
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user, { phone: '1234567890' })
+    await answerAll(user)
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/10-digit mobile/)
+    expect(await countFeedback(db)).toBe(0)
+  })
+
+  it('applies Point A’s email rule', async () => {
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user, { email: 'not-an-address' })
+    await answerAll(user)
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /valid email address/,
+    )
+  })
+
+  it('reports a missing rating and a bad email together', async () => {
+    // One pass, both problems. Showing them one at a time makes a rider fix
+    // something, press submit, and be told about the next thing.
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user, { email: 'nope' })
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.length).toBeGreaterThan(1)
+  })
+})
+
+describe('saving a contact-details response', () => {
+  it('saves with valid details and a complete questionnaire', async () => {
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user)
+    await answerAll(user)
+    await submitFeedback(user)
+
+    expect(await countFeedback(db)).toBe(1)
+  })
+
+  it('stores the rider’s details as the identity, with no fabricated code', async () => {
+    /*
+     * The architectural line. A generated public code would look exactly like a
+     * real one everywhere downstream, and would be joined to whatever
+     * registration happened to hold it.
+     */
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user)
+    await answerAll(user)
+    await submitFeedback(user)
+
+    const record = await onlyRecord()
+    expect(record).toMatchObject({
+      captureMethod: 'contact',
+      respondentName: RIDER.name,
+      respondentPhone: RIDER.phone,
+      respondentEmail: RIDER.email,
+    })
+    expect(Object.hasOwn(record, 'publicCode')).toBe(false)
+    expect(Object.hasOwn(record, 'participantId')).toBe(false)
+  })
+
+  it('creates no registration for the rider', async () => {
+    // Point B does not register people. A rider who only completed Point B did
+    // only complete Point B.
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user)
+    await answerAll(user)
+    await submitFeedback(user)
+
+    expect(await db.registrations.count()).toBe(0)
+  })
+
+  it('is pending, and stores the campaign answers', async () => {
+    renderScreen()
+    const user = await openContactForm()
+
+    await fillContact(user)
+    await answerCampaignFeedback(user, [7, 6, 5, 7], {
+      topThreeFeatures: 'The silence',
+    })
+    await submitFeedback(user)
+
+    const record = await onlyRecord()
+    expect(record.syncStatus).toBe('pending')
+    expect(record.formVersion).toBe(FLYING_FLEA_CAMPAIGN.formVersion)
+    expect(record.answers).toMatchObject({
+      testRideExperience: 7,
+      rotaryKnobUsage: 6,
+      rideModesExperience: 5,
+      overallExperienceRating: 7,
+      topThreeFeatures: 'The silence',
+    })
+  })
+
+  it('makes no network request at any point', async () => {
+    /*
+     * The whole path has to work on a tablet with the wifi off. A lookup to see
+     * whether this rider already registered would be the obvious thing to add
+     * and would break the one property the client insists on.
+     */
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    renderScreen()
+    const user = await openContactForm()
+    await fillContact(user)
+    await answerAll(user)
+    await submitFeedback(user)
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(await countFeedback(db)).toBe(1)
+  })
+
+  it('keeps every field when the save fails, and saves on retry', async () => {
+    /*
+     * Worse here than on the scanned path: a scanned rider who has to start
+     * again re-answers six questions, a contact rider re-types their email
+     * address too, and the answer to "please type all that in again" at an
+     * event is usually no.
+     */
+    const add = vi
+      .spyOn(db.feedback, 'add')
+      .mockRejectedValueOnce(new Error('QuotaExceededError'))
+
+    renderScreen()
+    const user = await openContactForm()
+    await fillContact(user)
+    await answerCampaignFeedback(user, [7, 6, 5, 7], {
+      overallExperienceComments: 'Loved the torque',
+    })
+    await user.click(screen.getByRole('button', { name: 'Submit Feedback' }))
+
+    await findSaveError()
+    expect(await countFeedback(db)).toBe(0)
+
+    // Everything the rider typed is still on screen.
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe(
+      RIDER.name,
+    )
+    expect((screen.getByLabelText(/^Email ID/) as HTMLInputElement).value).toBe(
+      RIDER.email,
+    )
+    expect((screen.getByLabelText(/^Phone Number/) as HTMLInputElement).value).toBe(
+      RIDER.phone,
+    )
+    expect(
+      (
+        screen.getByLabelText(
+          FLYING_FLEA_CAMPAIGN.textQuestions[1]?.prompt ?? '',
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe('Loved the torque')
+
+    add.mockRestore()
+    await submitFeedback(user)
+
+    const record = await onlyRecord()
+    expect(record).toMatchObject({
+      captureMethod: 'contact',
+      respondentEmail: RIDER.email,
+    })
+    expect(record.answers).toMatchObject({
+      overallExperienceComments: 'Loved the torque',
+    })
+  })
+
+  it('accepts a second response from the same details', async () => {
+    /*
+     * No duplicate guard applies: there is no code to be the same as, and
+     * refusing on a matching phone number would be one offline tablet deciding
+     * that two humans are one. Preserve the evidence; let reconciliation speak.
+     */
+    for (let index = 0; index < 2; index += 1) {
+      renderScreen()
+      const user = await openContactForm()
+      await fillContact(user)
+      await answerAll(user)
+      await submitFeedback(user)
+      cleanup()
+    }
+
+    expect(await countFeedback(db)).toBe(2)
+  })
+
+  it('returns to the start screen for the next rider', async () => {
+    renderScreen()
+    const user = await openContactForm()
+    await fillContact(user)
+    await answerAll(user)
+    await submitFeedback(user)
+
+    await user.click(screen.getByRole('button', { name: 'Next rider' }))
+
+    expect(
+      await screen.findByRole('button', { name: 'Start scanner' }),
+    ).toBeDefined()
+  })
+})
+
+describe('the sticker paths are unaffected', () => {
+  it('still records a scan while a contact response sits in the same store', async () => {
+    const sticker = makeSticker()
+
+    renderScreen()
+    const contactUser = await openContactForm()
+    await fillContact(contactUser)
+    await answerAll(contactUser)
+    await submitFeedback(contactUser)
+    cleanup()
+
+    renderScreen()
+    const user = await startScanner()
+    emit(sticker.qr)
+    await screen.findByTestId('participant-code')
+    await answerAll(user)
+    await submitFeedback(user)
+
+    const records = await db.feedback.toArray()
+    expect(records).toHaveLength(2)
+    expect(records.map((record) => record.captureMethod).sort()).toEqual([
+      'contact',
+      'qr',
+    ])
+  })
+
+  it('still refuses a second scan of one sticker', async () => {
+    // The public-code duplicate guard is untouched by the new path.
+    const sticker = makeSticker()
+
+    renderScreen()
+    let user = await startScanner()
+    emit(sticker.qr)
+    await screen.findByTestId('participant-code')
+    await answerAll(user)
+    await submitFeedback(user)
+    cleanup()
+
+    renderScreen()
+    user = await startScanner()
+    emit(sticker.qr)
+
+    expect(
+      await screen.findByText(/already recorded on this device/i),
+    ).toBeDefined()
     expect(await countFeedback(db)).toBe(1)
   })
 })

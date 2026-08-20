@@ -12,7 +12,14 @@ import type {
   SyncBatchResponse,
   SyncRecordResult,
 } from '../../shared/sync/protocol.js'
-import { batch, DEVICE_A, EVENT_ID, feedback, registration } from './fixtures.js'
+import {
+  batch,
+  contactFeedback,
+  DEVICE_A,
+  EVENT_ID,
+  feedback,
+  registration,
+} from './fixtures.js'
 
 /*
  * Ingest against a real Postgres.
@@ -319,6 +326,162 @@ describeDb('ingest against Postgres', () => {
       // And the corrected record re-delivers cleanly rather than conflicting.
       const retry = await postBatch(token, batch([corrected]))
       expect(statusOf(retry, record.recordId).status).toBe('already_current')
+    })
+  })
+
+  describe('contact identity', () => {
+    /*
+     * The round trip that only a database can prove.
+     *
+     * The memory-store suite proves the merge rules exhaustively and cannot
+     * prove a single line of SQL. This is the shape that most needs a column to
+     * be checked: a contact response reads back through `mapFeedback`, and the
+     * whole of its identity lives in three columns that did not exist before.
+     * The exact failure this guards against has happened once already, to
+     * `form_version`: a field mapped wrongly on the way out made every
+     * re-delivery of an unchanged record compare as a conflict, and the device
+     * would have retried it forever.
+     */
+    it('stores the rider’s details in their own columns', async () => {
+      const token = await enrolledToken()
+      const record = contactFeedback({
+        formVersion: FLYING_FLEA_FORM_VERSION,
+        answers: CAMPAIGN_ANSWERS,
+      })
+
+      const body = await postBatch(token, batch([record]))
+      expect(statusOf(body, record.recordId).status).toBe('accepted')
+
+      const [row] = await sql<
+        {
+          capture_method: string
+          public_code: string | null
+          participant_id: string | null
+          respondent_name: string
+          respondent_phone: string
+          respondent_email: string
+        }[]
+      >`
+        SELECT capture_method, public_code, participant_id,
+               respondent_name, respondent_phone, respondent_email
+        FROM feedback WHERE record_id = ${record.recordId}
+      `
+
+      expect(row).toMatchObject({
+        capture_method: 'contact',
+        respondent_name: 'Grace Hopper',
+        respondent_phone: '9876543210',
+        respondent_email: 'grace@example.com',
+      })
+      // NULL, not an empty string: this response never had either identifier.
+      expect(row?.public_code).toBeNull()
+      expect(row?.participant_id).toBeNull()
+    })
+
+    it('reports an identical re-delivery as already current, not a conflict', async () => {
+      const token = await enrolledToken()
+      const record = contactFeedback()
+
+      await postBatch(token, batch([record]))
+      const second = await postBatch(token, batch([record]))
+
+      expect(statusOf(second, record.recordId)).toMatchObject({
+        status: 'already_current',
+        serverRevision: 1,
+      })
+    })
+
+    it('survives the lost-response shape', async () => {
+      // The batch commits, the reply never reaches the tablet, the outbox sends
+      // it again. One row, and an answer the device can act on.
+      const token = await enrolledToken()
+      const record = contactFeedback()
+
+      await postBatch(token, batch([record]))
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const retry = await postBatch(token, batch([record]))
+        expect(statusOf(retry, record.recordId).status).toBe('already_current')
+      }
+
+      const [row] = await sql<{ count: string }[]>`
+        SELECT count(*) FROM feedback WHERE record_id = ${record.recordId}
+      `
+      expect(Number(row?.count)).toBe(1)
+    })
+
+    it('accepts a higher revision and leaves the identity alone', async () => {
+      const token = await enrolledToken()
+      const record = contactFeedback({
+        formVersion: FLYING_FLEA_FORM_VERSION,
+        answers: CAMPAIGN_ANSWERS,
+      })
+      await postBatch(token, batch([record]))
+
+      const corrected = {
+        ...record,
+        answers: { ...CAMPAIGN_ANSWERS, overallExperienceRating: 4 },
+        updatedAt: '2026-01-01T12:00:00.000Z',
+        revision: 2,
+      } as typeof record
+
+      const body = await postBatch(token, batch([corrected]))
+      expect(statusOf(body, record.recordId).status).toBe('accepted')
+
+      const [row] = await sql<
+        { revision: number; respondent_email: string; answers: Record<string, unknown> }[]
+      >`
+        SELECT revision, respondent_email, answers
+        FROM feedback WHERE record_id = ${record.recordId}
+      `
+
+      expect(Number(row?.revision)).toBe(2)
+      expect(row?.answers).toMatchObject({ overallExperienceRating: 4 })
+      // The identity did not move with the correction.
+      expect(row?.respondent_email).toBe('grace@example.com')
+    })
+
+    it('refuses a resend that changes who the response is from', async () => {
+      const token = await enrolledToken()
+      const record = contactFeedback()
+      await postBatch(token, batch([record]))
+
+      const impostor = {
+        ...record,
+        respondentEmail: 'someone.else@example.com',
+      } as typeof record
+
+      const body = await postBatch(token, batch([impostor]))
+
+      expect(statusOf(body, record.recordId)).toMatchObject({
+        status: 'conflict',
+        code: 'IMMUTABLE_FIELD_MISMATCH',
+      })
+
+      const [row] = await sql<{ respondent_email: string }[]>`
+        SELECT respondent_email FROM feedback WHERE record_id = ${record.recordId}
+      `
+      expect(row?.respondent_email).toBe('grace@example.com')
+    })
+
+    it('keeps the three capture methods distinguishable in one event', async () => {
+      const token = await enrolledToken()
+      const records = [
+        feedback(),
+        feedback({ captureMethod: 'manual' }),
+        contactFeedback(),
+      ]
+
+      await postBatch(token, batch(records))
+
+      const rows = await sql<{ capture_method: string }[]>`
+        SELECT capture_method FROM feedback WHERE event_id = ${EVENT_ID}
+        ORDER BY capture_method
+      `
+      expect(rows.map((row) => row.capture_method)).toEqual([
+        'contact',
+        'manual',
+        'qr',
+      ])
     })
   })
 })

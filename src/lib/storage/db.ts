@@ -54,6 +54,20 @@ export class OfflineEventDb extends Dexie {
      *     legitimately be recorded twice, and Point B has no basis to decide
      *     otherwise offline. `participantId` is a sparse index; manual-entry
      *     records simply omit the field.
+     *
+     * Contact-capture responses added no version and no index, and that is a
+     * decision rather than an omission. IndexedDB indexes are sparse by
+     * construction: a record with no `publicCode` property is simply not in the
+     * `publicCode` index, exactly as a manual-entry record has never been in
+     * the `participantId` index since v1. Nothing queries a response by
+     * respondent name, phone or email on the device, so there is nothing for a
+     * new index to serve.
+     *
+     * Bumping the version anyway would have been ceremony with a real cost: an
+     * upgrade transaction is a moment a database with an event's only copy of
+     * some records can fail, and every installed tablet would run it on first
+     * open of the new build. The right time to spend that risk is when the
+     * schema actually changes.
      */
     this.version(1).stores({
       registrations:

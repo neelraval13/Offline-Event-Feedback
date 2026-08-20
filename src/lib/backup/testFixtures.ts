@@ -13,6 +13,10 @@ import {
   type DeviceId,
   type FeedbackQuestionnairePayload,
   type FeedbackRecord,
+  type IdentityCaptureMethod,
+  type OfflineRecordMetadata,
+  type ParticipantId,
+  type PublicParticipantCode,
   type RegistrationRecord,
 } from '../../types'
 import { BACKUP_FORMAT_VERSION, type BackupPayloadV1 } from './format'
@@ -91,8 +95,28 @@ export function makeRegistration(
  * `Partial<FeedbackRecord>` would let a caller override `formVersion` alone and
  * leave the old questionnaire's answers behind it: the exact mismatch the
  * discriminated payload exists to prevent, reintroduced in the fixtures.
+ *
+ * The identity fields are listed flat rather than taken from `FeedbackRecord`,
+ * whose three shapes make `Partial<>` of it a union no caller can spread into.
+ * A fixture builder has to be able to produce a deliberately wrong record: the
+ * validator suites exist to prove a hostile file is refused, and they cannot
+ * build one through a type that forbids it. The assertion below is where that
+ * escape hatch lives, and it is confined to fixtures.
  */
-type FeedbackOverrides = Partial<Omit<FeedbackRecord, 'formVersion' | 'answers'>> &
+type FeedbackOverrides = Partial<
+  Omit<
+    OfflineRecordMetadata,
+    never
+  > & {
+    kind: 'feedback'
+    captureMethod: IdentityCaptureMethod
+    publicCode: PublicParticipantCode
+    participantId: ParticipantId
+    respondentName: string
+    respondentPhone: string
+    respondentEmail: string
+  }
+> &
   Partial<FeedbackQuestionnairePayload>
 
 export function makeFeedback(
@@ -121,6 +145,11 @@ export function makeFeedback(
 
   const { formVersion: _version, answers: _answers, ...rest } = overrides
 
+  /*
+   * Asserted for the same reason the questionnaire above is: the assembled
+   * object is whatever the caller asked for, including combinations the record
+   * type forbids, which is exactly what a validator suite needs to feed in.
+   */
   return {
     kind: 'feedback',
     recordId: newRecordId(),
@@ -137,7 +166,51 @@ export function makeFeedback(
     participantId: registration.participantId,
     ...questionnaire,
     ...rest,
-  }
+  } as FeedbackRecord
+}
+
+/**
+ * A contact-capture response: no sticker, no code, the rider's own details.
+ *
+ * Takes no registration, deliberately. That is the whole point of the path it
+ * models: this rider may never have been to Point A, and a fixture that
+ * required one would quietly make every contact test a test about somebody who
+ * had already registered.
+ */
+export function makeContactFeedback(
+  overrides: FeedbackOverrides = {},
+  device: DeviceId = SOURCE_DEVICE,
+): FeedbackRecord {
+  const questionnaire = {
+    formVersion: overrides.formVersion ?? 'feedback-v1',
+    answers: overrides.answers ?? {
+      overall_rating: 4,
+      experience: 'good',
+      recommend: true,
+      comments: 'Well organised',
+    },
+  } as FeedbackQuestionnairePayload
+
+  const { formVersion: _version, answers: _answers, ...rest } = overrides
+
+  return {
+    kind: 'feedback',
+    recordId: newRecordId(),
+    eventId: EVENT_CONFIG.eventId,
+    eventDay: EVENT_CONFIG.eventDay,
+    stationId: B1,
+    deviceId: device,
+    createdAt: isoTimestamp('2026-01-01T11:30:00.000Z'),
+    updatedAt: isoTimestamp('2026-01-01T11:30:00.000Z'),
+    revision: 1,
+    syncStatus: 'pending',
+    captureMethod: 'contact',
+    respondentName: 'Grace Hopper',
+    respondentPhone: '9876543210',
+    respondentEmail: 'grace@example.com',
+    ...questionnaire,
+    ...rest,
+  } as FeedbackRecord
 }
 
 /** A payload built directly, for tests that never touch a database. */

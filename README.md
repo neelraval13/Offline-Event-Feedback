@@ -265,13 +265,21 @@ See [docs/point-a-physical-test.md](docs/point-a-physical-test.md) for the
 manual print QA pass.
 
 **Point B**. Staff scans that sticker, or types the code printed under it, and
-records the participant's feedback.
+records the participant's feedback. A rider who has neither gives their contact
+details instead, which is a first-class third path and not a fallback: they may
+never have been to Point A at all.
 
 ```
-scan QR   -> validate against this event + the A1 desk -+
-                                                        +-> feedback-v1 -> IndexedDB
-type code -> validate the check character --------------+
+scan QR    -> validate against this event + the A1 desk -+
+type code  -> validate the check character --------------+-> IndexedDB
+contact    -> name + phone + email, validated as Point A -+
+              does, and never looked up
 ```
+
+No registration is created for a contact response and no code is invented for
+it. Whether those details belong to a registration is decided centrally after
+sync, on the normalised phone **and** email together, and a rider who matches
+none is recorded as direct feedback rather than as an error.
 
 - **No Point A lookup, ever.** Point B holds no registrations and needs none:
   everything it validates comes from the sticker itself.

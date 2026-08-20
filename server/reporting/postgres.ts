@@ -90,6 +90,8 @@ function mapRun(row: Row): RunDescriptor {
       ),
       matchedFeedback: Number(row['matched_feedback']),
       feedbackWithoutRegistration: Number(row['feedback_without_registration']),
+      // Zero on a run recorded before migration 008 added the column.
+      standaloneFeedback: Number(row['standalone_feedback'] ?? 0),
       feedbackIdentityConflicts: Number(row['feedback_identity_conflicts']),
       feedbackInMultipleGroups: Number(row['feedback_in_multiple_groups']),
       duplicateRegistrationCandidateCount: Number(
@@ -228,15 +230,23 @@ export async function buildOverview(
   const freshness = await assessFreshness(sql, eventId, run)
 
   /*
-   * Analytics reads only responses this run classified `matched`. The filter is
-   * a join rather than a post-filter so the database never hands over the
-   * ambiguous ones at all.
+   * Analytics reads the responses this run found unambiguous: `matched` and
+   * `standalone`. The filter is a join rather than a post-filter so the
+   * database never hands over the ambiguous ones at all.
+   *
+   * `standalone` is here because a direct response is unambiguous. The rider
+   * gave their details, answered every question, and matched no registration;
+   * the only open question is whether they also went through Point A, which
+   * says nothing about what they thought of the motorcycle. Leaving them out
+   * would quietly make every average on this screen describe registered riders
+   * rather than riders, and the two diverge exactly at the events where the
+   * contact path was most used.
    */
   const analysable = await sql<Row[]>`
     SELECT f.form_version, f.answers
     FROM reconciliation_feedback_results r
     JOIN feedback f ON f.record_id = r.feedback_record_id
-    WHERE r.run_id = ${run.runId} AND r.status = 'matched'
+    WHERE r.run_id = ${run.runId} AND r.status IN ('matched', 'standalone')
   `
 
   const responses = analysable.map((row) => ({
@@ -507,6 +517,7 @@ export interface FeedbackQuery {
   readonly status?:
     | 'matched'
     | 'without_registration'
+    | 'standalone'
     | 'identity_conflict'
     | 'multiple_feedback'
     | 'all'
@@ -515,17 +526,31 @@ export interface FeedbackQuery {
   readonly cursor?: string
 }
 
+/** The stored capture method, read rather than inferred from other columns. */
+function readCaptureMethod(value: unknown): FeedbackRow['captureMethod'] {
+  const method = String(value)
+  return method === 'qr' || method === 'contact' ? method : 'manual'
+}
+
 function mapFeedbackRow(row: Row): FeedbackRow {
   const linkedId = row['linked_record_id']
 
   return {
     recordId: String(row['record_id']),
-    publicCode: String(row['public_code']),
-    participantId:
-      row['participant_id'] === null || row['participant_id'] === undefined
-        ? null
-        : String(row['participant_id']),
-    captureMethod: String(row['capture_method']) === 'qr' ? 'qr' : 'manual',
+    // Null for a contact capture: that response never had a sticker, and an
+    // empty string here would render as a code that happens to be blank.
+    publicCode: toStringOrNull(row['public_code']),
+    participantId: toStringOrNull(row['participant_id']),
+    captureMethod: readCaptureMethod(row['capture_method']),
+    /*
+     * The rider's own details, on a contact capture. Null on the sticker paths,
+     * where the columns are NULL by database constraint rather than by
+     * convention: `feedback_identity_shape` refuses a qr or manual row that
+     * carries any of them.
+     */
+    respondentName: toStringOrNull(row['respondent_name']),
+    respondentPhone: toStringOrNull(row['respondent_phone']),
+    respondentEmail: toStringOrNull(row['respondent_email']),
     formVersion: String(row['form_version']),
     createdAt: toIso(row['created_at']),
     revision: Number(row['revision']),
@@ -584,6 +609,7 @@ export async function queryFeedback(
   const rows = await sql<Row[]>`
     -- Driven from the run's own results, same rule as the participant browser.
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
+           fb.respondent_name, fb.respondent_phone, fb.respondent_email,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -609,9 +635,22 @@ export async function queryFeedback(
     WHERE res.run_id = ${query.runId} AND fb.event_id = ${query.eventId}
       ${status === 'all' ? sql`` : sql`AND res.status = ${status}`}
       ${
+        /*
+         * Searching a response by what is on it, whichever identity it has.
+         *
+         * The registration columns alone were enough while every response
+         * carried a code that led to one. A direct response has no
+         * registration, so without the respondent columns here it would be
+         * unfindable by any term an organiser would actually type: the name of
+         * the person standing in front of them asking about their feedback.
+         * Code search is untouched.
+         */
         search === ''
           ? sql``
           : sql`AND (fb.public_code ILIKE ${`%${search}%`}
+                  OR fb.respondent_name ILIKE ${`%${search}%`}
+                  OR fb.respondent_phone ILIKE ${`%${search}%`}
+                  OR fb.respondent_email ILIKE ${`%${search}%`}
                   OR reg.public_code ILIKE ${`%${search}%`}
                   OR reg.name ILIKE ${`%${search}%`}
                   OR reg.phone ILIKE ${`%${search}%`}
@@ -687,6 +726,7 @@ export async function getRegistrationDetail(
   // Every valid response, never reduced to one.
   const feedbackRows = await sql<Row[]>`
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
+           fb.respondent_name, fb.respondent_phone, fb.respondent_email,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -810,12 +850,21 @@ export async function getFeedbackDetail(
   })
 
   /*
-   * For an identity conflict, show what each identifier resolves to *now*.
-   * Labelled as diagnostics in the UI: this is a live lookup, not something the
-   * run decided, and the run deliberately decided nothing.
+   * For a sticker identity conflict, show what each identifier resolves to
+   * *now*. Labelled as diagnostics in the UI: this is a live lookup, not
+   * something the run decided, and the run deliberately decided nothing.
+   *
+   * A contact conflict has neither identifier to resolve, so it gets no
+   * diagnostics block. Its conflict is of a different kind and the screen
+   * explains it in its own words: the phone and email pair belongs to more than
+   * one registration, which is a fact about the registrations rather than about
+   * this response.
    */
-  const isConflict = base.reconciliationStatus === 'identity_conflict'
   const participantId = base.participantId
+  const publicCode = base.publicCode
+  const isStickerConflict =
+    base.reconciliationStatus === 'identity_conflict' &&
+    base.captureMethod !== 'contact'
 
   return {
     ...base,
@@ -826,18 +875,16 @@ export async function getFeedbackDetail(
     lastUploaderDeviceId: String(row['last_uploader_device_id']),
     updatedAt: toIso(row['updated_at']),
     answers,
-    diagnostics: isConflict
+    diagnostics: isStickerConflict
       ? {
           participantIdResolvesTo:
             participantId === null
               ? null
               : await resolveSide(sql, eventId, 'participant_id', participantId),
-          publicCodeResolvesTo: await resolveSide(
-            sql,
-            eventId,
-            'public_code',
-            base.publicCode,
-          ),
+          publicCodeResolvesTo:
+            publicCode === null
+              ? null
+              : await resolveSide(sql, eventId, 'public_code', publicCode),
         }
       : null,
   }
@@ -1012,9 +1059,14 @@ export async function exportRegistrationRows(
 
 export interface FeedbackExportRow {
   readonly recordId: string
-  readonly publicCode: string
+  /** Null for a contact capture: that response never had a sticker. */
+  readonly publicCode: string | null
   readonly participantId: string | null
   readonly captureMethod: string
+  /* The rider's own details, on a contact capture. Null on the sticker paths. */
+  readonly respondentName: string | null
+  readonly respondentPhone: string | null
+  readonly respondentEmail: string | null
   readonly formVersion: string
   readonly createdAt: string
   readonly revision: number
@@ -1048,6 +1100,7 @@ export async function exportFeedbackRows(
     -- One row per response the run classified: the file's row count equals the
     -- run's own feedback count.
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
+           fb.respondent_name, fb.respondent_phone, fb.respondent_email,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -1083,9 +1136,12 @@ export async function exportFeedbackRows(
 
   return rows.map((row) => ({
     recordId: String(row['record_id']),
-    publicCode: String(row['public_code']),
+    publicCode: toStringOrNull(row['public_code']),
     participantId: toStringOrNull(row['participant_id']),
     captureMethod: String(row['capture_method']),
+    respondentName: toStringOrNull(row['respondent_name']),
+    respondentPhone: toStringOrNull(row['respondent_phone']),
+    respondentEmail: toStringOrNull(row['respondent_email']),
     formVersion: String(row['form_version']),
     createdAt: toIso(row['created_at']),
     revision: Number(row['revision']),

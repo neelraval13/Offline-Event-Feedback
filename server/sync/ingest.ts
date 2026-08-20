@@ -41,12 +41,27 @@ const REGISTRATION_IMMUTABLE = [
   'createdAt',
 ] as const
 
+/*
+ * The respondent fields are identity, so they are here rather than among the
+ * mutable contents below.
+ *
+ * For a contact capture they are the whole of who the response is from. A
+ * re-delivery of the same `recordId` at the same revision carrying a different
+ * name, phone or email is therefore not an idempotent retry: something
+ * upstream produced two different records under one ID, and `fieldsMatch`
+ * reports it as an immutable mismatch instead of silently acknowledging one and
+ * keeping the other. If they were merely mutable, the two would race and the
+ * arrival order would decide whose response it was.
+ */
 const FEEDBACK_IMMUTABLE = [
   'kind',
   'recordId',
   'publicCode',
   'captureMethod',
   'participantId',
+  'respondentName',
+  'respondentPhone',
+  'respondentEmail',
   'eventId',
   'eventDay',
   'stationId',

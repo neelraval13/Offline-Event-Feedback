@@ -4,6 +4,7 @@ import { stationFor } from '../../config/event'
 import type { QrScannerFactory } from '../../lib/scanner'
 import { CampaignFeedbackForm } from '../campaign/flying-flea/components/CampaignFeedbackForm'
 import { CampaignSuccessPanel } from '../campaign/flying-flea/components/CampaignSuccessPanel'
+import { ContactFeedbackForm } from './ContactFeedbackForm'
 import { ManualCodeEntry } from './ManualCodeEntry'
 import { usePointBTerminal } from './usePointBTerminal'
 
@@ -15,9 +16,17 @@ interface FeedbackScreenProps {
 /**
  * Point B: the scanner and feedback terminal.
  *
- * Everything on this screen comes from the sticker in front of the operator.
- * It never reads Point A's registrations, never asks the network, and never
- * has a participant's name, phone or email in scope to display.
+ * Three ways in, all equal: scan the sticker, type the printed code, or give
+ * contact details because there is no sticker. The third is a first-class path
+ * and not a fallback for the other two, so it is offered on the start screen
+ * beside them rather than hidden behind a failure.
+ *
+ * What is true of all three: nothing on this screen reads Point A's
+ * registrations and nothing asks the network. On the sticker paths there is no
+ * participant name, phone or email in scope at all. On the contact path there
+ * is, because the rider typed it and it is the identity of their response; it
+ * is displayed back only as they typed it, and it is never looked up against
+ * anything.
  */
 export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
   const station = stationFor('feedback')
@@ -27,9 +36,11 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
     videoRef,
     startScanner,
     openManualEntry,
+    openContactEntry,
     submitManualCode,
     returnToScanner,
     submitFeedback,
+    submitContactFeedback,
   } = usePointBTerminal(
     createScanner === undefined ? {} : { createScanner },
   )
@@ -69,6 +80,7 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
         <section className="point-b__start">
           <p className="screen__lede">
             Scan the QR on the participant’s sticker, or enter the printed code.
+            No sticker? Take their details instead.
           </p>
           <div className="button-row">
             <button
@@ -80,6 +92,13 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
             </button>
             <button type="button" className="button" onClick={openManualEntry}>
               Enter code manually
+            </button>
+            {/* Offered here, not only after something goes wrong. A rider who
+                never registered has nothing to scan and nothing to type, and
+                making an operator break the camera to find their way to this
+                button would be absurd. */}
+            <button type="button" className="button" onClick={openContactEntry}>
+              Continue without QR or code
             </button>
           </div>
         </section>
@@ -103,6 +122,9 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
             <button type="button" className="button" onClick={openManualEntry}>
               Enter code manually
             </button>
+            <button type="button" className="button" onClick={openContactEntry}>
+              Continue without QR or code
+            </button>
           </div>
         </section>
       )}
@@ -124,6 +146,9 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
             <button type="button" className="button" onClick={openManualEntry}>
               Enter code manually
             </button>
+            <button type="button" className="button" onClick={openContactEntry}>
+              Continue without QR or code
+            </button>
           </div>
         </section>
       )}
@@ -139,6 +164,48 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
             onCancel={returnToScanner}
             canCancel
           />
+          <div className="button-row">
+            <button type="button" className="button" onClick={openContactEntry}>
+              No code either? Take their details
+            </button>
+          </div>
+        </section>
+      )}
+
+      {state.status === 'contact-entry' && (
+        <section aria-labelledby="contact-heading">
+          <h2 id="contact-heading" className="section-title">
+            Continue without QR or code
+          </h2>
+          <p className="screen__lede">
+            No sticker and no code? Enter the rider’s contact details instead,
+            then the usual questions.
+          </p>
+
+          {state.saveError !== null && (
+            <p className="notice notice--error" role="alert">
+              Feedback was <strong>not</strong> saved: {state.saveError}. Please
+              try submitting again. Everything below is still here.
+            </p>
+          )}
+
+          <ContactFeedbackForm
+            busy={state.busy}
+            onSubmit={(identity, answers) =>
+              void submitContactFeedback(identity, answers)
+            }
+          />
+
+          <div className="button-row">
+            <button
+              type="button"
+              className="button button--small"
+              onClick={returnToScanner}
+              disabled={state.busy}
+            >
+              Cancel
+            </button>
+          </div>
         </section>
       )}
 

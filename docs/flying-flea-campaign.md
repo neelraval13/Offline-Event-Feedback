@@ -206,6 +206,82 @@ is stored as an absent field rather than an empty string, so "wrote nothing" and
 sets none. This is a storage bound so a stuck key cannot produce a record too
 large to sync; the visible question is unchanged.
 
+## Three ways to identify a response
+
+Point B started with two, both of which read a sticker Point A issued. The third
+exists because riders turn up without one: they never registered, or the sticker
+is in a jacket pocket somewhere, or it went through a puddle.
+
+| `captureMethod` | identity it carries | never carries |
+| --- | --- | --- |
+| `qr` | `participantId` + `publicCode` | respondent details |
+| `manual` | `publicCode` | `participantId`, respondent details |
+| `contact` | `respondentName` + `respondentPhone` + `respondentEmail` | `participantId`, `publicCode` |
+
+### What is deliberately not done
+
+**No fabricated identity.** A contact response gets no invented public code and
+no invented participant ID. A generated code would be indistinguishable from a
+printed one at every layer downstream and would be joined to whichever
+registration happened to hold it, silently, by a query with every right to trust
+the column. The fields are **absent**, not empty: an empty-string code joins
+against every other empty-string code the first time somebody writes a careless
+query.
+
+**No registration created.** A rider who only completed Point B did only
+complete Point B. Inventing a registration would put a participant in the event
+who never registered, carrying a code that was never printed and is on nobody's
+sticker, and every count downstream would be wrong in a way nothing could
+detect, because the fabrication would look exactly like the real thing.
+
+**No lookup.** Point B makes zero network reads on this path. It does not ask
+whether the rider registered, because that question has no answer at a desk with
+the wifi off, and asking it would make the one path designed for the rider who
+has nothing depend on the one thing a venue cannot guarantee.
+
+### The rules the three shapes obey
+
+Enforced in three independent places, deliberately: the wire schema
+(`shared/sync/protocol.ts`), the backup validator (`src/lib/backup/validate.ts`)
+and the database itself (`feedback_identity_shape`, migration 008). The first
+two protect the paths we know about; the third protects the table from a future
+migration, a manual correction typed into psql at an event, or a bug in a build
+nobody has written yet. A redundant CHECK costs nothing; one hybrid row costs a
+response silently attributed to a stranger.
+
+### Validation reuses Point A's rules
+
+Name, phone and email are checked with the same functions Point A uses,
+imported rather than restated. If the two desks accepted different phone
+formats, the same rider typing the same number at both would produce values that
+normalise differently and never match, and the failure would be invisible from
+either screen.
+
+### How a contact response is attributed
+
+Centrally, after sync, by reconciliation, and only on the **normalised phone and
+the normalised email together**, matching **exactly one** registration in the
+event.
+
+- Not the name. Two riders called Rahul Sharma at one event is a Tuesday.
+- Not the phone alone. Families share phone numbers.
+- Not the email alone. Couples share email accounts.
+- Not "the best" of several. Two registrations with that exact pair means the
+  event genuinely cannot say which rider this is, and it is recorded as an
+  identity conflict rather than resolved by choosing.
+
+Matching nothing is the ordinary outcome for a rider who never registered. It is
+recorded as **`standalone`**, shown as **Direct feedback**, and it is not an
+anomaly: it does not appear under Needs Review, it counts towards the campaign
+averages, and it is deliberately distinct from `without_registration`, which
+means a sticker code that resolved to nothing and does need somebody to look.
+
+Coverage keeps counting registrations only. A direct response has none, so it
+moves neither half of that fraction and is reported beside it. Folding it into
+the numerator could report coverage above 100% at an event where the contact
+desk was busy, which is the kind of number that makes an organiser stop trusting
+the whole report.
+
 ## Backwards compatibility
 
 - The device stores the questionnaire and its answers as one discriminated value
@@ -224,8 +300,16 @@ large to sync; the visible question is unchanged.
   record needs no new `version()` block and no index change; a bump would carry
   upgrade risk for installed devices in exchange for nothing.
 - The sync protocol stays at version 1. The registration schema gained optional
-  fields and the feedback schema became a version-tagged union. A device on an
-  older build still uploads successfully.
+  fields, the feedback schema became a version-tagged union, and later gained a
+  third `captureMethod` with three optional respondent fields. Every one of
+  those is additive, so a device on an older build still uploads successfully.
+- Contact identity added no IndexedDB version either. IndexedDB indexes are
+  sparse by construction, so a record with no `publicCode` property is simply
+  not in that index, exactly as a manual-entry record has never been in the
+  `participantId` index. Nothing on the device queries a response by respondent
+  details, so there is nothing for a new index to serve, and an upgrade
+  transaction is a moment a database holding an event's only copy of some
+  records can fail.
 - `feedback-v1` responses keep their meaning exactly. Reporting computes their
   figures separately and never averages a 1–5 rating together with a 1–7 one.
 - A restore file may hold both questionnaires; the validator branches on version.
@@ -267,14 +351,38 @@ A version bump would not have helped: the older server would refuse the batch on
 the version instead of the field, and the data would be just as stuck. This is a
 deployment ordering rule, not something a number can enforce.
 
+### Contact identity keeps the same contract
+
+The third capture method is additive in exactly the same way, so the protocol
+stayed at 1 and the supported direction is unchanged:
+
+- **Old client, new server.** A tablet that has been offline all day, running
+  the previous build, with unsynced responses on it, uploads them unchanged.
+  Every one is a `qr` or `manual` record with a `publicCode`, which is still a
+  valid shape. Verified by `protocol compatibility` in
+  `server/tests/wireIdentity.test.ts`.
+- **New client, old server.** Not supported, for the same reason as above: the
+  older server's enum has no `contact` member and would reject the record. A
+  version bump would not have helped, only changed which line refused it.
+
+Migration 008 is safe to apply **before** the new application is deployed, which
+is the order below. Nothing in it is required by the running code: dropping a
+NOT NULL and widening a CHECK cannot break a writer that was already satisfying
+the stricter rule, and the new columns are nullable with no default, so the
+existing INSERT statements continue to work unchanged. Proved against a schema
+built through migration 007 and populated with real qr and manual rows, in
+`server/tests/migration008.test.ts`.
+
 ### Deployment gate
 
-1. Deploy the Phase 9 **server** and run `pnpm server:migrate` first.
-2. Only then update the field devices to the Phase 9 application.
-3. A device must be on the Phase 9 build **before** it captures or restores any
-   Flying Flea campaign record. A pre-Phase-9 build cannot represent the campaign
-   questionnaire, and restoring a campaign backup onto one will fail validation
-   rather than silently drop answers.
+1. Deploy the **server** and run `pnpm server:migrate` first.
+2. Only then update the field devices to the new application.
+3. A device must be on the new build **before** it captures or restores any
+   record that the older build cannot represent: a Flying Flea campaign
+   response, or a contact-identity response. A pre-campaign build cannot
+   represent the questionnaire and a pre-contact build cannot represent the
+   identity, and restoring such a backup onto one will fail validation rather
+   than silently drop the record.
 
 ## Fidelity versus throughput
 

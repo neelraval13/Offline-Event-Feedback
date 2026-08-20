@@ -69,16 +69,36 @@ that ordering and reconcile, not reject it.
 | | holds | never holds |
 | --- | --- | --- |
 | **Point A** | PII (name, phone, email) + participant identity | none |
-| **Point B** | participant identity + feedback | participant PII |
+| **Point B**, sticker paths | participant identity + feedback | participant PII |
+| **Point B**, contact path | the rider's own name, phone and email + feedback | any copy of Point A's data |
 
-PII enters the system at Point A and stays there. The QR payload and the public
-code are opaque identifiers, so a lost or photographed sticker discloses
-nothing. Point B never receives a copy of the participant database, which is
-both a privacy property and the reason invariant 2 is achievable: there is no
-PII at Point B to keep in sync.
+The QR payload and the public code are opaque identifiers, so a lost or
+photographed sticker discloses nothing.
+
+The property that actually matters is not "Point B has no PII"; it is **Point B
+never reads Point A**. Those were the same statement for two phases, and then a
+rider turned up at Point B with no sticker. They can now give their name, phone
+number and email address, and Point B holds them, because for that response
+they *are* its identity, not a lookup result. The invariant is unchanged:
+nothing at Point B consults, mirrors or requires the participant database, and
+whether a rider's details happen to match a registration is a question nobody
+at the desk asks or could answer.
+
+So the contact path holds PII, and only for the responses that carry it. A
+scanned or typed response has no name, phone or email anywhere on it, and the
+database refuses one that does: `feedback_identity_shape` (migration 008)
+permits exactly three identity shapes and no combination of them. A build that
+started attaching contact details to a scanned response would fail on insert
+rather than quietly widening the boundary.
 
 Re-joining feedback to a participant is a **central-server** concern, performed
-after synchronisation, never a field concern.
+after synchronisation, never a field concern. That is true of a manually typed
+code and equally true of contact details: reconciliation matches a contact
+response to a registration only when the normalised phone *and* the normalised
+email both match, and exactly one registration in the event has that pair.
+Never a name, never one half of the pair alone. When nothing matches, the
+response is `standalone`, which means a rider who did not register, and is a
+valid outcome rather than a failure to look anything up.
 
 ## Offline architecture
 
@@ -2002,17 +2022,27 @@ migration's must not be.
 Point B needs three things to record attributable feedback, and has all three
 without a lookup:
 
-1. **The identifiers**; both are on the sticker. A QR scan yields
-   `participantId` and `publicCode`; a typed fallback yields `publicCode` alone.
-2. **Validation**: the check character is deterministic arithmetic over the
-   code itself, so a typo is caught locally with no participant list to consult.
+1. **An identity**, from whatever the rider brought. A QR scan yields
+   `participantId` and `publicCode`; a typed fallback yields `publicCode` alone;
+   a rider with neither gives their own name, phone number and email, and those
+   become the identity of the response.
+2. **Validation**: for a code, the check character is deterministic arithmetic
+   over the code itself, so a typo is caught locally with no participant list to
+   consult. For contact details, the same rules Point A applies to the same
+   three fields, so a number typed at either desk normalises identically.
 3. **Somewhere to put it**. Point B's own IndexedDB, which never contains a
    copy of Point A's data.
 
-Point B therefore holds no participant PII, needs no connectivity, and cannot be
-blocked by Point A being restarted, replaced or absent. Re-joining a
-manual-entry record to a participant ID is the central server's job after
-synchronisation.
+Point B therefore needs no connectivity and cannot be blocked by Point A being
+restarted, replaced or absent. The contact path in particular makes **zero**
+network reads: it does not ask whether the rider registered, because that
+question has no answer at a desk with the wifi off, and asking it would make the
+one path designed for the rider who has nothing depend on the one thing the
+venue cannot guarantee.
+
+Attributing a response to a participant is the central server's job after
+synchronisation, whether the response carries a typed code or a phone number
+and an email address.
 
 ## What exists after Phase 10
 

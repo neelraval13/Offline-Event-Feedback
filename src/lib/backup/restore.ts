@@ -61,12 +61,21 @@ const REGISTRATION_IMMUTABLE = [
   'createdAt',
 ] as const
 
+/*
+ * The respondent fields are here, with the other identifiers, and not among the
+ * mutable contents. For a contact capture they ARE the identity: two copies of
+ * one `recordId` that disagree about who answered are not the same response,
+ * exactly as two copies disagreeing about a public code are not.
+ */
 const FEEDBACK_IMMUTABLE = [
   'kind',
   'recordId',
   'publicCode',
   'participantId',
   'captureMethod',
+  'respondentName',
+  'respondentPhone',
+  'respondentEmail',
   'eventId',
   'eventDay',
   'stationId',

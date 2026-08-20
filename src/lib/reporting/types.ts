@@ -18,11 +18,20 @@ export type RegistrationReconciliationStatus =
 
 export type FeedbackReconciliationStatus =
   | 'matched'
+  /** A sticker resolved to nothing. A problem worth looking at. */
   | 'without_registration'
+  /** A valid response from a rider with no Point A registration. Not a problem. */
+  | 'standalone'
   | 'identity_conflict'
   | 'multiple_feedback'
 
-export type MatchMethod = 'qr_identity' | 'manual_public_code'
+export type MatchMethod =
+  | 'qr_identity'
+  | 'manual_public_code'
+  | 'contact_identity'
+
+/** How Point B identified a response. */
+export type CaptureMethod = 'qr' | 'manual' | 'contact'
 
 export interface RunDescriptor {
   readonly runId: string
@@ -38,6 +47,8 @@ export interface RunDescriptor {
     readonly registrationsWithMultipleFeedback: number
     readonly matchedFeedback: number
     readonly feedbackWithoutRegistration: number
+    /** Valid direct responses. Never part of a "needs review" total. */
+    readonly standaloneFeedback: number
     readonly feedbackIdentityConflicts: number
     readonly feedbackInMultipleGroups: number
     readonly duplicateRegistrationCandidateCount: number
@@ -57,10 +68,19 @@ export interface FeedbackAnalytics {
   readonly unreadableFormVersions: number
 }
 
+/**
+ * How many **registered** participants responded.
+ *
+ * Direct responses have no registration, so they move neither half of the
+ * fraction and are carried beside it instead. Counting them in would let
+ * coverage exceed 100% at an event where the contact path was popular.
+ */
 export interface ResponseCoverage {
   readonly registrationsWithFeedback: number
   readonly totalRegistrations: number
   readonly percentage: number | null
+  /** Valid responses from riders with no Point A registration. */
+  readonly directResponses: number
 }
 
 export interface FreshnessReport {
@@ -158,11 +178,26 @@ export interface CampaignFeedbackSummary {
   readonly overallExperienceRating: number | null
 }
 
-export interface FeedbackRow {
+/**
+ * The rider's own details, on a contact capture.
+ *
+ * Null on every other capture method: those responses genuinely have none.
+ * Privileged PII, exactly like a registration's name, phone and email, and
+ * subject to the same rule as everything else in this file: it exists in React
+ * state while a screen is open and is never written to any browser storage.
+ */
+export interface RespondentContact {
+  readonly respondentName: string | null
+  readonly respondentPhone: string | null
+  readonly respondentEmail: string | null
+}
+
+export interface FeedbackRow extends RespondentContact {
   readonly recordId: string
-  readonly publicCode: string
+  /** Null for a contact capture: that response never had a sticker. */
+  readonly publicCode: string | null
   readonly participantId: string | null
-  readonly captureMethod: 'qr' | 'manual'
+  readonly captureMethod: CaptureMethod
   readonly formVersion: string
   readonly createdAt: string
   readonly revision: number
@@ -242,6 +277,7 @@ export interface FeedbackQueryBody {
   readonly eventId: string
   readonly runId?: string
   readonly status?: FeedbackReconciliationStatus | 'all'
+  /** A code, or a respondent's name, phone or email. POSTed, never in a URL. */
   readonly search?: string
   readonly limit?: number
   readonly cursor?: string

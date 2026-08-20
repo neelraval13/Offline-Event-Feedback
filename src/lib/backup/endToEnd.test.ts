@@ -10,7 +10,12 @@ import { verifyBackupFile } from './verifyBackup'
 import { restoreBackup } from './restore'
 import { createSnapshot } from './snapshot'
 import { BACKUP_FORMAT, backupFileName, MAX_BACKUP_FILE_BYTES } from './format'
-import { makeFeedback, makeRegistration, seedDatabase } from './testFixtures'
+import {
+  makeContactFeedback,
+  makeFeedback,
+  makeRegistration,
+  seedDatabase,
+} from './testFixtures'
 
 /*
  * The whole recovery path, end to end: a device is backed up, the file is
@@ -442,5 +447,226 @@ describe('campaign records survive a backup and restore', () => {
     } finally {
       await destroyTestDb(replacement)
     }
+  })
+})
+
+describe('contact-capture responses survive a backup and restore', () => {
+  const CONTACT = {
+    respondentName: 'Grace Hopper',
+    respondentPhone: '9876543210',
+    respondentEmail: 'grace@example.com',
+  } as const
+
+  const CAMPAIGN_ANSWERS = {
+    testRideExperience: 6,
+    rotaryKnobUsage: 7,
+    rideModesExperience: 5,
+    overallExperienceRating: 6,
+    topThreeFeatures: 'The silence, the torque, the weight',
+    overallExperienceComments: 'Would ride again',
+  } as const
+
+  it('carries the rider’s details and every answer to a replacement device', async () => {
+    /*
+     * The recovery this protects: a Point B tablet dies with direct responses
+     * on it. Those riders have no registration and no sticker, so this file is
+     * the only copy of both their answers and their identity. A restore that
+     * dropped the respondent fields would leave the event holding anonymous
+     * feedback from people it could no longer name or contact.
+     */
+    await seedDatabase(database, { registrations: 0 })
+    const direct = makeContactFeedback({
+      formVersion: 'flying-flea-feedback-v1',
+      answers: CAMPAIGN_ANSWERS,
+    })
+    await database.feedback.add(direct)
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    expect(file.ok).toBe(true)
+    if (!file.ok) {
+      return
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      expect(verified.ok).toBe(true)
+      if (!verified.ok) {
+        return
+      }
+
+      const result = await restoreBackup(replacement, verified.payload)
+      expect(result.ok).toBe(true)
+
+      const restored = await replacement.feedback.get(direct.recordId)
+      expect(restored).toMatchObject(CONTACT)
+      expect(restored?.answers).toEqual(CAMPAIGN_ANSWERS)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+
+  it('preserves record identity, revision and sync status', async () => {
+    await seedDatabase(database, { registrations: 0 })
+    const direct = makeContactFeedback({ revision: 3, syncStatus: 'error' })
+    await database.feedback.add(direct)
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    if (!file.ok) {
+      throw new Error('backup failed')
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      if (!verified.ok) {
+        throw new Error('verify failed')
+      }
+      await restoreBackup(replacement, verified.payload)
+
+      // Deep equality: a field lost anywhere in the round trip fails here
+      // rather than three phases later in an export.
+      expect(await replacement.feedback.get(direct.recordId)).toEqual(direct)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+
+  it('invents no code for it on the way through', async () => {
+    await seedDatabase(database, { registrations: 0 })
+    const direct = makeContactFeedback()
+    await database.feedback.add(direct)
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    if (!file.ok) {
+      throw new Error('backup failed')
+    }
+    const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+    expect(verified.ok).toBe(true)
+    if (!verified.ok) {
+      return
+    }
+
+    const inFile = verified.payload.feedback[0] as unknown as Record<string, unknown>
+    expect(inFile['publicCode']).toBeUndefined()
+    expect(inFile['participantId']).toBeUndefined()
+  })
+
+  it('restores a file holding all three capture methods', async () => {
+    /*
+     * A real Point B tablet's database after a shift: whatever riders happened
+     * to bring. A restore that validated everything against one identity shape
+     * would reject a perfectly good backup.
+     */
+    await seedDatabase(database, { registrations: 0 })
+    const registration = makeRegistration(1)
+    const scanned = makeFeedback(registration)
+    const typed = makeFeedback(makeRegistration(2), { captureMethod: 'manual' })
+    const typedWithoutParticipant = { ...typed } as Record<string, unknown>
+    delete typedWithoutParticipant['participantId']
+    const direct = makeContactFeedback()
+
+    await database.registrations.add(registration)
+    await database.feedback.bulkAdd([
+      scanned,
+      typedWithoutParticipant as never,
+      direct,
+    ])
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    if (!file.ok) {
+      throw new Error('backup failed')
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      expect(verified.ok).toBe(true)
+      if (!verified.ok) {
+        return
+      }
+
+      const result = await restoreBackup(replacement, verified.payload)
+      expect(result.ok).toBe(true)
+      expect(await replacement.feedback.count()).toBe(3)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+
+  it('still restores an older file that contains no contact responses at all', async () => {
+    /*
+     * Backwards compatibility, stated as a test rather than assumed. A file
+     * made by the previous build has qr and manual records and no respondent
+     * fields anywhere, and it must restore onto this build unchanged.
+     */
+    await seedDatabase(database, { registrations: 3, feedbackFor: 2 })
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    if (!file.ok) {
+      throw new Error('backup failed')
+    }
+
+    const replacement = createTestDb()
+    try {
+      await getOrCreateDeviceId(replacement)
+      const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+      expect(verified.ok).toBe(true)
+      if (!verified.ok) {
+        return
+      }
+
+      const result = await restoreBackup(replacement, verified.payload)
+      expect(result.ok).toBe(true)
+      expect(await replacement.registrations.count()).toBe(3)
+      expect(await replacement.feedback.count()).toBe(2)
+    } finally {
+      await destroyTestDb(replacement)
+    }
+  })
+
+  it('refuses a restore that changes who a response is from', async () => {
+    /*
+     * Two different records under one ID. For a contact response the respondent
+     * fields ARE the identity, so this is not a merge to resolve by revision:
+     * it is two people's answers claiming to be one record, and the restore
+     * stops with nothing imported.
+     */
+    await seedDatabase(database, { registrations: 0 })
+    const direct = makeContactFeedback()
+    await database.feedback.add(direct)
+
+    const file = await createEncryptedBackup(database, PASSPHRASE, FAST)
+    if (!file.ok) {
+      throw new Error('backup failed')
+    }
+    const verified = await verifyBackupFile(file.contents, PASSPHRASE)
+    if (!verified.ok) {
+      throw new Error('verify failed')
+    }
+
+    // Asserted through `unknown`: this is deliberately a record the type system
+    // forbids, which is the only way to feed the merge one.
+    const impostor = {
+      ...verified.payload,
+      feedback: [
+        {
+          ...(verified.payload.feedback[0] as object),
+          respondentEmail: 'someone.else@example.com',
+        },
+      ],
+    } as unknown as typeof verified.payload
+
+    const result = await restoreBackup(database, impostor)
+
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.conflicts.join(' ')).toContain(
+      'different identity or provenance',
+    )
+    // Nothing was imported: the local copy is exactly as it was.
+    expect(await database.feedback.get(direct.recordId)).toEqual(direct)
   })
 })

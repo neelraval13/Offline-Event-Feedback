@@ -3,6 +3,11 @@ import { isUuid } from '../identity/uuid'
 import { parsePublicCode } from '../identity/publicCode'
 import { DB_NAME, DB_VERSION } from '../storage'
 import {
+  MAX_PERSON_EMAIL_LENGTH as MAX_RESPONDENT_EMAIL_LENGTH,
+  MAX_PERSON_NAME_LENGTH as MAX_RESPONDENT_NAME_LENGTH,
+  MAX_PERSON_PHONE_LENGTH as MAX_RESPONDENT_PHONE_LENGTH,
+} from '../../../shared/identity/contactBounds'
+import {
   EXPERIENCE_VALUES,
   FEEDBACK_FORM_VERSION,
   FLYING_FLEA_FORM_VERSION,
@@ -421,6 +426,99 @@ function validateFeedbackAnswers(
   }
 }
 
+/**
+ * The identity rule for a restored response, enforced on the way in.
+ *
+ * The same three shapes the wire contract enforces, restated here rather than
+ * imported, because this file is the boundary for a *file* and the wire schema
+ * is the boundary for a *request*. They are different threats with different
+ * inputs, and the day one of them is relaxed for a good reason, the other
+ * should not follow silently.
+ *
+ * Both halves matter equally. Requiring a contact record's three fields stops a
+ * response with no identity at all; forbidding a public code on one stops a
+ * record that would be joined to somebody else's registration by a query with
+ * every right to trust the column.
+ */
+function validateFeedbackIdentity(
+  input: Record<string, unknown>,
+  captureMethod: string | null,
+  where: string,
+  issues: string[],
+): void {
+  const present = (field: string): boolean =>
+    field in input && input[field] !== undefined
+
+  const code = readNonEmptyString(input, 'publicCode')
+  const codeIsValid =
+    code !== null &&
+    parsePublicCode(code, { expectedStation: ISSUING_STATION }).ok
+
+  const forbidContact = (): void => {
+    for (const field of [
+      'respondentName',
+      'respondentPhone',
+      'respondentEmail',
+    ]) {
+      if (present(field)) {
+        issues.push(`${where}: ${captureMethod} capture must not carry ${field}`)
+      }
+    }
+  }
+
+  if (captureMethod === 'qr') {
+    const participantId = readNonEmptyString(input, 'participantId')
+    if (participantId === null || !isUuid(participantId)) {
+      issues.push(`${where}: invalid participantId`)
+    }
+    if (!codeIsValid) {
+      // Re-validated against its own check character, not trusted for having
+      // been in a file that decrypted.
+      issues.push(`${where}: invalid public code`)
+    }
+    forbidContact()
+    return
+  }
+
+  if (captureMethod === 'manual') {
+    if (present('participantId')) {
+      issues.push(`${where}: manual capture must not carry a participantId`)
+    }
+    if (!codeIsValid) {
+      issues.push(`${where}: invalid public code`)
+    }
+    forbidContact()
+    return
+  }
+
+  if (captureMethod === 'contact') {
+    if (present('participantId')) {
+      issues.push(`${where}: contact capture must not carry a participantId`)
+    }
+    if (present('publicCode')) {
+      issues.push(`${where}: contact capture must not carry a publicCode`)
+    }
+
+    // Bounds only, matching the wire contract. A name or an address is checked
+    // for being there and for fitting, never for looking like what somebody
+    // thinks a name or an address should look like.
+    const bounds: readonly [string, number][] = [
+      ['respondentName', MAX_RESPONDENT_NAME_LENGTH],
+      ['respondentPhone', MAX_RESPONDENT_PHONE_LENGTH],
+      ['respondentEmail', MAX_RESPONDENT_EMAIL_LENGTH],
+    ]
+    for (const [field, max] of bounds) {
+      const value = readNonEmptyString(input, field)
+      if (value === null || value.length > max) {
+        issues.push(`${where}: invalid ${field}`)
+      }
+    }
+    return
+  }
+
+  issues.push(`${where}: invalid captureMethod`)
+}
+
 function validateFeedback(
   input: unknown,
   index: number,
@@ -435,7 +533,6 @@ function validateFeedback(
   }
 
   const recordId = readNonEmptyString(input, 'recordId')
-  const publicCode = readNonEmptyString(input, 'publicCode')
   const deviceId = readNonEmptyString(input, 'deviceId')
   const createdAt = readNonEmptyString(input, 'createdAt')
   const updatedAt = readNonEmptyString(input, 'updatedAt')
@@ -451,12 +548,6 @@ function validateFeedback(
   }
   if (deviceId === null || !isUuid(deviceId)) {
     issues.push(`${where}: invalid deviceId`)
-  }
-  if (
-    publicCode === null ||
-    !parsePublicCode(publicCode, { expectedStation: ISSUING_STATION }).ok
-  ) {
-    issues.push(`${where}: invalid public code`)
   }
   if (createdAt === null || !isIsoTimestamp(createdAt)) {
     issues.push(`${where}: invalid createdAt`)
@@ -484,23 +575,7 @@ function validateFeedback(
     issues.push(`${where}: unsupported questionnaire version`)
   }
 
-  /*
-   * The identity rule from Phase 3, enforced on the way in: a QR capture knows
-   * the participant ID, a manual capture cannot and must not claim to.
-   */
-  if (captureMethod === 'qr') {
-    const participantId = readNonEmptyString(input, 'participantId')
-    if (participantId === null || !isUuid(participantId)) {
-      issues.push(`${where}: invalid participantId`)
-    }
-  } else if (captureMethod === 'manual') {
-    if ('participantId' in input) {
-      issues.push(`${where}: manual capture must not carry a participantId`)
-    }
-  } else {
-    issues.push(`${where}: invalid captureMethod`)
-  }
-
+  validateFeedbackIdentity(input, captureMethod, where, issues)
   validateFeedbackAnswers(input['answers'], where, issues, formVersion)
 
   if (issues.length > before) {

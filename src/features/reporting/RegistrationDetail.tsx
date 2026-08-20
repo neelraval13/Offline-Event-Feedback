@@ -8,6 +8,7 @@ import type {
   RegistrationReconciliationStatus,
 } from '../../lib/reporting/types'
 import { ResponseSummary } from './ResponseSummary'
+import { captureLabel } from './responseIdentity'
 import { useReportingSession } from './session'
 
 /*
@@ -205,9 +206,14 @@ export function RegistrationDetail({
           <ul className="recent__list">
             {detail.feedback.map((response) => (
               <li className="recent__item" key={response.recordId}>
-                <span className="recent__code">
-                  {response.captureMethod === 'qr' ? 'Scanned' : 'Typed code'}
-                </span>
+                {/*
+                  A participant's responses can now reach them by three routes,
+                  and this said "Typed code" about a rider who typed no code:
+                  a contact response that reconciliation matched on their phone
+                  and email. One shared labelling, so the two screens that list
+                  responses cannot describe the same record differently.
+                */}
+                <span className="recent__code">{captureLabel(response)}</span>
                 <span>
                   {/*
                     Each response summarised on its own questionnaire's terms.

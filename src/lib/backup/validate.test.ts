@@ -4,6 +4,7 @@ import { BACKUP_FORMAT, BACKUP_FORMAT_VERSION } from './format'
 import { KDF_ITERATIONS } from './crypto'
 import { bytesToBase64 } from './base64'
 import {
+  makeContactFeedback,
   makeFeedback,
   makePayload,
   makeRegistration,
@@ -18,6 +19,22 @@ import { DB_VERSION } from '../storage'
  * to merge into a database holding an event's records, so every field is
  * checked, and nothing is imported when anything fails.
  */
+
+/**
+ * Drops keys from a fixture record.
+ *
+ * Destructuring would be tidier and does not compile: `FeedbackRecord` is a
+ * union of three identity shapes, and a rest pattern over a union produces a
+ * type no caller can name. These suites deliberately build records the type
+ * system forbids, because their job is to prove a hostile file is refused.
+ */
+function withoutKeys<T extends object>(record: T, ...keys: string[]): unknown {
+  const remaining = { ...record } as Record<string, unknown>
+  for (const key of keys) {
+    delete remaining[key]
+  }
+  return remaining
+}
 
 function validEnvelope() {
   return {
@@ -298,9 +315,10 @@ describe('payload validation', () => {
 
     it('accepts a manual capture without a participant ID', () => {
       const registration = makeRegistration(1)
-      const { participantId: _dropped, ...manual } = makeFeedback(registration, {
-        captureMethod: 'manual',
-      })
+      const manual = withoutKeys(
+        makeFeedback(registration, { captureMethod: 'manual' }),
+        'participantId',
+      )
 
       const result = validatePayload(
         makePayload({
@@ -372,6 +390,162 @@ describe('payload validation', () => {
       expect(!result.ok && result.issues.join(' ')).toContain(
         'duplicate feedback recordId',
       )
+    })
+  })
+
+  describe('contact-capture feedback records', () => {
+    /*
+     * A restore file is a security boundary, and a contact response is the one
+     * shape in it whose identity is not a checksummed identifier. There is no
+     * check character to catch a tampered name, so the rules that matter are
+     * the structural ones: exactly the three respondent fields, and none of the
+     * identifiers a contact capture cannot have.
+     */
+    function contact(overrides: Record<string, unknown> = {}): unknown {
+      return {
+        ...(makeContactFeedback() as object),
+        ...overrides,
+      }
+    }
+
+    it('accepts a well-formed contact response', () => {
+      const result = validatePayload(
+        makePayload({ feedback: [contact() as never] }),
+      )
+
+      expect(result.ok).toBe(true)
+    })
+
+    it('accepts one carrying campaign answers', () => {
+      const result = validatePayload(
+        makePayload({
+          feedback: [
+            makeContactFeedback({
+              formVersion: 'flying-flea-feedback-v1',
+              answers: {
+                testRideExperience: 6,
+                rotaryKnobUsage: 7,
+                rideModesExperience: 5,
+                overallExperienceRating: 6,
+              },
+            }),
+          ],
+        }),
+      )
+
+      expect(result.ok).toBe(true)
+    })
+
+    it('rejects one carrying a public code', () => {
+      /*
+       * The dangerous shape. A contact record with a code would be joined to
+       * whichever registration holds it, silently, by a query with every right
+       * to trust the column.
+       */
+      const result = validatePayload(
+        makePayload({
+          feedback: [contact({ publicCode: 'A1-B8EFD9-00001-X' }) as never],
+        }),
+      )
+
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'contact capture must not carry a publicCode',
+      )
+    })
+
+    it('rejects one carrying a participant ID', () => {
+      const result = validatePayload(
+        makePayload({
+          feedback: [
+            contact({
+              participantId: '019ffc65-4559-7125-9453-e230415644f1',
+            }) as never,
+          ],
+        }),
+      )
+
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'contact capture must not carry a participantId',
+      )
+    })
+
+    it.each(['respondentName', 'respondentPhone', 'respondentEmail'])(
+      'rejects one with no %s',
+      (field) => {
+        const record = { ...(makeContactFeedback() as object) } as Record<
+          string,
+          unknown
+        >
+        delete record[field]
+
+        const result = validatePayload(
+          makePayload({ feedback: [record as never] }),
+        )
+
+        expect(!result.ok && result.issues.join(' ')).toContain(
+          `invalid ${field}`,
+        )
+      },
+    )
+
+    it('rejects an empty respondent field', () => {
+      // An empty string is a value somebody supplied; this is the absence of
+      // one, and a response identified by nothing is a response from nobody.
+      const result = validatePayload(
+        makePayload({ feedback: [contact({ respondentName: '' }) as never] }),
+      )
+
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'invalid respondentName',
+      )
+    })
+
+    it('rejects a respondent field longer than storage allows', () => {
+      const result = validatePayload(
+        makePayload({
+          feedback: [contact({ respondentEmail: `${'a'.repeat(320)}@x.com` }) as never],
+        }),
+      )
+
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'invalid respondentEmail',
+      )
+    })
+
+    it('rejects respondent details on a scanned response', () => {
+      /*
+       * The other direction. A qr capture has never needed a name, and a file
+       * that attached one would be putting PII on the one path that avoids it.
+       */
+      const registration = makeRegistration(1)
+      const result = validatePayload(
+        makePayload({
+          registrations: [registration],
+          feedback: [
+            {
+              ...(makeFeedback(registration) as object),
+              respondentName: 'Grace Hopper',
+            } as never,
+          ],
+        }),
+      )
+
+      expect(!result.ok && result.issues.join(' ')).toContain(
+        'qr capture must not carry respondentName',
+      )
+    })
+
+    it('names the field and index and never a value', () => {
+      // A validation message is written to a screen an operator is looking at
+      // and often pasted into a support note.
+      const result = validatePayload(
+        makePayload({ feedback: [contact({ respondentEmail: '' }) as never] }),
+      )
+
+      const issues = !result.ok ? result.issues.join(' ') : ''
+      expect(issues).toContain('feedback[0]')
+      expect(issues).not.toContain('Grace Hopper')
+      expect(issues).not.toContain('9876543210')
     })
   })
 

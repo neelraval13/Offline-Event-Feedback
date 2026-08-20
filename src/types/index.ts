@@ -34,6 +34,7 @@ export {
   type FeedbackV1Answers,
   type OverallRating,
 } from './feedback'
+export { feedbackPublicCode } from './records'
 export type {
   CapturedParticipantIdentity,
   FeedbackRecord,
@@ -42,5 +43,6 @@ export type {
   OfflineRecordMetadata,
   RecordContext,
   RegistrationRecord,
+  RespondentContact,
   SyncStatus,
 } from './records'

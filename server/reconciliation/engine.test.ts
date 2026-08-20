@@ -40,6 +40,9 @@ function qrFeedback(
     captureMethod: 'qr',
     participantId: target.participantId,
     publicCode: target.publicCode,
+    // A sticker capture has no respondent details, by database constraint.
+    respondentPhone: null,
+    respondentEmail: null,
     ...overrides,
   }
 }
@@ -53,6 +56,8 @@ function manualFeedback(
     captureMethod: 'manual',
     participantId: null,
     publicCode: target.publicCode,
+    respondentPhone: null,
+    respondentEmail: null,
     ...overrides,
   }
 }
@@ -331,7 +336,14 @@ describe('determinism', () => {
   })
 
   it('records the engine version', () => {
-    expect(run([]).engineVersion).toBe('reconciliation-v1')
+    /*
+     * v2 since contact identity landed. Pinned to a literal deliberately:
+     * asserting against the imported constant would pass whatever it said, and
+     * the point of this test is that changing the rules is a decision somebody
+     * has to make in two places. A run is only interpretable against the rules
+     * that produced it.
+     */
+    expect(run([]).engineVersion).toBe('reconciliation-v2')
   })
 })
 
@@ -548,5 +560,358 @@ describe('run invariants', () => {
     expect(output.counts.registrationCount).toBe(0)
     expect(output.counts.feedbackCount).toBe(0)
     expect(output.duplicateCandidates).toEqual([])
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Contact identity: the third path
+ * ------------------------------------------------------------------ */
+
+/**
+ * A response whose identity is the rider's own details.
+ *
+ * Takes no registration, deliberately: this rider may never have been to
+ * Point A, and a helper that required one would quietly make every test below
+ * a test about somebody who had already registered.
+ */
+function contactFeedback(
+  contact: { phone: string; email: string },
+  overrides: Partial<ReconciliationFeedback> = {},
+): ReconciliationFeedback {
+  return {
+    recordId: randomUUID(),
+    captureMethod: 'contact',
+    // No sticker, so neither identifier exists. Not empty strings: an empty
+    // code would join against every other empty code.
+    participantId: null,
+    publicCode: null,
+    respondentPhone: contact.phone,
+    respondentEmail: contact.email,
+    ...overrides,
+  }
+}
+
+/** A registration whose contact details are known, for matching against. */
+function registeredWith(contact: { phone: string; email: string }) {
+  return registration({ phone: contact.phone, email: contact.email })
+}
+
+const RIDER = { phone: '9876543210', email: 'grace@example.com' }
+
+describe('contact feedback: a unique match', () => {
+  it('links to the one registration whose phone and email both match', () => {
+    const target = registeredWith(RIDER)
+    const feedback = contactFeedback(RIDER)
+
+    const result = feedbackFor(run([target], [feedback]), feedback.recordId)
+
+    expect(result).toMatchObject({
+      status: 'matched',
+      registrationRecordId: target.recordId,
+      matchMethod: 'contact_identity',
+    })
+  })
+
+  it('counts towards its registration, exactly like a scanned response', () => {
+    const target = registeredWith(RIDER)
+    const feedback = contactFeedback(RIDER)
+
+    const output = run([target], [feedback])
+
+    expect(registrationFor(output, target.recordId)).toMatchObject({
+      status: 'matched',
+      validFeedbackCount: 1,
+    })
+    expect(output.counts.matchedFeedback).toBe(1)
+    expect(output.counts.standaloneFeedback).toBe(0)
+  })
+
+  it('matches through formatting differences, as duplicate detection does', () => {
+    /*
+     * The rider typed their number one way at Point A and another at Point B.
+     * The same normalisation both places, from `normalize.ts`: strip
+     * formatting, change nothing else. If these two rules ever diverged, the
+     * engine could propose that two registrations are one person while
+     * refusing to match a response to either.
+     */
+    const target = registration({
+      phone: '+91 98765 43210',
+      email: 'Grace@Example.com  ',
+    })
+    const feedback = contactFeedback({
+      phone: '(98765) 43210',
+      email: 'grace@example.com',
+    })
+
+    expect(normalizePhone(target.phone)).not.toBe(normalizePhone(feedback.respondentPhone as string))
+    // Not equal as typed, and that is the point: a country code is never
+    // inferred. This pair therefore does NOT match.
+    expect(feedbackFor(run([target], [feedback]), feedback.recordId)).toMatchObject({
+      status: 'standalone',
+    })
+  })
+
+  it('matches when only formatting differs, country code included on both', () => {
+    const target = registration({
+      phone: '+91 98765 43210',
+      email: '  Grace@Example.com ',
+    })
+    const feedback = contactFeedback({
+      phone: '+91-98765-43210',
+      email: 'grace@example.com',
+    })
+
+    expect(normalizePhone(target.phone)).toBe(
+      normalizePhone(feedback.respondentPhone as string),
+    )
+    expect(normalizeEmail(target.email)).toBe(
+      normalizeEmail(feedback.respondentEmail as string),
+    )
+    expect(feedbackFor(run([target], [feedback]), feedback.recordId)).toMatchObject({
+      status: 'matched',
+      matchMethod: 'contact_identity',
+    })
+  })
+})
+
+describe('contact feedback: what it refuses to match on', () => {
+  it('does not match on the phone number alone', () => {
+    /*
+     * Families share phone numbers. This is not hypothetical: the duplicate
+     * candidate detector in this same engine exists because the collision is
+     * common enough to need reviewing.
+     */
+    const target = registration({
+      phone: RIDER.phone,
+      email: 'someone.else@example.com',
+    })
+    const feedback = contactFeedback(RIDER)
+
+    expect(feedbackFor(run([target], [feedback]), feedback.recordId)).toMatchObject({
+      status: 'standalone',
+      registrationRecordId: null,
+      matchMethod: null,
+    })
+  })
+
+  it('does not match on the email alone', () => {
+    // Couples share email accounts.
+    const target = registration({ phone: '9000000001', email: RIDER.email })
+    const feedback = contactFeedback(RIDER)
+
+    expect(feedbackFor(run([target], [feedback]), feedback.recordId)).toMatchObject({
+      status: 'standalone',
+      registrationRecordId: null,
+    })
+  })
+
+  it('does not match on the name, even an exactly equal one', () => {
+    /*
+     * Names are not identifiers. Two riders with the same name at one event is
+     * a Tuesday, and a name match would attach one rider's opinion to the
+     * other's registration with nothing on any screen to show it happened.
+     *
+     * The engine is not even given a name to match on: `ReconciliationFeedback`
+     * has no respondent name field. This asserts the consequence.
+     */
+    const target = registration({
+      phone: '9000000002',
+      email: 'different@example.com',
+    })
+    const feedback = contactFeedback(RIDER)
+
+    expect(feedbackFor(run([target], [feedback]), feedback.recordId)).toMatchObject({
+      status: 'standalone',
+      registrationRecordId: null,
+    })
+  })
+
+  it('refuses to choose when two registrations share the exact pair', () => {
+    /*
+     * Both halves match, and match twice. There is genuinely no answer to which
+     * rider this is, and picking the earlier one, or the one with more fields
+     * filled in, would record a guess as a fact.
+     */
+    const first = registeredWith(RIDER)
+    const second = registeredWith(RIDER)
+    const feedback = contactFeedback(RIDER)
+
+    const output = run([first, second], [feedback])
+
+    expect(feedbackFor(output, feedback.recordId)).toMatchObject({
+      status: 'identity_conflict',
+      registrationRecordId: null,
+      matchMethod: null,
+    })
+    // Neither registration is credited with a response.
+    expect(registrationFor(output, first.recordId)?.validFeedbackCount).toBe(0)
+    expect(registrationFor(output, second.recordId)?.validFeedbackCount).toBe(0)
+    expect(output.counts.feedbackIdentityConflicts).toBe(1)
+    expect(output.counts.standaloneFeedback).toBe(0)
+  })
+
+  it('flags the same two registrations as a possible duplicate person', () => {
+    // The conflict above and this candidate are the same fact seen from two
+    // sides, and an organiser needs both to understand what happened.
+    const first = registeredWith(RIDER)
+    const second = registeredWith(RIDER)
+
+    const output = run([first, second], [contactFeedback(RIDER)])
+
+    expect(output.duplicateCandidates).toHaveLength(1)
+    expect(output.duplicateCandidates[0]?.matchBasis).toBe('phone_and_email')
+  })
+})
+
+describe('standalone feedback', () => {
+  it('is not the same finding as a sticker that resolved to nothing', () => {
+    /*
+     * The distinction this status exists for. Both have no registration; one is
+     * the contact path working and the other is a code that led nowhere.
+     * Folding them together would either bury real problems under valid
+     * feedback, or put valid feedback under a heading that says something
+     * broke.
+     */
+    const orphanSticker = manualFeedback(registration())
+    const direct = contactFeedback(RIDER)
+
+    const output = run([], [orphanSticker, direct])
+
+    expect(feedbackFor(output, orphanSticker.recordId)?.status).toBe(
+      'without_registration',
+    )
+    expect(feedbackFor(output, direct.recordId)?.status).toBe('standalone')
+    expect(output.counts.feedbackWithoutRegistration).toBe(1)
+    expect(output.counts.standaloneFeedback).toBe(1)
+  })
+
+  it('is never attributed to a registration', () => {
+    const stranger = registration()
+    const direct = contactFeedback(RIDER)
+
+    const output = run([stranger], [direct])
+
+    expect(feedbackFor(output, direct.recordId)).toMatchObject({
+      registrationRecordId: null,
+      matchMethod: null,
+    })
+    expect(registrationFor(output, stranger.recordId)).toMatchObject({
+      status: 'without_feedback',
+      validFeedbackCount: 0,
+    })
+  })
+
+  it('does not move the registration counts at all', () => {
+    // Coverage is a question about the registration list, and these riders are
+    // not on it. They must not appear in either half of that fraction.
+    const registered = registeredWith({ phone: '9111111111', email: 'a@b.com' })
+    const withResponse = manualFeedback(registered)
+
+    const output = run(
+      [registered],
+      [withResponse, contactFeedback(RIDER), contactFeedback({ phone: '9222222222', email: 'x@y.com' })],
+    )
+
+    expect(output.counts.registrationCount).toBe(1)
+    expect(output.counts.matchedRegistrations).toBe(1)
+    expect(output.counts.registrationsWithoutFeedback).toBe(0)
+    expect(output.counts.standaloneFeedback).toBe(2)
+    // Every response is still classified: nothing vanishes from a run.
+    expect(output.counts.feedbackCount).toBe(3)
+    expect(output.feedbackResults).toHaveLength(3)
+  })
+
+  it('is what a rider with unusable contact details gets, not a crash', () => {
+    /*
+     * Both fields are required at the desk and bounded on the wire, so a
+     * response whose phone normalises to nothing should not exist. If one ever
+     * does, it matches nobody rather than matching everybody: a key built from
+     * one usable half and one empty one would group every registration missing
+     * the same half and report conflicts between people who share only an
+     * absence.
+     */
+    const target = registration({ phone: '   ', email: RIDER.email })
+    const feedback = contactFeedback({ phone: '   ', email: RIDER.email })
+
+    const output = run([target], [feedback])
+
+    expect(feedbackFor(output, feedback.recordId)?.status).toBe('standalone')
+    expect(registrationFor(output, target.recordId)?.validFeedbackCount).toBe(0)
+  })
+})
+
+describe('contact feedback alongside the sticker paths', () => {
+  it('leaves QR and manual classification untouched', () => {
+    const alice = registeredWith({ phone: '9111111111', email: 'alice@example.com' })
+    const bob = registeredWith({ phone: '9222222222', email: 'bob@example.com' })
+
+    const scanned = qrFeedback(alice)
+    const typed = manualFeedback(bob)
+    const direct = contactFeedback(RIDER)
+
+    const output = run([alice, bob], [scanned, typed, direct])
+
+    expect(feedbackFor(output, scanned.recordId)).toMatchObject({
+      status: 'matched',
+      matchMethod: 'qr_identity',
+    })
+    expect(feedbackFor(output, typed.recordId)).toMatchObject({
+      status: 'matched',
+      matchMethod: 'manual_public_code',
+    })
+    expect(feedbackFor(output, direct.recordId)?.status).toBe('standalone')
+  })
+
+  it('joins the multiple-response group when a rider answers twice by two paths', () => {
+    /*
+     * One rider, a scanned response and a contact response that resolves to the
+     * same registration. Two valid responses for one person: the existing rule
+     * applies unchanged and no winner is chosen, whichever path produced them.
+     */
+    const target = registeredWith(RIDER)
+    const scanned = qrFeedback(target)
+    const direct = contactFeedback(RIDER)
+
+    const output = run([target], [scanned, direct])
+
+    expect(feedbackFor(output, scanned.recordId)?.status).toBe('multiple_feedback')
+    expect(feedbackFor(output, direct.recordId)?.status).toBe('multiple_feedback')
+    expect(registrationFor(output, target.recordId)).toMatchObject({
+      status: 'multiple_feedback',
+      validFeedbackCount: 2,
+    })
+    expect(output.counts.matchedFeedback).toBe(0)
+    expect(output.counts.feedbackInMultipleGroups).toBe(2)
+  })
+
+  it('stays deterministic regardless of the order responses arrive in', () => {
+    const target = registeredWith(RIDER)
+    const responses = [
+      contactFeedback(RIDER),
+      qrFeedback(registeredWith({ phone: '9333333333', email: 'c@example.com' })),
+      contactFeedback({ phone: '9444444444', email: 'd@example.com' }),
+    ]
+
+    const forwards = run([target], responses)
+    const backwards = run([target], [...responses].reverse())
+
+    expect(backwards.feedbackResults).toEqual(forwards.feedbackResults)
+    expect(backwards.counts).toEqual(forwards.counts)
+  })
+
+  it('resolves on a later run once the registration syncs', () => {
+    // The same out-of-order story the sticker paths have, by a different route:
+    // the rider registered, and the Point A device had not uploaded yet.
+    const target = registeredWith(RIDER)
+    const direct = contactFeedback(RIDER)
+
+    expect(feedbackFor(run([], [direct]), direct.recordId)?.status).toBe(
+      'standalone',
+    )
+    expect(feedbackFor(run([target], [direct]), direct.recordId)).toMatchObject({
+      status: 'matched',
+      matchMethod: 'contact_identity',
+      registrationRecordId: target.recordId,
+    })
   })
 })

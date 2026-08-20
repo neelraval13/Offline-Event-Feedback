@@ -32,6 +32,9 @@ function row(overrides: Partial<FeedbackRow> = {}): FeedbackRow {
     recommend: true,
     campaignSummary: null,
     linkedRegistration: null,
+    respondentName: null,
+    respondentPhone: null,
+    respondentEmail: null,
     ...overrides,
   }
 }

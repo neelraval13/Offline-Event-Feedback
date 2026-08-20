@@ -102,16 +102,24 @@ function readFormVersion(value: unknown): CentralFeedback['formVersion'] {
 }
 
 function mapFeedback(row: Row): CentralFeedback {
-  const participantId = row['participant_id']
-
   return {
     kind: 'feedback',
     recordId: String(row['record_id']),
-    ...(participantId === null || participantId === undefined
-      ? {}
-      : { participantId: String(participantId) }),
-    publicCode: String(row['public_code']),
-    captureMethod: String(row['capture_method']) as 'qr' | 'manual',
+    /*
+     * Identity fields are omitted when the column is NULL rather than reported
+     * as null, for the same reason the campaign fields above are: the wire
+     * contract's optionals reject an explicit null, and this shape is compared
+     * field by field against an incoming record on every re-delivery. A stored
+     * record that read back `publicCode: null` where the device sent nothing at
+     * all would differ from itself, and an ordinary retry would come back
+     * `conflict` and be retried forever.
+     */
+    ...optional('participantId', row['participant_id']),
+    ...optional('publicCode', row['public_code']),
+    ...optional('respondentName', row['respondent_name']),
+    ...optional('respondentPhone', row['respondent_phone']),
+    ...optional('respondentEmail', row['respondent_email']),
+    captureMethod: String(row['capture_method']) as CentralFeedback['captureMethod'],
     eventId: String(row['event_id']),
     eventDay: toDay(row['event_day']),
     stationId: String(row['station_id']),
@@ -299,17 +307,26 @@ export function createPostgresStore(sql: Sql): SyncStore {
     },
 
     async insertFeedback(record, receivedAt, uploaderDeviceId) {
+      /*
+       * Identity is written exactly as the record carries it, with absent
+       * fields as NULL. `feedback_identity_shape` (migration 008) refuses any
+       * combination that is not one of the three legitimate ones, so a bug
+       * anywhere above this line fails here rather than landing a hybrid row.
+       */
       const inserted = await sql<Row[]>`
         INSERT INTO feedback (
           record_id, participant_id, public_code, capture_method,
+          respondent_name, respondent_phone, respondent_email,
           event_id, event_day, station_id, source_device_id,
           form_version, answers,
           created_at, updated_at, revision,
           first_received_at, last_received_at, last_uploader_device_id,
           content_changed_at
         ) VALUES (
-          ${record.recordId}, ${record.participantId ?? null}, ${record.publicCode},
-          ${record.captureMethod},
+          ${record.recordId}, ${record.participantId ?? null},
+          ${record.publicCode ?? null}, ${record.captureMethod},
+          ${record.respondentName ?? null}, ${record.respondentPhone ?? null},
+          ${record.respondentEmail ?? null},
           ${record.eventId}, ${record.eventDay}, ${record.stationId}, ${record.deviceId},
           ${record.formVersion}, ${sql.json(record.answers)},
           ${record.createdAt}, ${record.updatedAt}, ${record.revision},
@@ -324,6 +341,17 @@ export function createPostgresStore(sql: Sql): SyncStore {
     },
 
     async updateFeedback(record, expectedRevision, receivedAt, uploaderDeviceId) {
+      /*
+       * The identity columns are deliberately absent from this statement.
+       *
+       * A revision may correct what a rider said. It may not change who the
+       * response is from: `publicCode`, `participantId`, `captureMethod` and
+       * the three respondent fields are all in `FEEDBACK_IMMUTABLE`, so ingest
+       * rejects a record whose identity differs from the stored one as a
+       * conflict long before reaching here. Listing them in the SET clause
+       * would be dead code that quietly became live the day someone relaxed
+       * that list.
+       */
       const updated = await sql<Row[]>`
         UPDATE feedback SET
           form_version = ${record.formVersion},

@@ -20,6 +20,7 @@ import type {
 import {
   captureIdentityFromManualCode,
   captureIdentityFromQr,
+  type StickerIdentity,
 } from './identityCapture'
 import {
   FLYING_FLEA_FORM_VERSION,
@@ -32,36 +33,52 @@ import {
  *                    +-----------------------------+
  *                    v                             |
  *   idle -> starting-camera -> scanning -> feedback -> saving -> success
- *             |                   |  |                  |          |
- *             v                   |  +-> already-recorded          |
- *        camera-error <-----------+                     |          |
- *             |                   |                     v          |
- *             +---> manual-entry -+              (failure returns   |
- *                                                 to feedback)      |
+ *     |       |                   |  |                  |          |
+ *     |       v                   |  +-> already-recorded          |
+ *     |  camera-error <-----------+                     |          |
+ *     |       |                   |                     v          |
+ *     |       +---> manual-entry -+              (failure returns   |
+ *     |       |                                    to feedback)     |
+ *     |       +---> contact-entry ------------------------+         |
+ *     +-----------------+  (failure stays put, everything kept)     |
  *                    ^                                              |
  *                    +----------------- next participant -----------+
  *
  * A single discriminated union rather than a handful of booleans: with flags,
  * "saving" and "already recorded" and "camera error" can all be true at once,
  * and the screen has to guess which one to believe. Here they cannot be.
+ *
+ * `contact-entry` carries its own `busy` flag instead of having a separate
+ * saving state, and that is deliberate. The contact form owns a draft with a
+ * name, a phone number, an email address and six answers in it; a separate
+ * status would unmount and remount the form around the save, and a failed write
+ * would greet the rider with an empty form. One state, one mounted component,
+ * everything still there.
  */
 export type PointBState =
-  /** Camera not started yet. Manual entry is available from here. */
+  /** Camera not started yet. Manual and contact entry are available here. */
   | { readonly status: 'idle' }
   | { readonly status: 'starting-camera' }
   /** Decoding. `notice` carries a transient rejection message. */
   | { readonly status: 'scanning'; readonly notice: string | null }
   | { readonly status: 'camera-error'; readonly message: string }
   | { readonly status: 'manual-entry'; readonly error: string | null }
+  /** The no-sticker path: contact details and the questionnaire, together. */
+  | {
+      readonly status: 'contact-entry'
+      readonly busy: boolean
+      /** Set when a save was attempted and failed. Everything typed is kept. */
+      readonly saveError: string | null
+    }
   | {
       readonly status: 'feedback'
-      readonly identity: CapturedParticipantIdentity
+      readonly identity: StickerIdentity
       /** Set when a save was attempted and failed. Answers are kept. */
       readonly saveError: string | null
     }
   | {
       readonly status: 'saving'
-      readonly identity: CapturedParticipantIdentity
+      readonly identity: StickerIdentity
     }
   | {
       readonly status: 'already-recorded'
@@ -135,9 +152,15 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     }
   }, [refreshCount])
 
-  /** Moves to the feedback form, unless this device already has a response. */
+  /**
+   * Moves to the feedback form, unless this device already has a response.
+   *
+   * Sticker paths only. The duplicate guard is a question about a public code,
+   * and a contact capture has none: see `hasFeedbackForPublicCode` for why no
+   * equivalent guard exists on contact details.
+   */
   const acceptIdentity = useCallback(
-    async (identity: CapturedParticipantIdentity) => {
+    async (identity: StickerIdentity) => {
       const alreadyRecorded = await hasFeedbackForPublicCode(
         db,
         identity.publicCode,
@@ -241,6 +264,13 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     setState({ status: 'manual-entry', error: null })
   }, [])
 
+  /** The no-sticker path. Reachable from every screen that offers a way out. */
+  const openContactEntry = useCallback(() => {
+    acceptingRef.current = false
+    scannerRef.current?.pause()
+    setState({ status: 'contact-entry', busy: false, saveError: null })
+  }, [])
+
   const submitManualCode = useCallback(
     async (typed: string) => {
       const result = captureIdentityFromManualCode(typed)
@@ -319,14 +349,80 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     [refreshCount, state],
   )
 
+  /**
+   * Saves a response whose identity is the rider's own contact details.
+   *
+   * Structurally the same as `submitFeedback` and deliberately separate rather
+   * than a branch inside it: this path carries its identity in with the answers
+   * (the one form produces both together), where the sticker path captured its
+   * identity several screens earlier and holds it in the state machine.
+   *
+   * Note what does not happen before the write: no lookup, no registration
+   * search, no network call of any kind. The rider's details are what they are.
+   * Whether they match a registration is a question the central server answers
+   * later, and asking it here would make the flow depend on a connection that
+   * an offline tablet at a venue does not have.
+   */
+  const submitContactFeedback = useCallback(
+    async (
+      identity: Extract<
+        CapturedParticipantIdentity,
+        { captureMethod: 'contact' }
+      >,
+      answers: FlyingFleaFeedbackV1Answers,
+    ) => {
+      if (state.status !== 'contact-entry' || submittingRef.current) {
+        return
+      }
+
+      submittingRef.current = true
+      setState({ status: 'contact-entry', busy: true, saveError: null })
+
+      try {
+        const deviceId = await getOrCreateDeviceId(db)
+        await createFeedback(db, {
+          ...recordContextFor('feedback', deviceId),
+          identity,
+          formVersion: FLYING_FLEA_FORM_VERSION,
+          answers,
+        })
+      } catch (error) {
+        /*
+         * Nothing committed. Stay exactly where we are: the form is still
+         * mounted, so the name, phone, email and all six answers are still on
+         * screen and the rider can press the button again.
+         */
+        if (mountedRef.current) {
+          setState({
+            status: 'contact-entry',
+            busy: false,
+            saveError: describe(error),
+          })
+        }
+        submittingRef.current = false
+        return
+      }
+
+      submittingRef.current = false
+
+      if (mountedRef.current) {
+        setState({ status: 'success' })
+      }
+      await refreshCount()
+    },
+    [refreshCount, state],
+  )
+
   return {
     state,
     savedCount,
     videoRef,
     startScanner,
     openManualEntry,
+    openContactEntry,
     submitManualCode,
     returnToScanner,
     submitFeedback,
+    submitContactFeedback,
   }
 }

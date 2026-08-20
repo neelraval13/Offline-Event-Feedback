@@ -96,11 +96,22 @@ Open DevTools → Application → IndexedDB → `offline-event-feedback` →
 | `syncStatus` | `pending` |
 | `answers` | `overall_rating`, `experience`, `recommend`, and `comments` only if typed |
 
-### 6. Confirm no PII in the record
+### 6. Confirm no PII on a scanned or typed record
 
-Read the whole record. There must be **no name, no phone number, no email**, and
-no field that could carry them. If a comment was typed, it is the participant's
-own words and is expected; nothing else about the person may be present.
+Read the whole record. On a **sticker capture** there must be no name, no phone
+number and no email. If a comment was typed, it is the participant's own words
+and is expected; nothing else about the person may be present.
+
+This is not a general claim about Point B any more, and the distinction is
+deliberate. A **contact capture** holds `respondentName`, `respondentPhone` and
+`respondentEmail`, because for that response those fields are its identity: the
+rider had no sticker and typed their own details. What has not changed is that
+Point B never reads Point A. Nothing on the device consults a participant list,
+and no lookup happens at any point, which is why the path works with the wifi
+off.
+
+The database enforces the boundary rather than trusting it: a scanned or typed
+row carrying any respondent field is refused outright. See step 9.
 
 ### 7. Next participant
 
@@ -137,6 +148,56 @@ Complete and submit the feedback, then check the new record: `captureMethod`
 must be `manual` and there must be **no `participantId` field at all**. That is
 correct: the printed code does not contain one and Point B cannot look one up.
 Reconciliation resolves it centrally later.
+
+### 9a. No sticker and no code
+
+The third path, and the one to exercise most carefully because it is the only
+one that holds a rider's contact details.
+
+Press **Continue without QR or code**. Confirm it is offered from *all four*
+places, without breaking anything to reach it:
+
+- the start screen
+- the scanner, while it is running
+- the **Camera unavailable** screen
+- manual code entry (*"No code either? Take their details"*)
+
+Fill in a name, a phone number and an email address, answer all six questions,
+and submit. Then check the record in DevTools:
+
+| field | expected |
+| --- | --- |
+| `captureMethod` | `contact` |
+| `respondentName` / `respondentPhone` / `respondentEmail` | exactly what was typed |
+| `publicCode` | **the field must not exist at all** |
+| `participantId` | **the field must not exist at all** |
+| `formVersion` | `flying-flea-feedback-v1` |
+| `syncStatus` | `pending` |
+
+The two absences are the point. A fabricated code would look exactly like a real
+one everywhere downstream and would be joined to whichever registration happens
+to hold it.
+
+Also confirm, in the **Application → IndexedDB → registrations** store, that
+**no registration was created**. A rider who only completed Point B did only
+complete Point B.
+
+Then try the failure cases:
+
+- Submit with all three fields blank: three errors, nothing saved.
+- Submit with a nine-digit phone number: rejected with the same message Point A
+  gives, because it is the same rule. If the two desks accepted different
+  formats, the same rider typing the same number at both would produce values
+  that never match centrally, and nothing on either screen would show it.
+- Submit with `not-an-address` in the email field: rejected.
+- Fill everything in, answer every question, then turn Wi-Fi **off** and submit:
+  it must save. This path makes no network request at any point.
+
+Finally, submit a second response with the *same* name, phone and email.
+It must be accepted. There is no code to be the same as, and one offline tablet
+must not decide that two humans are one: families share phone numbers and
+couples share email accounts. Both responses are kept, and reconciliation says
+what it thinks centrally, in a run somebody can read.
 
 ### 10. Invalid code rejection
 
@@ -204,6 +265,15 @@ leak.
 
 With Point B loaded, turn off Wi-Fi and repeat a full scan-and-submit. Nothing
 about normal operation may depend on the network.
+
+Then, still offline, do the same on the contact path: **Continue without QR or
+code**, name, phone, email, all six answers, submit. This is the combination
+most worth proving, because it is the one that would be most tempting to
+implement with a lookup.
+
+Confirm the counter goes up and the record is in IndexedDB with `syncStatus:
+pending`. Turn Wi-Fi back on and let sync run; the response uploads with no
+further action.
 
 ## Recording results
 

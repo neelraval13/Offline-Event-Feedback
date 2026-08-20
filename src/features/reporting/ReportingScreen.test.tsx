@@ -31,6 +31,7 @@ const RUN = {
     registrationsWithMultipleFeedback: 0,
     matchedFeedback: 1,
     feedbackWithoutRegistration: 0,
+    standaloneFeedback: 0,
     feedbackIdentityConflicts: 0,
     feedbackInMultipleGroups: 0,
     duplicateRegistrationCandidateCount: 0,
@@ -78,6 +79,7 @@ const OVERVIEW = {
     registrationsWithFeedback: 1,
     totalRegistrations: 1,
     percentage: 100,
+    directResponses: 0,
   },
 }
 

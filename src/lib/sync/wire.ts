@@ -56,15 +56,40 @@ export function toRegistrationWire(
   }
 }
 
+/**
+ * The identity fields for one record, per capture method.
+ *
+ * Narrowed rather than spread, so each branch emits exactly the fields its
+ * method has. The server's `checkCaptureIdentity` rejects any other
+ * combination, and this is where a bug would produce one.
+ */
+function feedbackIdentity(
+  record: FeedbackRecord,
+): Partial<FeedbackWireRecord> {
+  switch (record.captureMethod) {
+    case 'qr':
+      return {
+        publicCode: record.publicCode,
+        participantId: record.participantId,
+      }
+    case 'manual':
+      // No participant ID: the printed code never carried one.
+      return { publicCode: record.publicCode }
+    case 'contact':
+      // No code and no participant ID: this rider had no sticker.
+      return {
+        respondentName: record.respondentName,
+        respondentPhone: record.respondentPhone,
+        respondentEmail: record.respondentEmail,
+      }
+  }
+}
+
 export function toFeedbackWire(record: FeedbackRecord): FeedbackWireRecord {
   return {
     kind: 'feedback',
     recordId: record.recordId,
-    // Absent for a manual capture, and the server enforces that.
-    ...(record.participantId === undefined
-      ? {}
-      : { participantId: record.participantId }),
-    publicCode: record.publicCode,
+    ...feedbackIdentity(record),
     captureMethod: record.captureMethod,
     eventId: record.eventId,
     eventDay: record.eventDay,

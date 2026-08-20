@@ -244,7 +244,7 @@ describeDb('reconciliation against Postgres', () => {
       const latest = await getLatestCompletedRun(sql, EVENT_ID)
 
       expect(latest?.runId).toBe(second.runId)
-      expect(latest?.engineVersion).toBe('reconciliation-v1')
+      expect(latest?.engineVersion).toBe('reconciliation-v2')
     })
 
     it('never returns an incomplete run as latest', async () => {

@@ -117,8 +117,19 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
     ['Feedback identity conflicts', run.counts.feedbackIdentityConflicts],
     ['Feedback in multiple-feedback groups', run.counts.feedbackInMultipleGroups],
     ['Possible duplicate registration pairs', run.counts.duplicateRegistrationCandidateCount],
+    /*
+     * Direct responses, immediately above coverage and deliberately not inside
+     * it. A reader who sees "480 of 500" wants to know what the other numbers
+     * on this sheet are made of, and the honest answer is that these responses
+     * are in the averages and in neither half of that fraction.
+     */
+    ['Direct responses (no Point A registration)', coverage.directResponses],
     ['Response coverage (registrations with any valid feedback)', coverage.registrationsWithFeedback],
     ['Response coverage %', coverage.percentage ?? ''],
+    [
+      '  Coverage counts registrations only',
+      'Direct responses have no registration, so they are counted above and are in neither part of this fraction.',
+    ],
     ['Responses by questionnaire', describeFormVersions(overview.responsesByFormVersion)],
     ['Responses this build cannot read', overview.unreadableResponses],
   ]
@@ -129,6 +140,10 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
       ['', ''],
       [`FLYING FLEA FEEDBACK (${campaignAnalytics.formVersion})`, ''],
       ['Flying Flea responses analysed', campaignAnalytics.analysedResponses],
+      [
+        '  Which responses these figures use',
+        'Every response this run could attribute unambiguously: matched to one rider, plus direct responses from riders with no Point A registration. Multiple-response groups and identity conflicts are excluded, because no single answer in them belongs to a known person.',
+      ],
     )
 
     /*
@@ -294,6 +309,10 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
       row.overallExperienceRating,
       row.topThreeFeatures,
       row.overallExperienceComments,
+      // Appended, matching the CSV header exactly. Blank on the sticker paths.
+      row.respondentName,
+      row.respondentPhone,
+      row.respondentEmail,
     ])
   }
 
@@ -331,6 +350,8 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
     ['currentFeedbackCount', freshness.currentFeedbackCount],
     ['registrationsAddedSinceRun', freshness.registrationsAddedSinceRun],
     ['feedbackAddedSinceRun', freshness.feedbackAddedSinceRun],
+    ['matchedResponses', run.counts.matchedFeedback],
+    ['standaloneResponses', run.counts.standaloneFeedback],
     ['latestContentChangeAt', freshness.latestContentChangeAt ?? ''],
     [
       'membershipRule',
@@ -338,11 +359,19 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
     ],
     [
       'analyticsInclusionRule',
-      'Rating, experience and recommend figures use only feedback classified matched by this reconciliation run. Responses in multiple-feedback groups, identity conflicts and feedback without a registration are excluded.',
+      'Rating, experience and recommend figures use the responses this reconciliation run could attribute unambiguously: those classified matched, and those classified standalone. A standalone response is a complete answer from a rider who identified themselves by contact details and matched no Point A registration; it is valid feedback and is included. Responses in multiple-feedback groups, identity conflicts and feedback whose sticker code resolved to no registration are excluded, because none of them can be attributed to one person.',
+    ],
+    [
+      'standaloneRule',
+      'A standalone (direct) response is not a reconciliation failure. It means the rider gave their own name, phone and email at Point B and no registration in this event has that exact phone and email pair, which is the expected outcome for somebody who never went through Point A. It is distinct from without_registration, which means a scanned or typed sticker code resolved to no registration and does need looking at.',
+    ],
+    [
+      'contactMatchRule',
+      'A response captured by contact details is linked to a registration only when the normalised phone AND the normalised email both match, and exactly one registration in the event has that pair. Names are never matched on. A pair matching more than one registration is recorded as an identity conflict rather than resolved by choosing.',
     ],
     [
       'coverageRule',
-      'Response coverage counts registrations with at least one valid feedback record (matched + multiple_feedback), which is a different measure from the analytics sample.',
+      'Response coverage counts registrations with at least one valid feedback record (matched + multiple_feedback), which is a different measure from the analytics sample. Standalone direct responses have no registration and are counted in neither the numerator nor the denominator; they are reported separately as their own figure.',
     ],
     [
       'multipleFeedbackRule',

@@ -152,6 +152,13 @@ Open `#/b`.
 - Test the manual code fallback as well.
 - Scan an already-recorded sticker and confirm *Feedback already recorded on
   this device*.
+- Press **Continue without QR or code**, give a name, a phone number and an
+  email address, answer all six questions and submit. This is the path most
+  worth exercising with the network genuinely gone: it is the one where a
+  lookup would be the obvious thing to have added, and a lookup would make it
+  the only part of the app that cannot work at a venue. Confirm the record
+  saves, has `captureMethod: 'contact'`, and has no `publicCode` and no
+  `participantId` field at all.
 
 ## F. Admin, offline
 

@@ -32,6 +32,7 @@ function run(counts: Partial<RunDescriptor['counts']>): RunDescriptor {
       registrationsWithMultipleFeedback: 0,
       matchedFeedback: 0,
       feedbackWithoutRegistration: 0,
+    standaloneFeedback: 0,
       feedbackIdentityConflicts: 0,
       feedbackInMultipleGroups: 0,
       duplicateRegistrationCandidateCount: 0,

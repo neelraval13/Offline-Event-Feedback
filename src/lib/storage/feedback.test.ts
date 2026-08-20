@@ -55,9 +55,19 @@ describe('feedback captured from a QR scan (invariant C)', () => {
       answers: ANSWERS,
     })
 
-    expect(record.captureMethod).toBe('qr')
-    expect(record.publicCode).toBe(CODE)
-    expect(record.participantId).toBe(participantId)
+    /*
+     * `toMatchObject` rather than three property reads. `FeedbackRecord` is a
+     * union of three identity shapes, so `record.publicCode` does not compile
+     * without narrowing first, which is the point of the union: production code
+     * has to establish which shape it holds before reading a field only some
+     * shapes have. A test asserting the whole shape at once says the same thing
+     * and needs no narrowing.
+     */
+    expect(record).toMatchObject({
+      captureMethod: 'qr',
+      publicCode: CODE,
+      participantId,
+    })
   })
 
   it('is retrievable by participant ID through the index', async () => {
@@ -87,9 +97,8 @@ describe('feedback captured by manual entry (invariant D)', () => {
       answers: ANSWERS,
     })
 
-    expect(record.captureMethod).toBe('manual')
-    expect(record.publicCode).toBe(CODE)
-    expect(record.participantId).toBeUndefined()
+    expect(record).toMatchObject({ captureMethod: 'manual', publicCode: CODE })
+    expect(Object.hasOwn(record, 'participantId')).toBe(false)
   })
 
   it('omits the participant ID rather than storing an empty one', async () => {
@@ -198,7 +207,7 @@ describe('feedback records generally', () => {
     expect(await listFeedbackBySyncStatus(database, 'synced')).toHaveLength(0)
   })
 
-  it('holds no participant PII', async () => {
+  it('holds no participant PII on a sticker capture', async () => {
     const record = await createFeedback(database, {
       ...CONTEXT,
       formVersion: FEEDBACK_FORM_VERSION,
@@ -206,7 +215,13 @@ describe('feedback records generally', () => {
       answers: ANSWERS,
     })
 
-    // Point B's store has identity and answers, and no field for anything else.
+    /*
+     * A sticker capture has identity and answers and no field for anything
+     * else. This is stricter than "does not contain a name": it asserts the
+     * exact key set, so a future change that started attaching contact details
+     * to a scanned response has to come and edit this list, in a test whose
+     * name says why the list is short.
+     */
     expect(Object.keys(record).sort()).toEqual([
       'answers',
       'captureMethod',
@@ -223,5 +238,128 @@ describe('feedback records generally', () => {
       'syncStatus',
       'updatedAt',
     ])
+  })
+})
+
+describe('feedback captured from contact details', () => {
+  const CONTACT = {
+    captureMethod: 'contact',
+    respondentName: 'Grace Hopper',
+    respondentPhone: '9876543210',
+    respondentEmail: 'grace@example.com',
+  } as const
+
+  it('records the rider’s own details as the identity', async () => {
+    const record = await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+
+    expect(record).toMatchObject(CONTACT)
+  })
+
+  it('invents no public code and no participant ID', async () => {
+    /*
+     * The defect this exists to prevent: fabricating an identifier so the
+     * record fits the shape the other two paths have. A blank or generated
+     * public code would join against every other blank one the moment somebody
+     * wrote a query that trusted the column.
+     */
+    const record = await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+
+    const stored = await getFeedbackByRecordId(database, record.recordId)
+    expect(stored).toBeDefined()
+    expect(Object.hasOwn(stored as object, 'publicCode')).toBe(false)
+    expect(Object.hasOwn(stored as object, 'participantId')).toBe(false)
+  })
+
+  it('stays out of both sparse indexes', async () => {
+    await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+
+    // An absent property is absent from the index. This is what makes a new
+    // Dexie version unnecessary for this change.
+    expect(await database.feedback.where('publicCode').notEqual('').count()).toBe(0)
+    expect(
+      await database.feedback.where('participantId').notEqual('').count(),
+    ).toBe(0)
+    expect(await countFeedback(database)).toBe(1)
+  })
+
+  it('starts pending, like every other record', async () => {
+    const record = await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+
+    expect(record.syncStatus).toBe('pending')
+    expect(record.revision).toBe(1)
+  })
+
+  it('survives a restart with every field intact', async () => {
+    const record = await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+    const name = database.name
+
+    database.close()
+    const reopened = new OfflineEventDb(name)
+    // Deep equality, so a lost respondent field fails here rather than at the
+    // export three phases later.
+    expect(await getFeedbackByRecordId(reopened, record.recordId)).toEqual(record)
+    reopened.close()
+  })
+
+  it('keeps both responses when the same person answers twice', async () => {
+    /*
+     * No duplicate guard applies here, deliberately. There is no code to be the
+     * same as, and refusing a response because another on this device shares a
+     * phone number would be one offline tablet deciding two humans are one.
+     */
+    for (const answers of [ANSWERS, { ...ANSWERS, overall_rating: 3 as const }]) {
+      await createFeedback(database, {
+        ...CONTEXT,
+        formVersion: FEEDBACK_FORM_VERSION,
+        identity: CONTACT,
+        answers,
+      })
+    }
+
+    expect(await countFeedback(database)).toBe(2)
+  })
+
+  it('leaves sticker responses untouched in the same database', async () => {
+    await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: { captureMethod: 'qr', publicCode: CODE, participantId: newParticipantId() },
+      answers: ANSWERS,
+    })
+    await createFeedback(database, {
+      ...CONTEXT,
+      formVersion: FEEDBACK_FORM_VERSION,
+      identity: CONTACT,
+      answers: ANSWERS,
+    })
+
+    // The code lookup finds the scanned one and only the scanned one.
+    expect(await listFeedbackByPublicCode(database, CODE)).toHaveLength(1)
+    expect(await countFeedback(database)).toBe(2)
   })
 })

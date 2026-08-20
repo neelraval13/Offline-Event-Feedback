@@ -13,16 +13,22 @@ import { newRecordMetadata } from './metadata'
 /*
  * Feedback persistence.
  *
- * The store represents both identity origins without Point B ever consulting
- * Point A (invariants B, C, D):
+ * The store represents all three identity origins without Point B ever
+ * consulting Point A (invariants B, C, D):
  *
- *   QR scan       -> publicCode + participantId
- *   manual entry  -> publicCode only
+ *   QR scan          -> publicCode + participantId
+ *   manual entry     -> publicCode only
+ *   contact details  -> respondentName + respondentPhone + respondentEmail
  *
- * The manual case omits `participantId` rather than storing null, which keeps
- * those records out of the sparse IndexedDB index and makes "we do not know it"
- * distinct in the type system from "it is empty". Attributing a manual record
- * to a participant ID is the central server's job after synchronisation.
+ * Each case omits the fields it does not have rather than storing null or an
+ * empty string, which keeps those records out of the sparse IndexedDB indexes
+ * and makes "we do not have it" distinct in the type system from "it is empty".
+ *
+ * The contact case is the only place Point B holds a name, a phone number or an
+ * email address, and it holds them because they are the record's identity, not
+ * because it looked anybody up. Deciding whether they belong to a registration
+ * is the central server's job after synchronisation, exactly as attributing a
+ * manual code has always been.
  */
 
 /**
@@ -46,11 +52,6 @@ export async function createFeedback(
   database: OfflineEventDb,
   input: NewFeedbackInput,
 ): Promise<FeedbackRecord> {
-  const identity =
-    input.identity.captureMethod === 'qr'
-      ? { participantId: input.identity.participantId }
-      : {}
-
   /*
    * The questionnaire is narrowed before the record is built, so each branch
    * writes a pair the type system has already checked. Spreading
@@ -62,14 +63,40 @@ export async function createFeedback(
       ? { formVersion: input.formVersion, answers: input.answers }
       : { formVersion: input.formVersion, answers: input.answers }
 
-  const record: FeedbackRecord = {
-    ...newRecordMetadata(input),
-    kind: 'feedback',
-    captureMethod: input.identity.captureMethod,
-    publicCode: input.identity.publicCode,
-    ...identity,
-    ...questionnaire,
-  }
+  const metadata = { ...newRecordMetadata(input), kind: 'feedback' as const }
+
+  /*
+   * The identity is narrowed the same way and for the same reason. Each branch
+   * spreads exactly the fields its capture method has, so a contact record
+   * genuinely has no `publicCode` key rather than a key holding undefined.
+   * Dexie stores what it is given: a present-but-undefined property would sit
+   * in the record and read back as a field that exists and is empty.
+   */
+  const identity = input.identity
+  const record: FeedbackRecord =
+    identity.captureMethod === 'qr'
+      ? {
+          ...metadata,
+          ...questionnaire,
+          captureMethod: 'qr',
+          publicCode: identity.publicCode,
+          participantId: identity.participantId,
+        }
+      : identity.captureMethod === 'manual'
+        ? {
+            ...metadata,
+            ...questionnaire,
+            captureMethod: 'manual',
+            publicCode: identity.publicCode,
+          }
+        : {
+            ...metadata,
+            ...questionnaire,
+            captureMethod: 'contact',
+            respondentName: identity.respondentName,
+            respondentPhone: identity.respondentPhone,
+            respondentEmail: identity.respondentEmail,
+          }
 
   await database.feedback.add(record)
   return record
@@ -108,6 +135,15 @@ export async function countFeedback(database: OfflineEventDb): Promise<number> {
  * that actually happens, the same operator scanning the same sticker twice,
  * and makes no claim about the event as a whole. Reconciling duplicates across
  * devices is the central server's job after synchronisation.
+ *
+ * There is deliberately no equivalent for a contact capture. A contact response
+ * has no code to be the same as, and refusing one because another response on
+ * this device carries a similar name, phone or email would be this device
+ * deciding two humans are one, offline, with no way to check. Families share
+ * phone numbers and couples share email accounts. Where the sticker path can
+ * refuse a duplicate on an identifier that is unique by construction, the
+ * contact path preserves the evidence and lets reconciliation say what it
+ * thinks, which it does in a run an operator can read.
  */
 export async function hasFeedbackForPublicCode(
   database: OfflineEventDb,

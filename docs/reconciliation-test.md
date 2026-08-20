@@ -265,11 +265,73 @@ disagree, preferring one silently would bury evidence that something upstream
 produced an inconsistent sticker or record, so the disagreement itself is the
 finding.
 
+## 8. Contact identity
+
+The third way a response can identify itself: the rider's own name, phone
+number and email, given at Point B because they had no sticker. Insert one:
+
+```sql
+INSERT INTO feedback (
+  record_id, participant_id, public_code, capture_method,
+  respondent_name, respondent_phone, respondent_email,
+  event_id, event_day, station_id, source_device_id, form_version, answers,
+  created_at, updated_at, revision,
+  first_received_at, last_received_at, last_uploader_device_id
+) VALUES (
+  gen_random_uuid(), NULL, NULL, 'contact',
+  'Grace Hopper', '9876543210', 'grace@example.com',
+  'ff-rc-2026-08-23', '2026-01-01', 'B1',
+  (SELECT source_device_id FROM feedback LIMIT 1),
+  'feedback-v1', '{"overall_rating":4,"experience":"good","recommend":true}',
+  now(), now(), 1, now(), now(),
+  (SELECT last_uploader_device_id FROM feedback LIMIT 1)
+);
+```
+
+Run reconciliation.
+
+**Expected:** `standalone`, linked to no registration. That is not an error and
+must never be reported as one: it means the rider did not go through Point A,
+which is what the contact path exists for. It is deliberately a different status
+from `without_registration`, which means a sticker code that resolved to nothing
+and does need somebody to look.
+
+Now add a registration whose `phone` and `email` are exactly `'9876543210'` and
+`'grace@example.com'`, and run again.
+
+**Expected:** `matched`, with `match_method = contact_identity`.
+
+Then add a **second** registration with the same phone and email, and run again.
+
+**Expected:** `identity_conflict`, linked to neither. Both halves match, and
+match twice, so the event genuinely cannot say which rider this is. The same
+pair also appears as a `phone_and_email` duplicate candidate: the two findings
+are one fact seen from either side.
+
+Finally, prove what it will **not** match on. With one registration whose phone
+matches but whose email does not, the response must be `standalone`, and the
+same with the email matching and the phone not. One half matching is a
+coincidence: families share phone numbers and couples share email accounts.
+A name is never consulted at all.
+
+The database refuses a hybrid outright, so this cannot be produced by hand
+either. All of these fail with `feedback_identity_shape`:
+
+```sql
+-- a contact row carrying a code, which would be joined to whoever holds it
+UPDATE feedback SET public_code = 'A1-B8EFD9-00001-X'
+WHERE capture_method = 'contact';
+
+-- a scanned row carrying contact details
+UPDATE feedback SET respondent_name = 'Grace Hopper' WHERE capture_method = 'qr';
+```
+
 ## What to record
 
 | Step | Result |
 | --- | --- |
 | Migration 002 applies; re-run is a no-op | |
+| Migration 008 applies over existing rows; re-run is a no-op | |
 | CLI prints counts only, no PII | |
 | CLI refuses without `--event` | |
 | Status counts sum to source counts | |
@@ -281,6 +343,11 @@ finding.
 | Orphan feedback: `without_registration`, then `matched` | |
 | Earlier run unchanged by the later one | |
 | Incomplete run excluded from latest | |
+| Contact feedback with no match: `standalone`, not `without_registration` | |
+| Contact feedback, phone AND email match one registration: `contact_identity` | |
+| Contact feedback, only phone or only email matches: still `standalone` | |
+| Contact feedback matching two registrations: `identity_conflict`, no winner | |
+| Hybrid rows refused by `feedback_identity_shape` | |
 
 ## Known limitations
 
@@ -298,3 +365,9 @@ finding.
   times would not be.
 - **Reconciliation is never automatic.** It is not run after a sync batch, so a
   run reflects only what had synced when it was invoked.
+- **Contact matching is exact and paired.** Phone AND email, both normalised the
+  same minimal way, matching exactly one registration. There is no fuzzy name
+  matching, no scoring, and no "closest" registration. A rider who gave a
+  different email at the two desks will not match, and that is the intended
+  trade: a missed link is visible as a direct response, where a wrong link is
+  one rider's opinion silently attached to another rider's registration.

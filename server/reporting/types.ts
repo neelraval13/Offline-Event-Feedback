@@ -15,11 +15,20 @@ export type RegistrationReconciliationStatus =
 
 export type FeedbackReconciliationStatus =
   | 'matched'
+  /** A sticker resolved to nothing. A problem worth looking at. */
   | 'without_registration'
+  /** A valid response from a rider with no Point A registration. Not a problem. */
+  | 'standalone'
   | 'identity_conflict'
   | 'multiple_feedback'
 
-export type MatchMethod = 'qr_identity' | 'manual_public_code'
+export type MatchMethod =
+  | 'qr_identity'
+  | 'manual_public_code'
+  | 'contact_identity'
+
+/** How Point B identified a response. */
+export type CaptureMethod = 'qr' | 'manual' | 'contact'
 
 export interface RunDescriptor {
   readonly runId: string
@@ -35,6 +44,8 @@ export interface RunDescriptor {
     readonly registrationsWithMultipleFeedback: number
     readonly matchedFeedback: number
     readonly feedbackWithoutRegistration: number
+    /** Valid direct responses. Never part of a "needs review" total. */
+    readonly standaloneFeedback: number
     readonly feedbackIdentityConflicts: number
     readonly feedbackInMultipleGroups: number
     readonly duplicateRegistrationCandidateCount: number
@@ -42,12 +53,22 @@ export interface RunDescriptor {
 }
 
 /**
- * Analytics over **unambiguous matched responses only**.
+ * Analytics over **unambiguous responses only**: `matched` and `standalone`.
  *
- * `multiple_feedback` responses are excluded because no one of them is
- * authoritative; `identity_conflict` and `without_registration` are excluded
- * because they are not attributable to a participant at all. Including any of
- * them would let an ambiguity quietly move an average.
+ * `standalone` is included because it is unambiguous. A rider who gave their
+ * own contact details and answered every question said exactly one thing, and
+ * the only fact reconciliation could not establish about them is whether they
+ * also registered at Point A. That is a question about the event's paperwork,
+ * not about their opinion of the motorcycle, and excluding their answers would
+ * make the averages describe registered riders rather than riders.
+ *
+ * Still excluded, and for reasons that have not changed: `multiple_feedback`,
+ * because no one of several responses is authoritative; `identity_conflict`,
+ * because the response cannot be attributed to a person at all;
+ * `without_registration`, because a sticker that resolves to nothing means the
+ * identity on the response is wrong, so its answers cannot be trusted to belong
+ * to whoever the code names. Including any of them would let an ambiguity
+ * quietly move an average.
  */
 export interface FeedbackAnalytics {
   /** How many responses the figures below are computed from. */
@@ -73,13 +94,28 @@ export interface FeedbackAnalytics {
  * Coverage is a different question from analytics.
  *
  * Analytics asks "what did unambiguous responses say?"; coverage asks "how many
- * participants gave us anything at all?", which legitimately includes the
- * ambiguous ones.
+ * **registered participants** gave us anything at all?", which legitimately
+ * includes the ambiguous ones.
+ *
+ * Both numbers below count registrations, and a standalone direct response has
+ * none. It therefore moves neither the numerator nor the denominator, which is
+ * the only honest arithmetic: adding it to the top would report more responses
+ * than registrations and could push coverage past 100%, and adding it to the
+ * bottom would invent a registration to divide by. It is reported separately as
+ * {@link directResponses}, beside coverage rather than inside it.
  */
 export interface ResponseCoverage {
   readonly registrationsWithFeedback: number
   readonly totalRegistrations: number
   readonly percentage: number | null
+  /**
+   * Valid responses from riders with no Point A registration.
+   *
+   * Deliberately outside the fraction above. It answers a question coverage
+   * cannot: how much feedback this event collected that its registration list
+   * knows nothing about.
+   */
+  readonly directResponses: number
 }
 
 export interface FreshnessReport {
@@ -217,11 +253,26 @@ export interface CampaignFeedbackSummary {
   readonly overallExperienceRating: number | null
 }
 
-export interface FeedbackRow {
+/**
+ * The rider's own details, on a contact capture.
+ *
+ * Null on every other capture method, because those responses genuinely have
+ * none: the sticker paths never asked. This is privileged PII, exactly like a
+ * registration's name, phone and email, and it appears only behind the
+ * reporting credential.
+ */
+export interface RespondentContact {
+  readonly respondentName: string | null
+  readonly respondentPhone: string | null
+  readonly respondentEmail: string | null
+}
+
+export interface FeedbackRow extends RespondentContact {
   readonly recordId: string
-  readonly publicCode: string
+  /** Null for a contact capture: that response never had a sticker. */
+  readonly publicCode: string | null
   readonly participantId: string | null
-  readonly captureMethod: 'qr' | 'manual'
+  readonly captureMethod: CaptureMethod
   readonly formVersion: string
   readonly createdAt: string
   readonly revision: number

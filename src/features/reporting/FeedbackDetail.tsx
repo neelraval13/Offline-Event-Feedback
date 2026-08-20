@@ -27,8 +27,21 @@ import { useReportingSession } from './session'
 const STATUS_LABELS: Record<FeedbackReconciliationStatus, string> = {
   matched: 'Matched to one participant',
   without_registration: 'No matching registration',
+  standalone: 'Direct feedback: rider has no Point A registration',
   identity_conflict: 'Identity conflict: identifiers disagree',
   multiple_feedback: 'One of several responses for one participant',
+}
+
+const CAPTURE_LABELS: Record<Detail['captureMethod'], string> = {
+  qr: 'Scanned sticker',
+  manual: 'Typed code',
+  contact: 'Contact details given at Point B',
+}
+
+const MATCH_LABELS: Record<string, string> = {
+  qr_identity: 'Participant ID',
+  manual_public_code: 'Public code',
+  contact_identity: 'Phone and email (both matched one registration)',
 }
 
 const SUPPORTED_FORM_VERSION = 'feedback-v1'
@@ -120,13 +133,20 @@ export function FeedbackDetail({
       {detail !== null && (
         <>
           <h3 className="section-title">
-            Response <span className="recent__code">{detail.publicCode}</span>
+            Response{' '}
+            {detail.publicCode === null ? (
+              <span>{detail.respondentName ?? 'without a code'}</span>
+            ) : (
+              <span className="recent__code">{detail.publicCode}</span>
+            )}
           </h3>
 
           <dl className="station-badge">
             <div>
               <dt>Public code</dt>
-              <dd>{detail.publicCode}</dd>
+              {/* A contact response never had a sticker. An empty cell would
+                  read as a code that failed to load. */}
+              <dd>{detail.publicCode ?? 'No code'}</dd>
             </div>
             <div>
               <dt>Reconciliation status</dt>
@@ -134,18 +154,14 @@ export function FeedbackDetail({
             </div>
             <div>
               <dt>Captured</dt>
-              <dd>
-                {detail.captureMethod === 'qr' ? 'Scanned sticker' : 'Typed code'}
-              </dd>
+              <dd>{CAPTURE_LABELS[detail.captureMethod]}</dd>
             </div>
             <div>
               <dt>Matched by</dt>
               <dd>
-                {detail.matchMethod === 'qr_identity'
-                  ? 'Participant ID'
-                  : detail.matchMethod === 'manual_public_code'
-                    ? 'Public code'
-                    : 'Not matched'}
+                {detail.matchMethod === null
+                  ? 'Not matched'
+                  : (MATCH_LABELS[detail.matchMethod] ?? detail.matchMethod)}
               </dd>
             </div>
             <div>
@@ -201,6 +217,55 @@ export function FeedbackDetail({
               <dd>{detail.lastUploaderDeviceId}</dd>
             </div>
           </dl>
+
+          {/*
+            The rider's own details, when they are what identifies the response.
+            Privileged PII, on a privileged screen, shown exactly as the rider
+            typed it: this is the evidence a match was made from, or, on a
+            direct response, the only way to reach the person at all.
+          */}
+          {detail.captureMethod === 'contact' && (
+            <>
+              <h4 className="section-title">Details given by the rider</h4>
+              <p className="screen__note">
+                Entered at Point B by the rider themselves. Nothing was looked
+                up: these details are the identity of this response.
+              </p>
+              <dl className="station-badge">
+                <div>
+                  <dt>Name</dt>
+                  <dd>{detail.respondentName ?? 'None'}</dd>
+                </div>
+                <div>
+                  <dt>Phone</dt>
+                  <dd>{detail.respondentPhone ?? 'None'}</dd>
+                </div>
+                <div>
+                  <dt>Email</dt>
+                  <dd>{detail.respondentEmail ?? 'None'}</dd>
+                </div>
+              </dl>
+
+              {detail.reconciliationStatus === 'standalone' && (
+                <p className="notice" role="status">
+                  No registration in this event has both this phone number and
+                  this email address, so this rider did not go through Point A.
+                  That is the expected outcome for this path and not a problem
+                  to resolve. Their answers count towards the event figures.
+                </p>
+              )}
+
+              {detail.reconciliationStatus === 'identity_conflict' && (
+                <p className="notice notice--error" role="alert">
+                  More than one registration in this event has both this phone
+                  number and this email address, so there is no single rider
+                  this response could belong to. Nothing on this screen picks
+                  one. The registrations concerned are listed under possible
+                  duplicate registrations.
+                </p>
+              )}
+            </>
+          )}
 
           <h4 className="section-title">Answers as recorded</h4>
 

@@ -41,6 +41,12 @@ function lines(
       value: format(counts.feedbackWithoutRegistration),
     },
     {
+      // Valid direct responses, listed beside the counts rather than among the
+      // anomalies: nothing went wrong for these riders.
+      label: 'Direct feedback (no Point A registration)',
+      value: format(counts.standaloneFeedback),
+    },
+    {
       label: 'Feedback identity conflicts',
       value: format(counts.feedbackIdentityConflicts),
     },

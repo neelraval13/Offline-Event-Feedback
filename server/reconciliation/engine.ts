@@ -20,9 +20,24 @@ import {
  * and feedback produce the same output regardless of the order they arrive in.
  *
  * It classifies. It never resolves. Where the data is ambiguous (two feedback
- * records for one participant, two registrations that might be one person) the
- * engine says so and stops. Picking a winner would be a guess recorded as a
- * fact, and the raw rows would no longer explain how the system reached it.
+ * records for one participant, two registrations that might be one person, a
+ * phone and email pair that belongs to two riders) the engine says so and
+ * stops. Picking a winner would be a guess recorded as a fact, and the raw rows
+ * would no longer explain how the system reached it.
+ *
+ * ## Three identity paths in, one classification out
+ *
+ *   qr       participant ID and printed code, which must agree
+ *   manual   printed code alone
+ *   contact  the rider's own phone and email, which must both match, and
+ *            match exactly one registration
+ *
+ * The three resolve differently and are classified identically afterwards. A
+ * matched response is a matched response whatever identified it, so the counts,
+ * the multiple-response rule and the coverage arithmetic below need no special
+ * case for the newest path. The one genuinely new outcome is `standalone`: a
+ * valid response from somebody who was never at Point A, which no sticker
+ * capture can produce because a sticker implies a registration existed.
  */
 
 /** Sorting everything up front makes output independent of input order. */
@@ -37,6 +52,105 @@ interface ResolvedFeedback {
   readonly registrationRecordId: string | null
   readonly matchMethod: MatchMethod | null
   readonly conflict: boolean
+  /**
+   * A contact response that matched no registration, which is a valid outcome
+   * rather than a failure to resolve. Distinguishes `standalone` from
+   * `without_registration`, which are the same shape and opposite findings.
+   */
+  readonly standalone: boolean
+}
+
+/** The composite key a contact response is matched on: phone AND email. */
+function contactKey(phone: string, email: string): string | null {
+  const normalizedPhone = normalizePhone(phone)
+  const normalizedEmail = normalizeEmail(email)
+
+  // Both halves must be usable. A key built from one usable half and one empty
+  // one would group every registration that is missing the same half, and the
+  // engine would then report a conflict between people who have nothing in
+  // common but an absence.
+  return isUsableKey(normalizedPhone) && isUsableKey(normalizedEmail)
+    // A NUL separator, written as an escape for the same reason
+    // `findDuplicateCandidates` does below: a literal NUL in the source makes
+    // this file binary to grep, ripgrep and every other text tool, which is how
+    // six em dashes once hid in it. The separator itself matters because
+    // neither half is guaranteed free of the other's characters, and a
+    // separator that can appear inside a value is a key collision waiting.
+    ? `${normalizedPhone}\u0000${normalizedEmail}`
+    : null
+}
+
+/**
+ * Resolves a contact response against the registrations in this snapshot.
+ *
+ * The rule, in full: a registration matches only when its normalised phone AND
+ * its normalised email both equal the response's, and only when exactly one
+ * registration in the event does.
+ *
+ * Everything about that is deliberately strict.
+ *
+ * **Not the name.** Names are not identifiers. Two riders called Rahul Sharma
+ * at one event is not a coincidence, it is a Tuesday, and a name match would
+ * attach one rider's opinion to the other's registration with nothing on any
+ * screen to show it had happened.
+ *
+ * **Not the phone alone, and not the email alone.** Families share phone
+ * numbers and couples share email accounts. This is not a hypothetical: the
+ * duplicate-candidate detector in this same file exists precisely because those
+ * collisions are common enough to need reviewing. One of them matching is worth
+ * nothing on its own; requiring both is what makes this deterministic.
+ *
+ * **Not "the best" of several.** Two registrations with the same phone and
+ * email pair means the event genuinely cannot say which rider this is. Picking
+ * the earlier one, or the one with more fields filled in, would record a guess
+ * as a fact. It is a conflict, and it says so.
+ *
+ * The same normalisation as duplicate detection, from `normalize.ts`: strip
+ * formatting and nothing else. If these two disagreed, the engine could propose
+ * that two registrations are the same person while refusing to match a response
+ * to either.
+ */
+function resolveContactFeedback(
+  feedback: ReconciliationInput['feedback'][number],
+  byContact: ReadonlyMap<string, readonly ReconciliationRegistration[]>,
+): ResolvedFeedback {
+  const key =
+    feedback.respondentPhone === null || feedback.respondentEmail === null
+      ? null
+      : contactKey(feedback.respondentPhone, feedback.respondentEmail)
+
+  const candidates = key === null ? [] : (byContact.get(key) ?? [])
+
+  if (candidates.length === 1) {
+    return {
+      feedbackRecordId: feedback.recordId,
+      // Non-null: the length is exactly one.
+      registrationRecordId: (candidates[0] as ReconciliationRegistration).recordId,
+      matchMethod: 'contact_identity',
+      conflict: false,
+      standalone: false,
+    }
+  }
+
+  if (candidates.length > 1) {
+    return {
+      feedbackRecordId: feedback.recordId,
+      registrationRecordId: null,
+      matchMethod: null,
+      conflict: true,
+      standalone: false,
+    }
+  }
+
+  // Nothing matched. This rider did not register, which is the ordinary case
+  // for this path and not a problem to be reported as one.
+  return {
+    feedbackRecordId: feedback.recordId,
+    registrationRecordId: null,
+    matchMethod: null,
+    conflict: false,
+    standalone: true,
+  }
 }
 
 /**
@@ -52,8 +166,16 @@ function resolveFeedback(
   feedback: ReconciliationInput['feedback'][number],
   byParticipantId: ReadonlyMap<string, ReconciliationRegistration>,
   byPublicCode: ReadonlyMap<string, ReconciliationRegistration>,
+  byContact: ReadonlyMap<string, readonly ReconciliationRegistration[]>,
 ): ResolvedFeedback {
-  const viaCode = byPublicCode.get(feedback.publicCode) ?? null
+  if (feedback.captureMethod === 'contact') {
+    return resolveContactFeedback(feedback, byContact)
+  }
+
+  const viaCode =
+    feedback.publicCode === null
+      ? null
+      : (byPublicCode.get(feedback.publicCode) ?? null)
 
   if (feedback.captureMethod === 'manual') {
     /*
@@ -65,6 +187,7 @@ function resolveFeedback(
       registrationRecordId: viaCode?.recordId ?? null,
       matchMethod: viaCode === null ? null : 'manual_public_code',
       conflict: false,
+      standalone: false,
     }
   }
 
@@ -80,6 +203,7 @@ function resolveFeedback(
       registrationRecordId: null,
       matchMethod: null,
       conflict: false,
+      standalone: false,
     }
   }
 
@@ -94,6 +218,7 @@ function resolveFeedback(
       registrationRecordId: viaParticipant.recordId,
       matchMethod: 'qr_identity',
       conflict: false,
+      standalone: false,
     }
   }
 
@@ -108,6 +233,7 @@ function resolveFeedback(
     registrationRecordId: null,
     matchMethod: null,
     conflict: true,
+    standalone: false,
   }
 }
 
@@ -208,8 +334,37 @@ export function reconcile(input: ReconciliationInput): ReconciliationOutput {
     registrations.map((registration) => [registration.publicCode, registration]),
   )
 
+  /*
+   * Registrations grouped by their normalised phone-and-email pair.
+   *
+   * Built once, in one pass, and read with a single `get` per contact response.
+   * The obvious alternative, scanning every registration for each response,
+   * is the quadratic trap this engine already avoids for duplicate candidates:
+   * at 10,000 registrations and 10,000 responses that is 100 million string
+   * comparisons for a question a hash map answers in constant time.
+   *
+   * A list rather than a single registration, because the pair is NOT unique.
+   * That is the whole reason more-than-one has to be an outcome the engine can
+   * express: two registrations sharing a phone and an email is exactly what
+   * `findDuplicateCandidates` below flags as a possible duplicate person, and
+   * when a response arrives for that pair there is genuinely no answer.
+   */
+  const byContact = new Map<string, ReconciliationRegistration[]>()
+  for (const registration of registrations) {
+    const key = contactKey(registration.phone, registration.email)
+    if (key === null) {
+      continue
+    }
+    const existing = byContact.get(key)
+    if (existing === undefined) {
+      byContact.set(key, [registration])
+    } else {
+      existing.push(registration)
+    }
+  }
+
   const resolved = feedback.map((record) =>
-    resolveFeedback(record, byParticipantId, byPublicCode),
+    resolveFeedback(record, byParticipantId, byPublicCode, byContact),
   )
 
   /* Valid links, grouped by the registration they resolved to. */
@@ -268,7 +423,14 @@ export function reconcile(input: ReconciliationInput): ReconciliationOutput {
       return {
         feedbackRecordId: entry.feedbackRecordId,
         registrationRecordId: null,
-        status: 'without_registration',
+        /*
+         * The same shape, two opposite findings, and the difference is which
+         * question was asked. A sticker that resolved to nothing means
+         * something went wrong and someone should look. Contact details that
+         * matched nothing mean this rider did not register, which is what the
+         * contact path is for.
+         */
+        status: entry.standalone ? 'standalone' : 'without_registration',
         matchMethod: null,
       }
     }
@@ -305,6 +467,7 @@ export function reconcile(input: ReconciliationInput): ReconciliationOutput {
 
       matchedFeedback: countFeedback('matched'),
       feedbackWithoutRegistration: countFeedback('without_registration'),
+      standaloneFeedback: countFeedback('standalone'),
       feedbackIdentityConflicts: countFeedback('identity_conflict'),
       feedbackInMultipleGroups: countFeedback('multiple_feedback'),
 
