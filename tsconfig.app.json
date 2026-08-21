@@ -7,6 +7,15 @@
     "jsx": "react-jsx",
     "types": ["vite/client"],
 
+    /*
+     * Mirrors `resolve.alias` in vite.config.ts. Both, or neither.
+     *
+     * No `baseUrl`: it is deprecated in TypeScript 6 and unnecessary, because
+     * `paths` without one resolves relative to this file, which is what is
+     * wanted here anyway.
+     */
+    "paths": { "@/*": ["./src/*"] },
+
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

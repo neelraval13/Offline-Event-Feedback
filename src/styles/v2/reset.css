@@ -1,0 +1,158 @@
+/*
+ * Preflight, scoped to the V2 subtree.
+ *
+ * Tailwind's global reset is not imported (see `index.css`), because it would
+ * restyle elements the four existing screens depend on. What those screens do
+ * not depend on is anything inside a `.v2` container, so the parts of preflight
+ * that V2 components actually need are reproduced here under that scope.
+ *
+ * Only the parts that matter are included. This is not an attempt to reproduce
+ * preflight in full; it is the specific normalisation without which the shadcn
+ * primitives are wrong, plus the two typographic defaults the V2 layout
+ * assumes.
+ */
+
+@layer base {
+  /*
+   * The one that silently breaks everything if omitted.
+   *
+   * Tailwind's `border` utility sets `border-width` and nothing else, on the
+   * assumption that preflight has already set `border-style: solid` globally.
+   * Without that, every `border` in every V2 component computes to
+   * `border-style: none` and renders no border at all: no card edges, no table
+   * rules, no input outlines, and no error message anywhere to explain it.
+   */
+  .v2,
+  .v2 *,
+  .v2 *::before,
+  .v2 *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--color-line);
+  }
+
+  /*
+   * Headings and paragraphs carry no size or margin of their own. The V2 type
+   * scale is applied with utilities, so an `h2` is whatever the component says
+   * it is rather than whatever the browser thinks a second-level heading looks
+   * like. Without this, `text-title` on an `h2` would fight the user-agent
+   * stylesheet's own `font-size` and margins.
+   */
+  .v2 h1,
+  .v2 h2,
+  .v2 h3,
+  .v2 h4,
+  .v2 p,
+  .v2 figure,
+  .v2 blockquote,
+  .v2 dl,
+  .v2 dd {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .v2 ul,
+  .v2 ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /*
+   * Links carry no colour or underline of their own.
+   *
+   * The browser underlines anchors and paints them blue, and V1's global
+   * `a { color: var(--accent) }` reaches into this subtree too. Both are
+   * cleared so the component decides: a V2 link that wants to look like a link
+   * asks for it with a utility.
+   *
+   * This rule only wins over V1's because `src/styles/app.css` puts V1 in a
+   * lower cascade layer. Without that, an unlayered `a` selector outranks
+   * everything here regardless of specificity.
+   */
+  .v2 a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  /*
+   * Controls inherit their typeface. Browsers default form elements to a
+   * system font, so without this a `<button>` and the `<span>` beside it are
+   * set in different faces at different sizes, which is visible at a glance
+   * and impossible to fix with utilities alone.
+   */
+  .v2 button,
+  .v2 input,
+  .v2 optgroup,
+  .v2 select,
+  .v2 textarea {
+    font-family: inherit;
+    font-size: 100%;
+    font-weight: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+  }
+
+  .v2 button,
+  .v2 [type='button'],
+  .v2 [type='reset'],
+  .v2 [type='submit'] {
+    appearance: button;
+    background-color: transparent;
+    background-image: none;
+  }
+
+  .v2 :disabled {
+    cursor: default;
+  }
+
+  /* Images behave as blocks that fit their container, never as inline text. */
+  .v2 img,
+  .v2 svg,
+  .v2 video,
+  .v2 canvas {
+    display: block;
+    vertical-align: middle;
+  }
+
+  .v2 img,
+  .v2 video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .v2 table {
+    border-collapse: collapse;
+    border-color: inherit;
+    text-indent: 0;
+  }
+
+  .v2 [role='button'],
+  .v2 button {
+    cursor: pointer;
+  }
+
+  /* Placeholder text must read as absence, not as a filled-in value. */
+  .v2 ::placeholder {
+    color: var(--color-faint);
+    opacity: 1;
+  }
+
+  /*
+   * Focus is never removed, only replaced.
+   *
+   * Operators use these screens with keyboards and with external scanners that
+   * behave like keyboards, and the default focus ring is invisible against a
+   * near-black surface. Every V2 control declares its own ring; this is the
+   * floor for anything that forgets.
+   */
+  .v2 :focus-visible {
+    outline: 2px solid var(--color-interactive);
+    outline-offset: 2px;
+  }
+}

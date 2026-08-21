@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { EVENT_CONFIG } from '../config/event'
+import { AppShellV2, type ShellChrome } from './design-system/AppShellV2'
 import { hrefFor, type RoutePath } from '../lib/routing/hashRoute'
 
 export interface NavLink {
@@ -10,38 +11,46 @@ export interface NavLink {
 interface AppShellProps {
   readonly navLinks: readonly NavLink[]
   readonly activePath: RoutePath | null
+  /** Which station the operator is at, for the shell's context line. */
+  readonly context?: string
+  /** Capture surfaces ask for `minimal`; see `AppShellV2`. */
+  readonly chrome?: ShellChrome
   readonly children: ReactNode
 }
 
 /**
- * Frame shared by every surface: event context on top, navigation, content.
+ * The application frame.
  *
- * The event/day banner is not decoration: staff running a station needs to be
- * able to confirm at a glance which event and day this device is stamping onto
- * the records it captures.
+ * Now a thin adapter over {@link AppShellV2}: it turns this application's
+ * routing vocabulary into the design system's shell props and supplies the
+ * event identity. The visual and structural decisions all live in the design
+ * system, so a screen that wants a different amount of chrome asks for it
+ * rather than building its own header.
+ *
+ * The event/day line is not decoration: staff running a station needs to
+ * confirm at a glance which event and day this device is stamping onto the
+ * records it captures.
  */
-export function AppShell({ navLinks, activePath, children }: AppShellProps) {
+export function AppShell({
+  navLinks,
+  activePath,
+  context,
+  chrome,
+  children,
+}: AppShellProps) {
   return (
-    <div className="app-shell">
-      <header className="app-shell__header">
-        <div className="app-shell__event">
-          <strong>{EVENT_CONFIG.eventName}</strong>
-          <span className="app-shell__meta">{EVENT_CONFIG.eventDay}</span>
-        </div>
-        <nav className="app-shell__nav" aria-label="Surfaces">
-          {navLinks.map((link) => (
-            <a
-              key={link.path}
-              href={hrefFor(link.path)}
-              className="app-shell__nav-link"
-              aria-current={link.path === activePath ? 'page' : undefined}
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
-      </header>
-      <main className="app-shell__main">{children}</main>
-    </div>
+    <AppShellV2
+      eventName={EVENT_CONFIG.eventName}
+      eventDay={EVENT_CONFIG.eventDay}
+      {...(context === undefined ? {} : { context })}
+      {...(chrome === undefined ? {} : { chrome })}
+      nav={navLinks.map((link) => ({
+        href: hrefFor(link.path),
+        label: link.label,
+        active: link.path === activePath,
+      }))}
+    >
+      {children}
+    </AppShellV2>
   )
 }

@@ -22,6 +22,19 @@ const ReportingScreen = lazy(async () => ({
   default: (await import('../features/reporting/ReportingScreen')).ReportingScreen,
 }))
 
+/*
+ * The design-system gallery is loaded on demand, for the same reason.
+ *
+ * It is a review surface, not a station: nobody opens it during a shift and
+ * nothing about capturing a registration depends on it. Leaving it in the
+ * eager bundle would have put its fixtures and every component it demonstrates
+ * on to every tablet, which is 30 kB of precache budget spent on a page an
+ * operator will never see.
+ */
+const FoundationScreen = lazy(async () => ({
+  default: (await import('../features/foundation/FoundationScreen')).FoundationScreen,
+}))
+
 export interface RouteDefinition {
   readonly path: RoutePath
   /** Document title, so a device left on a station is identifiable. */
@@ -61,6 +74,28 @@ export const ROUTES: readonly RouteDefinition[] = [
     navLabel: 'Admin',
     showInNav: true,
     render: () => <AdminScreen />,
+  },
+  {
+    /*
+     * The V2 design-system gallery. Unlisted for the same reason as reporting:
+     * it is not a station, and a station tablet's navigation should offer only
+     * the things an operator is meant to open mid-shift.
+     */
+    path: '/foundation',
+    title: 'V2 Foundation',
+    navLabel: 'Foundation',
+    showInNav: false,
+    render: () => (
+      <Suspense
+        fallback={
+          <article className="screen">
+            <p className="screen__note">Loading the design system…</p>
+          </article>
+        }
+      >
+        <FoundationScreen />
+      </Suspense>
+    ),
   },
   {
     /*

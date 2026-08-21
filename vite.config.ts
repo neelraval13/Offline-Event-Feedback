@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf8')) as {
@@ -21,6 +23,15 @@ const BUILD_ID = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
 export default defineConfig({
   plugins: [
     react(),
+    /*
+     * Tailwind v4, as the engine behind the V2 design system only.
+     *
+     * The generated stylesheet is additive: `src/styles/v2/index.css`
+     * deliberately imports Tailwind's theme and utilities layers and NOT its
+     * preflight, so nothing Tailwind emits restyles an element the existing
+     * screens rely on. See that file for the full argument.
+     */
+    tailwindcss(),
     VitePWA({
       /*
        * `generateSW`, not `injectManifest`.
@@ -135,6 +146,15 @@ export default defineConfig({
   // Relative base: the built app must be servable from any path (or a local
   // static host at the venue) without server-side configuration.
   base: './',
+  resolve: {
+    /*
+     * `@/` is the convention shadcn generates against, and it keeps the design
+     * system's own imports short from anywhere in the tree. Mirrored in
+     * `tsconfig.app.json`; the two must agree or the editor and the bundler
+     * will disagree about what resolves.
+     */
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_ID__: JSON.stringify(BUILD_ID),

@@ -1,0 +1,251 @@
+/*
+ * V2 design tokens.
+ *
+ * The vocabulary the V2 design system is built from, expressed as Tailwind v4
+ * theme variables so that `bg-surface`, `text-muted` and `rounded-card` all
+ * exist as utilities and nothing has to hardcode a hex value again.
+ *
+ * ## This extends the campaign identity, it does not replace it
+ *
+ * The Flying Flea palette in `../tokens.css` is the product's identity and the
+ * client has already seen and approved it in the field. Every surface and
+ * accent below therefore *derives* from those tokens rather than restating a
+ * similar hex. Rebranding stays one edit in one file, and V1 and V2 screens
+ * cannot drift apart while both exist during the migration.
+ *
+ * What V2 adds is the part an operations product needs and a campaign palette
+ * does not have: a semantic status ramp, an elevation ladder with meaning, a
+ * typographic scale, and a spacing rhythm.
+ *
+ * ## The one deliberate departure: success is not the teal
+ *
+ * V1 defined `--ff-success: #3ac6be`, the same value as `--ff-interactive`.
+ * That made "this device is enrolled" and "press this button" the same colour,
+ * so an operator scanning the Admin screen could not tell a state from a
+ * control. V2 gives success its own green. Teal stays interactive, lime stays
+ * display, and status colours are a third family that means only status.
+ */
+
+@theme {
+  /* ------------------------------------------------------------------ *
+   * Surfaces
+   *
+   * An elevation ladder, not a set of greys. Each step is one level further
+   * "up" from the page, and structure is carried by borders rather than
+   * shadows: on a near-black interface a drop shadow is nearly invisible and
+   * mostly adds noise, while a one-pixel border reads instantly.
+   * ------------------------------------------------------------------ */
+
+  /* The page itself. Nothing sits behind this. */
+  --color-canvas: var(--ff-bg);
+  /* A panel on the page: cards, the shell header, table headers. */
+  --color-surface: var(--ff-surface);
+  /* A panel on a panel: popovers, dialogs, hovered rows. Used sparingly. */
+  --color-raised: var(--ff-surface-elevated);
+  /* Inputs and anything that looks like it accepts typing. */
+  --color-field: var(--ff-field);
+
+  --color-line: var(--ff-border);
+  --color-line-strong: var(--ff-border-strong);
+
+  /* ------------------------------------------------------------------ *
+   * Text
+   *
+   * Three weights of emphasis and no more. A fourth grey is how a hierarchy
+   * stops being legible: at that point nobody can tell which of two similar
+   * greys means "less important".
+   * ------------------------------------------------------------------ */
+
+  --color-ink: var(--ff-text);
+  /*
+   * Both secondary weights are lifted a step above V1's.
+   *
+   * V1's `--ff-muted` is 7.5:1 against the canvas, which is comfortable on a
+   * desk and marginal in the place this product is actually used: a tablet held
+   * at an angle, outdoors, in daylight that raises the black point of the whole
+   * screen and collapses the effective contrast of everything on it. The faint
+   * weight was worse: at 65% alpha it landed at 3.7:1, below the 4.5:1 floor,
+   * and it carries the event day and the column units.
+   *
+   * Nudged rather than rewritten, so the hierarchy still reads as three steps:
+   * muted 7.5:1 -> 9.0:1, faint 3.7:1 -> 5.3:1. V1's own token is untouched,
+   * because changing it would restyle Point A, Point B and Home.
+   */
+  --color-muted: color-mix(in srgb, var(--ff-muted) 80%, var(--ff-text));
+  /* Metadata, timestamps, column units. Quiet, but still legible outdoors. */
+  --color-faint: color-mix(in srgb, var(--ff-muted) 82%, transparent);
+
+  /* ------------------------------------------------------------------ *
+   * Brand
+   *
+   * Two accents that are not interchangeable, carried over from V1 because
+   * getting this wrong is the fastest way to stop looking like the campaign.
+   *
+   *   accent      lime. Display only: eyebrows, a lit rating lamp, the last
+   *               word of a heading. Never a control.
+   *   interactive teal. Everything you can operate: focus rings, primary
+   *               buttons, selected tabs, links.
+   * ------------------------------------------------------------------ */
+
+  --color-accent: var(--ff-accent);
+  --color-accent-glow: var(--ff-accent-glow);
+
+  --color-interactive: var(--ff-interactive);
+  --color-interactive-soft: var(--ff-interactive-soft);
+  --color-interactive-line: var(--ff-interactive-line);
+  --color-on-interactive: var(--ff-on-interactive);
+
+  /* ------------------------------------------------------------------ *
+   * Status
+   *
+   * A third family, meaning status and nothing else. Each has three parts,
+   * and every status treatment in the product is built from exactly these:
+   *
+   *   -fg    the icon and the label
+   *   -soft  a tinted background, low enough to sit under text
+   *   -line  the border that gives the tint an edge
+   *
+   * Hues are chosen to stay apart from each other for the most common forms
+   * of colour vision deficiency, which is also why no status is ever
+   * communicated by colour alone: see `StatusPill`, which always renders an
+   * icon and a word.
+   * ------------------------------------------------------------------ */
+
+  /* Done, healthy, enrolled, ready. */
+  --color-ok: #4ade80;
+  --color-ok-soft: color-mix(in srgb, #4ade80 14%, transparent);
+  --color-ok-line: color-mix(in srgb, #4ade80 42%, transparent);
+
+  /* In flight: syncing, preparing, saving. Amber reads as "not yet". */
+  --color-busy: #fbbf24;
+  --color-busy-soft: color-mix(in srgb, #fbbf24 14%, transparent);
+  --color-busy-line: color-mix(in srgb, #fbbf24 42%, transparent);
+
+  /* Needs attention but nothing is lost: pending records, no response yet. */
+  --color-warn: #fb923c;
+  --color-warn-soft: color-mix(in srgb, #fb923c 14%, transparent);
+  --color-warn-line: color-mix(in srgb, #fb923c 42%, transparent);
+
+  /* Something failed, or is about to be destroyed. */
+  --color-danger: var(--ff-error);
+  --color-danger-soft: color-mix(in srgb, #ff5a5a 14%, transparent);
+  --color-danger-line: color-mix(in srgb, #ff5a5a 42%, transparent);
+
+  /* Neutral fact. Offline is this, not danger: offline is normal here. */
+  --color-info: #60a5fa;
+  --color-info-soft: color-mix(in srgb, #60a5fa 14%, transparent);
+  --color-info-line: color-mix(in srgb, #60a5fa 42%, transparent);
+
+  /* No state worth colouring. Unknown, not applicable, checking. */
+  --color-idle: var(--ff-muted);
+  --color-idle-soft: color-mix(in srgb, var(--ff-muted) 12%, transparent);
+  --color-idle-line: var(--ff-border-strong);
+
+  /* ------------------------------------------------------------------ *
+   * Type
+   *
+   * Three faces with fixed roles, inherited from V1 and unchanged. Setting
+   * the whole product in the display face would look like the campaign for
+   * about a minute and then cost an operator real time.
+   * ------------------------------------------------------------------ */
+
+  --font-display: var(--ff-font-display);
+  --font-body: var(--ff-font-body);
+  --font-ui: var(--ff-font-ui);
+  /* Digits that line up in a column: IDs, counts, codes, timestamps. */
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+
+  /*
+   * A restrained scale. Seven sizes for the whole product, because an
+   * operator learns a hierarchy by repetition and a scale with twelve steps
+   * has no repetition in it.
+   *
+   * Sizes below 0.8125rem exist for captions only and never for anything a
+   * reader has to act on. Nothing that accepts typing is below 1rem, which is
+   * the threshold at which mobile Safari zooms the page on focus.
+   */
+  --text-caption: 0.6875rem;   /* 11px. Column units, footnotes.          */
+  --text-label: 0.75rem;       /* 12px. Field labels, table headers.      */
+  --text-small: 0.8125rem;     /* 13px. Metadata, helper text.            */
+  --text-base: 0.9375rem;      /* 15px. Body and controls.                */
+  --text-lead: 1.0625rem;      /* 17px. Page descriptions, questions.     */
+  --text-title: 1.375rem;      /* 22px. Section and card titles.          */
+  --text-page: 1.875rem;       /* 30px. One per screen.                   */
+  --text-display: 2.5rem;      /* 40px. Brand moments only.               */
+
+  /*
+   * Figures for reading in a column.
+   *
+   * A count that changes while an operator watches it must not change width
+   * as it does, so statistics are tabular and slashed-zero everywhere.
+   */
+  --text-stat: 1.75rem;
+  --text-stat-small: 1.125rem;
+
+  /* ------------------------------------------------------------------ *
+   * Spacing
+   *
+   * A 4px rhythm. Tailwind's default spacing scale already steps in 4px, so
+   * this only names the handful of larger intervals the layout repeats, and
+   * the rest is `gap-2`, `p-4` and so on.
+   * ------------------------------------------------------------------ */
+
+  --spacing-gutter: var(--ff-gutter);
+  --spacing-section: 1.75rem;
+  --spacing-page: 2.5rem;
+
+  /* ------------------------------------------------------------------ *
+   * Shape
+   *
+   * A four-step ladder, tightened.
+   *
+   * V2 first took its radii straight from V1: 12px controls and 22px cards.
+   * On a campaign landing surface that softness is right, and on an operations
+   * console it is the single thing that made the foundation read as a generic
+   * dashboard template rather than as equipment. A 22px corner on a data table
+   * is a lozenge, and every rounded box in a stack of them compounds the
+   * effect.
+   *
+   * The ladder is now proportional to the thing it is on: the larger the
+   * surface, the larger the radius, and none of them large enough to be the
+   * first thing you notice.
+   *
+   *   chip     5px   badges, menu items, sort affordances
+   *   control  8px   buttons, inputs, selects, alerts, popovers
+   *   card    12px   cards, tables, stat tiles: the regular surfaces
+   *   panel   16px   dialogs and sheets: the largest surfaces there are
+   *
+   * These are deliberately literal rather than derived from `--ff-radius-*`.
+   * V1's radii still belong to V1, which is untouched by this phase; when the
+   * last screen has migrated, the `--ff-radius-*` tokens go away with it.
+   * ------------------------------------------------------------------ */
+
+  --radius-chip: 5px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-pill: var(--ff-radius-pill);
+
+  /* ------------------------------------------------------------------ *
+   * Elevation
+   *
+   * Two shadows, both barely there. They exist to say "this floats above the
+   * page" for the two things that genuinely do, and nothing else may use
+   * them. Cards do not get a shadow; they get a border.
+   * ------------------------------------------------------------------ */
+
+  --shadow-popover: 0 12px 32px -12px rgb(0 0 0 / 0.7);
+  --shadow-dialog: 0 32px 64px -24px rgb(0 0 0 / 0.85);
+
+  /* ------------------------------------------------------------------ *
+   * Layout
+   * ------------------------------------------------------------------ */
+
+  /* A form is not more usable stretched across a 27-inch monitor. */
+  --container-measure: var(--ff-content-max);
+  /* Data surfaces get the room they need: tables, reporting, admin. */
+  --container-wide: 88rem;
+
+  /* The minimum size of anything a finger operates. */
+  --spacing-touch: var(--ff-touch);
+}

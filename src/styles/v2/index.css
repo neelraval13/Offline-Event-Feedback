@@ -1,0 +1,42 @@
+/*
+ * The V2 design system's stylesheet.
+ *
+ * ## Tailwind is imported without preflight, deliberately
+ *
+ * `@import "tailwindcss"` would pull in three things: the theme, the utility
+ * classes, and preflight, Tailwind's global reset. The first two are what this
+ * phase wants. The third would unstyle every `h1`, `p`, `ul`, `table`, `button`
+ * and `dl` in the application, and Point A, Point B, Device Admin and Central
+ * Reporting are all still rendered by `src/styles.css`, which relies on those
+ * defaults. Importing preflight would visually break four working screens on
+ * the day this phase landed, for no benefit until they are migrated.
+ *
+ * So the layers are imported individually, which is Tailwind's own supported
+ * way of opting out, and preflight is reproduced *scoped* in `reset.css` for
+ * the V2 subtree only. Existing screens are byte-for-byte unaffected; V2
+ * components get the normalisation they were written against.
+ *
+ * When the last screen has migrated, `reset.css` can be deleted and the plain
+ * `@import "tailwindcss"` restored. That is a Phase N decision, not this one.
+ */
+
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@import 'tw-animate-css';
+
+@import './theme.css';
+@import './reset.css';
+
+/*
+ * Tell Tailwind where to look for class names.
+ *
+ * Explicit rather than automatic: the scanner would otherwise walk the whole
+ * project including `server/`, `docs/` and the 1,656-line V1 stylesheet, and
+ * generate utilities for every word in them that happens to look like a class.
+ */
+@source '../../components';
+@source '../../features';
+@source '../../app';

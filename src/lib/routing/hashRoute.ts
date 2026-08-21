@@ -6,7 +6,19 @@
  * rewrite rules and no internet. `#/b` always resolves to `index.html`.
  */
 
-export const ROUTE_PATHS = ['/', '/a', '/b', '/admin', '/reporting'] as const
+export const ROUTE_PATHS = [
+  '/',
+  '/a',
+  '/b',
+  '/admin',
+  '/reporting',
+  /*
+   * The V2 design-system gallery. Unlisted in navigation, like `/reporting`,
+   * because it is not a station: it exists so the foundation can be reviewed
+   * in a browser rather than read as source.
+   */
+  '/foundation',
+] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]
 

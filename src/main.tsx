@@ -2,7 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
 import { initOfflineShell } from './lib/pwa/browserShell'
-import './styles.css'
+/*
+ * One stylesheet entry, which is also where the V1/V2 cascade order is
+ * declared. Importing the two sheets separately from here is what let V1's
+ * unlayered element selectors outrank the whole design system; see
+ * `src/styles/app.css` for the full account.
+ */
+import './styles/app.css'
 
 const container = document.getElementById('root')
 

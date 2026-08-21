@@ -1,0 +1,40 @@
+/*
+ * The application's single stylesheet entry point.
+ *
+ * This file exists to declare one thing that cannot be declared anywhere else:
+ * the cascade order between the V1 stylesheet and the V2 design system.
+ *
+ * ## Why the V1 stylesheet has to be in a layer
+ *
+ * CSS cascade layers outrank specificity, and **unlayered rules beat every
+ * layered rule**. Tailwind's utilities live in `@layer utilities`, so while
+ * `src/styles.css` was unlayered its three bare element selectors silently
+ * outranked the entire V2 design system inside the V2 subtree. Only three, but
+ * one of them is `a { color: var(--accent) }`, and the visible result was that
+ * every link in the new application shell rendered teal and underlined no
+ * matter what utility was put on it. `text-muted` was in the markup, in the
+ * DOM, and losing.
+ *
+ * Putting V1 in a layer below Tailwind's fixes it at the root rather than by
+ * escalating specificity, which is the fight that produces `!important` three
+ * commits later.
+ *
+ * ## This does not change how V1 renders
+ *
+ * Within a single layer the cascade is exactly what it was: specificity, then
+ * source order. Every rule in `styles.css` moves into `v1` together, so their
+ * relative precedence is untouched, and nothing else in the document competes
+ * with them: V1 screens carry no Tailwind classes at all. The only relationship
+ * that changes is V1 versus V2, which is the one that was wrong.
+ *
+ * `fonts.css` and `tokens.css` are imported by `styles.css` and travel with it.
+ * They declare `@font-face` rules and custom properties whose names nothing
+ * else defines, so layering them changes nothing.
+ *
+ * When the last screen has migrated, this file and the `v1` layer go away.
+ */
+
+@layer v1, theme, base, components, utilities;
+
+@import '../styles.css' layer(v1);
+@import './v2/index.css';
