@@ -12,42 +12,6 @@ export const ROUTE_PATHS = [
   '/b',
   '/admin',
   '/reporting',
-  /*
-   * The V2 design-system gallery. Unlisted in navigation, like `/reporting`,
-   * because it is not a station: it exists so the foundation can be reviewed
-   * in a browser rather than read as source.
-   */
-  '/foundation',
-  /*
-   * The Point A V2 concept. A design-review surface, not a station.
-   *
-   * Deliberately a separate path from `/a`, which still renders the production
-   * registration terminal untouched. The concept writes nothing, calls no
-   * registration function and holds no real record; it exists so the V2 design
-   * can be agreed by looking at it before any of it is implemented.
-   */
-  '/concept/point-a',
-  /*
-   * The Point B V2 concept. Same rules as the Point A one: a design-review
-   * surface on static fixtures, deliberately a separate path from `/b`, which
-   * still renders the production feedback terminal untouched. It opens no
-   * camera, calls no scanner and writes nothing.
-   */
-  '/concept/point-b',
-  /*
-   * The Device Admin V2 concept. Same rules as the other two: a design-review
-   * surface on static fixtures, deliberately a separate path from `/admin`,
-   * which still renders the production console untouched. It opens no database,
-   * runs no sync, enrols nothing and touches no backup.
-   */
-  '/concept/admin',
-  /*
-   * The Central Reporting V2 concept. Same rules again, and one more that
-   * matters here: `/reporting` is the only route that reads other people's
-   * contact details, and this one reads none. It calls no reporting API, sends
-   * no secret and holds nothing but invented people.
-   */
-  '/concept/reporting',
 ] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]

@@ -9,154 +9,78 @@ import { readFileSync } from 'node:fs'
  * 320px" would be asserting nothing. Manual QA at real widths is the only thing
  * that proves that, and `docs/flying-flea-qa.md` carries the matrix.
  *
- * What can be checked here is the class of mistake that is invisible in review
- * and fatal on a small screen:
+ * ## What is left of this file
  *
- *   - an `auto-fit` track whose floor is wider than its container, which is the
- *     usual cause of a page that scrolls sideways on a phone
- *   - a global `overflow-x: hidden`, which hides exactly that bug rather than
- *     fixing it
- *   - an input under 16px, which makes mobile Safari zoom the page on focus
- *   - a layout container pinned to a fixed width
+ * Most of it used to check V1 rules: the numeric dial's keypad, the rating
+ * lamps, the field controls, the old content gutter. Those components are gone
+ * and their stylesheet with them, so assertions about them would pass against
+ * an empty string and prove nothing. What remains are the two classes of
+ * mistake that are still possible, still invisible in review, and still fatal
+ * on a small screen. Both are now checked against every stylesheet the
+ * application actually ships.
+ *
+ * Touch-target sizing moved with the components: `designSystem.test.ts` checks
+ * that the V2 primitives declare `min-h-touch`, which is where a control's
+ * height is decided now.
  */
 
 function withoutComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '')
 }
 
-const stylesheet = withoutComments(readFileSync('src/styles.css', 'utf8'))
-const tokens = withoutComments(readFileSync('src/styles/tokens.css', 'utf8'))
+const SHEETS = [
+  'src/styles.css',
+  'src/styles/app.css',
+  'src/styles/tokens.css',
+  'src/styles/v2/index.css',
+  'src/styles/v2/reset.css',
+  'src/styles/v2/theme.css',
+] as const
 
-describe('grid tracks', () => {
-  it('never declare a minimum wider than the container they sit in', () => {
-    /*
-     * `repeat(auto-fit, minmax(260px, 1fr))` keeps its 260px floor even when
-     * the container is 240px wide, and the grid then overflows. Wrapping the
-     * floor in `min(…, 100%)` lets the single remaining column shrink instead.
-     */
-    // The floor may itself contain a comma, as `min(260px, 100%)` does.
-    const tracks = [
-      ...stylesheet.matchAll(
-        /repeat\(auto-fit,\s*minmax\((.+?),\s*1fr\)\)/g,
-      ),
-    ].map((match) => (match[1] as string).trim())
-
-    /*
-     * A non-vacuity guard, not a census. It exists so a regex that stopped
-     * matching would fail rather than pass with nothing to check, and the
-     * number goes down as screens migrate off this stylesheet: Phase 3 removed
-     * Point A's vehicle-plate and rider-details tracks with the rest of its V1
-     * presentation. What matters is the loop below, which still checks every
-     * track the file has.
-     */
-    expect(tracks.length).toBeGreaterThanOrEqual(3)
-    for (const floor of tracks) {
-      expect(floor.startsWith('min(')).toBe(true)
-      expect(floor).toContain('100%')
-    }
-  })
-})
+const sheets = SHEETS.map((path) => ({
+  path,
+  css: withoutComments(readFileSync(path, 'utf8')),
+}))
 
 describe('horizontal overflow', () => {
   it('is never concealed with a global clip', () => {
-    // Hiding the symptom means the next person cannot see the cause.
-    for (const selector of ['html', 'body', '#root', '.app-shell']) {
-      const rule = new RegExp(
-        `${selector.replace('.', '\\.')}\\s*(,[^{]*)?\\{[^}]*overflow-x:\\s*hidden`,
-      )
-      expect(stylesheet).not.toMatch(rule)
+    /*
+     * Hiding the symptom means the next person cannot see the cause. A page
+     * that scrolls sideways on a phone has a child wider than its container,
+     * and `overflow-x: hidden` on the document makes that child unreachable
+     * instead of making it fit.
+     */
+    for (const { path, css } of sheets) {
+      for (const selector of ['html', 'body', '#root']) {
+        const rule = new RegExp(
+          `${selector}\\s*(,[^{]*)?\\{[^}]*overflow-x:\\s*hidden`,
+        )
+        expect(css, `${path} clips ${selector}`).not.toMatch(rule)
+      }
     }
-  })
-})
-
-describe('the content container', () => {
-  it('is fluid up to a reading measure rather than a fixed column', () => {
-    const screen = /\.screen \{[^}]*\}/.exec(stylesheet)?.[0] ?? ''
-
-    expect(screen).toContain('width: min(100%, var(--ff-content-max))')
-    expect(screen).not.toContain('max-width: 44rem')
-  })
-
-  it('takes its gutter from a token, so every screen agrees', () => {
-    expect(tokens).toContain('--ff-gutter:')
-    expect(tokens).toContain('--ff-content-max:')
-    expect(stylesheet).toContain('padding: 1.5rem var(--ff-gutter) 3rem')
   })
 })
 
 describe('text inputs', () => {
-  it('are never small enough to make mobile Safari zoom the page', () => {
+  it('are set in the largest of the small type steps, never a smaller one', () => {
     /*
-     * Focusing an input under 16px makes iOS scale the page up and leave it
-     * there, which at a registration desk means the operator scrolls sideways
-     * for the rest of the form.
+     * A control that is typed into on a phone must not shrink with the
+     * viewport. `text-base` is the step the V2 scale gives to body and
+     * controls; anything below it is metadata sizing and belongs on a caption,
+     * not on a field an operator is reading their own typing in.
+     *
+     * `file:`-prefixed utilities are excluded: they style the button inside a
+     * file input, not the value.
      */
-    const controls = [
-      /\.ff-field__control \{[^}]*\}/,
-      /\.ff-dial__input \{[^}]*\}/,
-      /\.field__input \{[^}]*\}/,
-      /\.manual-entry__input \{[^}]*\}/,
-    ]
+    // Comments stripped first: the note above the component discusses
+    // `md:text-small` in order to say it is deliberately absent.
+    const input = withoutComments(readFileSync('src/components/ui/input.tsx', 'utf8'))
+    const ownText = input.replace(/file:[a-z0-9:[\]/-]+/g, '')
 
-    for (const pattern of controls) {
-      const rule = pattern.exec(stylesheet)?.[0]
-      expect(rule).toBeDefined()
-
-      const size = /font-size:\s*([\d.]+)(px|rem)/.exec(rule as string)
-      if (size === null) {
-        // Inherits the 17px body size, which is already above the threshold.
-        continue
-      }
-
-      const value =
-        size[2] === 'rem'
-          ? Number.parseFloat(size[1] as string) * 16
-          : Number.parseFloat(size[1] as string)
-
-      expect(value).toBeGreaterThanOrEqual(16)
-    }
-  })
-})
-
-describe('touch targets', () => {
-  it('are declared as a token rather than left to padding', () => {
-    // Padding shrinks with the font; a minimum height does not.
-    expect(tokens).toContain('--ff-touch: 44px')
-
-    for (const rule of [
-      /\.button \{[^}]*\}/,
-      /\.ff-field__control \{[^}]*\}/,
-      /\.ff-rating__button \{[^}]*\}/,
-    ]) {
-      expect(rule.exec(stylesheet)?.[0]).toContain('var(--ff-touch)')
-    }
-  })
-
-  it('keep the numeric keypad pressable at any dial size', () => {
-    const key = /\.ff-dial__key \{[^}]*\}/.exec(stylesheet)?.[0] ?? ''
-
-    expect(key).toContain('min-height: max(38px')
-  })
-})
-
-describe('media queries', () => {
-  it('are few, and grouped rather than scattered', () => {
-    /*
-     * Layout is decided by `auto-fit`, `clamp()` and container queries, so a
-     * breakpoint is the exception. Print and reduced-motion are not viewport
-     * rules and do not count against that.
-     */
-    const viewportQueries = [
-      ...stylesheet.matchAll(/@media \(((?:max|min)-width): (\d+)px\)/g),
-    ].map((match) => `${match[1]}:${match[2]}`)
-
-    expect(viewportQueries).toEqual(['max-width:480', 'min-width:1024'])
-  })
-
-  it('keep the seven-point scale on one row until it stops fitting', () => {
-    const small = /@media \(max-width: 480px\) \{[\s\S]*?\n\}/.exec(stylesheet)?.[0] ?? ''
-
-    expect(stylesheet).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
-    expect(small).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    expect(ownText).toMatch(/\btext-base\b/)
+    expect(ownText).not.toMatch(/\btext-(?:small|caption|label)\b/)
+    // And it never trades height for density at a breakpoint.
+    expect(input).toMatch(/min-h-touch/)
+    expect(input).not.toMatch(/(?:sm|md|lg):min-h-/)
   })
 })

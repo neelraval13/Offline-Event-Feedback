@@ -147,7 +147,20 @@ describe('components consume the tokens', () => {
   })
 
   it('gives the display face to headings and the prose face to reading copy', () => {
-    expect(stylesheet).toMatch(/\.ff-display\s*\{[^}]*var\(--ff-font-display\)/)
-    expect(stylesheet).toMatch(/\.ff-question__prompt\s*\{[^}]*var\(--ff-font-body\)/)
+    /*
+     * The V1 rules this used to read (`.ff-display`, `.ff-question__prompt`)
+     * went with their components. The roles did not move, they moved up: V2
+     * exposes them as theme variables, so a heading asks for `font-display`
+     * and a question asks for `font-body`, and both resolve here.
+     */
+    const theme = readFileSync('src/styles/v2/theme.css', 'utf8')
+
+    expect(theme).toMatch(/--font-display:\s*var\(--ff-font-display\)/)
+    expect(theme).toMatch(/--font-body:\s*var\(--ff-font-body\)/)
+
+    // And the two faces are still different, which is the point of having two.
+    expect(/--ff-font-display:\s*([^;]+);/.exec(tokens)?.[1]).not.toBe(
+      /--ff-font-body:\s*([^;]+);/.exec(tokens)?.[1],
+    )
   })
 })

@@ -331,25 +331,29 @@ describe('the cascade order', () => {
 
 describe('the primitives', () => {
   it('are all present and none was added without being needed', () => {
-    // Established deliberately rather than by installing the whole catalogue.
+    /*
+     * Established deliberately rather than by installing the whole catalogue,
+     * and pruned once every screen had migrated: `card`, `dropdown-menu`,
+     * `separator` and `tooltip` were copied in during the design-system phase
+     * and no production surface ever imported one. They are shadcn copy-ins,
+     * so the cost of adding one back the day a screen needs it is a single
+     * file; the cost of keeping four unused ones is a reader believing they
+     * are part of the vocabulary.
+     */
     const names = primitives().map((file) => file.name).sort()
 
     expect(names).toEqual([
       'alert.tsx',
       'badge.tsx',
       'button.tsx',
-      'card.tsx',
       'dialog.tsx',
-      'dropdown-menu.tsx',
       'input.tsx',
       'label.tsx',
       'select.tsx',
-      'separator.tsx',
       'sheet.tsx',
       'skeleton.tsx',
       'table.tsx',
       'tabs.tsx',
-      'tooltip.tsx',
     ])
   })
 
