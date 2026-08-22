@@ -60,6 +60,13 @@ export function TableRow({ className, ...props }: ComponentProps<'tr'>) {
 export function TableHead({ className, ...props }: ComponentProps<'th'>) {
   return (
     <th
+      /*
+       * Column headers by default. A `<th>` with no scope leaves a screen
+       * reader to infer which cells it governs, and it infers wrongly often
+       * enough that the attribute is worth stating. A caller building a row
+       * header passes `scope="row"` and this is overridden by the spread.
+       */
+      scope="col"
       data-slot="table-head"
       className={cn(
         'h-11 whitespace-nowrap px-3 text-left align-middle',

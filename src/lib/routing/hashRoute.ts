@@ -41,6 +41,13 @@ export const ROUTE_PATHS = [
    * runs no sync, enrols nothing and touches no backup.
    */
   '/concept/admin',
+  /*
+   * The Central Reporting V2 concept. Same rules again, and one more that
+   * matters here: `/reporting` is the only route that reads other people's
+   * contact details, and this one reads none. It calls no reporting API, sends
+   * no secret and holds nothing but invented people.
+   */
+  '/concept/reporting',
 ] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]

@@ -1,4 +1,8 @@
+import { InfoIcon } from 'lucide-react'
 import { useState } from 'react'
+import { Alert, AlertDescription } from '../../components/ui/alert'
+import { cn } from '@/lib/ui/cn'
+import type { OverviewResponse } from '../../lib/reporting/types'
 import { FeedbackTable } from './FeedbackTable'
 import { RegistrationTable } from './RegistrationTable'
 
@@ -11,16 +15,24 @@ import { RegistrationTable } from './RegistrationTable'
  * reconciliation run, and hiding one behind a resolved flag would make the next
  * run's counts disagree with the screen for no traceable reason.
  *
- * What an organiser does with an anomaly is human work, find the person, ask
- * at the desk, accept the loss.
+ * What an organiser does with an anomaly is human work: find the person, ask at
+ * the desk, accept the loss.
  *
- * Direct feedback is deliberately not a tab here. A rider who identified
+ * Direct feedback is deliberately not a category here. A rider who identified
  * themselves by contact details and matched no registration did not go through
  * Point A, which is what the contact path is for; nothing about it needs
  * reviewing. Those responses are browsed under Responses with everything else,
- * filtered by their own status. The `without_registration` tab below is a
+ * filtered by their own status. The `without_registration` category below is a
  * different finding entirely: a sticker code that led nowhere, which usually
  * means a typo at Point B or a Point A device that has not synced.
+ *
+ * ## The counts come from the overview already on screen
+ *
+ * All four are fields of the run's counts, which the workspace has fetched for
+ * the snapshot rail. Putting them on the controls costs no request and stops
+ * somebody opening four categories to discover three were empty. When the
+ * overview has not loaded, the labels render without badges rather than with
+ * placeholders that would read as zero.
  */
 
 type Anomaly =
@@ -29,7 +41,11 @@ type Anomaly =
   | 'multiple_feedback'
   | 'without_feedback'
 
-const TABS: readonly { readonly key: Anomaly; readonly label: string; readonly explanation: string }[] = [
+const CATEGORIES: readonly {
+  readonly key: Anomaly
+  readonly label: string
+  readonly explanation: string
+}[] = [
   {
     key: 'without_registration',
     label: 'Codes that matched no registration',
@@ -52,7 +68,7 @@ const TABS: readonly { readonly key: Anomaly; readonly label: string; readonly e
     key: 'without_feedback',
     label: 'No response',
     explanation:
-      'The participant registered but no response was matched to them.',
+      'The participant registered but no response was matched to them. This is coverage that is incomplete, not data that is wrong: most of these riders simply did not stop at Point B.',
   },
 ]
 
@@ -60,51 +76,109 @@ interface AnomalyReviewProps {
   readonly eventId: string
   readonly runId: string | undefined
   readonly refreshToken: number
+  /** Already loaded for the snapshot rail; no request is made for the counts. */
+  readonly overview: OverviewResponse | null
+}
+
+function countFor(anomaly: Anomaly, overview: OverviewResponse | null): number | null {
+  if (overview === null) {
+    return null
+  }
+  const counts = overview.run.counts
+  switch (anomaly) {
+    case 'without_registration':
+      return counts.feedbackWithoutRegistration
+    case 'identity_conflict':
+      return counts.feedbackIdentityConflicts
+    case 'multiple_feedback':
+      return counts.registrationsWithMultipleFeedback
+    case 'without_feedback':
+      return counts.registrationsWithoutFeedback
+  }
 }
 
 export function AnomalyReview({
   eventId,
   runId,
   refreshToken,
+  overview,
 }: AnomalyReviewProps) {
   const [anomaly, setAnomaly] = useState<Anomaly>('without_registration')
-  const active = TABS.find((tab) => tab.key === anomaly)
+  const active = CATEGORIES.find((category) => category.key === anomaly)
+  const browsesParticipants =
+    anomaly === 'without_feedback' || anomaly === 'multiple_feedback'
 
   return (
-    <section aria-labelledby="anomaly-heading">
-      <h2 id="anomaly-heading" className="pending__title">
-        Needs review
-      </h2>
-
-      <p className="screen__note">
-        These are read-only. Nothing here can be merged, linked, deleted or
-        marked resolved. The reconciliation run is the record of what the
-        evidence says, and this screen does not overrule it.
+    <div className="flex flex-col gap-5">
+      <p className="max-w-measure font-body text-base text-muted">
+        Read-only. Nothing here can be merged, linked, deleted or marked
+        resolved. The reconciliation run is the record of what the evidence says,
+        and this screen does not overrule it.
       </p>
 
-      <div className="button-row" role="group" aria-label="Anomaly type">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className="choice"
-            aria-pressed={anomaly === tab.key}
-            onClick={() => setAnomaly(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div role="group" aria-label="Anomaly type" className="flex flex-wrap gap-2.5">
+        {CATEGORIES.map((category) => {
+          const count = countFor(category.key, overview)
+          const selected = anomaly === category.key
+
+          return (
+            <button
+              key={category.key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setAnomaly(category.key)}
+              className={cn(
+                'flex min-h-touch items-center gap-3 rounded-card border px-4 py-2.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive',
+                selected
+                  ? 'border-interactive bg-interactive-soft'
+                  : 'border-line bg-surface hover:border-line-strong',
+              )}
+            >
+              <span
+                className={cn(
+                  'font-ui text-small',
+                  selected ? 'font-medium text-ink' : 'text-muted',
+                )}
+              >
+                {category.label}
+              </span>
+              {count !== null && (
+                <span
+                  className={cn(
+                    'font-ui text-base font-semibold tabular-nums',
+                    count === 0
+                      ? 'text-faint'
+                      : /* No response is incomplete coverage, not corrupt
+                           evidence, so it is not coloured like a fault. */
+                        category.key === 'without_feedback'
+                        ? 'text-ink'
+                        : 'text-danger',
+                  )}
+                >
+                  {count.toLocaleString()}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      {active !== undefined && <p className="screen__note">{active.explanation}</p>}
+      {active !== undefined && (
+        <Alert tone="neutral">
+          <InfoIcon aria-hidden="true" />
+          <AlertDescription>{active.explanation}</AlertDescription>
+        </Alert>
+      )}
 
-      {anomaly === 'without_feedback' || anomaly === 'multiple_feedback' ? (
+      {browsesParticipants ? (
         <RegistrationTable
           key={anomaly}
           eventId={eventId}
           runId={runId}
           refreshToken={refreshToken}
           initialStatus={anomaly}
+          filtersHidden
         />
       ) : (
         <FeedbackTable
@@ -113,8 +187,9 @@ export function AnomalyReview({
           runId={runId}
           refreshToken={refreshToken}
           initialStatus={anomaly}
+          filtersHidden
         />
       )}
-    </section>
+    </div>
   )
 }

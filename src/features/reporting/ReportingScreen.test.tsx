@@ -160,11 +160,22 @@ async function flush(): Promise<void> {
   })
 }
 
-/** Clicks a button by its exact label, then lets its request settle. */
+/**
+ * Clicks a button by its exact label, then lets its request settle.
+ *
+ * `mousedown` as well as `click`, because a real pointer sends both and some
+ * controls listen for the first one: the V2 section tabs activate on mousedown
+ * so that a drag off the control does not select it. A bare synthetic `click`
+ * is a sequence no browser produces, and a helper that only sent one was
+ * silently failing to change tabs at all.
+ */
 async function click(label: string): Promise<void> {
   await act(async () => {
     const button = [...container.querySelectorAll('button')].find(
       (candidate) => candidate.textContent === label,
+    )
+    button?.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, button: 0 }),
     )
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -218,7 +229,7 @@ describe('ReportingScreen', () => {
     })
 
     expect(container.querySelector('#reporting-secret')).not.toBeNull()
-    expect(container.textContent).not.toContain('Event overview')
+    expect(container.textContent).not.toContain('Event report')
   })
 
   it('opens the workspace once the secret is accepted', async () => {
@@ -227,7 +238,7 @@ describe('ReportingScreen', () => {
     })
     await signIn()
 
-    expect(container.textContent).toContain('Event overview')
+    expect(container.textContent).toContain('Event report')
     expect(container.querySelector('#reporting-secret')).toBeNull()
   })
 
@@ -276,19 +287,30 @@ describe('ReportingScreen', () => {
     expect(localFeedback).toHaveLength(0)
   })
 
-  it('offers the recorded runs, defaulting to the latest', async () => {
+  it('defaults to the latest run and identifies it by what it contains', async () => {
     await act(async () => {
       root.render(<ReportingScreen />)
     })
     await signIn()
 
-    const select = container.querySelector<HTMLSelectElement>('#reporting-run')
-    expect(select).not.toBeNull()
-    // Latest is the default and carries no run id: the server resolves it.
-    expect(select?.value).toBe('')
-    expect([...(select?.options ?? [])].map((option) => option.value)).toContain(
-      RUN.runId,
-    )
+    /*
+     * V2's picker is the design system's Select, so its options live in a
+     * portalled listbox rather than in `select.options`. What matters has not
+     * changed and is asserted here instead: the default is Latest, which
+     * carries no run id at all, and the run is identified by its timestamp and
+     * record counts rather than by an id nobody could choose between.
+     */
+    const trigger = container.querySelector('#reporting-run')
+    expect(trigger).not.toBeNull()
+    expect(trigger?.textContent).toContain('Latest')
+    expect(trigger?.textContent).toContain('1 registrations')
+
+    // The run id is not what the operator is asked to read.
+    expect(trigger?.textContent).not.toContain(RUN.runId)
+
+    // And nothing put it in the address bar on the way.
+    expect(window.location.search).toBe('')
+    expect(window.location.hash).not.toContain(RUN.runId)
   })
 
   it('destroys the session and unmounts the data when a request returns 401', async () => {
@@ -323,7 +345,7 @@ describe('ReportingScreen', () => {
     expect(container.innerHTML).not.toContain(SECRET)
 
     // The panels themselves are unmounted, not merely emptied.
-    expect(container.textContent).not.toContain('Event overview')
+    expect(container.textContent).not.toContain('Event report')
     expect(container.querySelector('.report-table')).toBeNull()
     expect(container.querySelector('#reporting-run')).toBeNull()
 
@@ -365,7 +387,7 @@ describe('ReportingScreen', () => {
 
     for (const tab of ['Participants', 'Responses', 'Duplicates', 'Export']) {
       await click(tab)
-      expect(container.textContent).toContain('Viewing a historical run')
+      expect(container.textContent).toContain('Historical snapshot')
       // Both halves of the caveat: which parts are historical, which are current.
       expect(container.textContent).toContain('current')
     }
@@ -388,12 +410,12 @@ describe('ReportingScreen', () => {
     await signIn()
 
     await click('Participants')
-    expect(container.textContent).toContain('no longer describes the event')
+    expect(container.textContent).toContain('Event data changed since this snapshot')
 
     await click('Export')
-    expect(container.textContent).toContain('no longer describes the event')
+    expect(container.textContent).toContain('Event data changed since this snapshot')
     // The tab where acting on it matters most says so explicitly.
-    expect(container.textContent).toContain('Reconcile first if this is a final report')
+    expect(container.textContent).toContain('Reconcile first for a current final report')
   })
 
   it('forgets the secret on sign out', async () => {

@@ -53,6 +53,18 @@ const AdminConcept = lazy(async () => ({
   default: (await import('../features/concept/admin/AdminConcept')).AdminConcept,
 }))
 
+/*
+ * The Central Reporting V2 concept, loaded on demand.
+ *
+ * Lazy for the same reason the real reporting screen is: it never runs on a
+ * station device, and a tablet's precache budget should not carry a design
+ * review surface it will never open. It also carries the largest fixture set of
+ * any concept, which is exactly the kind of weight that must not be eager.
+ */
+const ReportingConcept = lazy(async () => ({
+  default: (await import('../features/concept/reporting/ReportingConcept')).ReportingConcept,
+}))
+
 /** The Point B V2 concept. Same reasoning as the Point A one above. */
 const PointBConcept = lazy(async () => ({
   default: (await import('../features/concept/point-b/PointBConcept'))
@@ -228,6 +240,36 @@ export const ROUTES: readonly RouteDefinition[] = [
         }
       >
         <AdminConcept />
+      </Suspense>
+    ),
+  },
+  {
+    /*
+     * The Central Reporting V2 concept. Unlisted, and deliberately not
+     * `/reporting`.
+     *
+     * `/reporting` still renders `ReportingScreen` exactly as it did. This
+     * route calls no reporting API, sends no secret, runs no reconciliation,
+     * downloads no export and reads nothing from IndexedDB or the central
+     * database. Every participant on it is invented.
+     *
+     * Full chrome, like the Admin concept: an organiser deliberately entered
+     * this route on a laptop, and Reporting stays out of the station nav
+     * whether or not the shell is showing.
+     */
+    path: '/concept/reporting',
+    title: 'Reporting concept',
+    navLabel: 'Reporting concept',
+    showInNav: false,
+    render: () => (
+      <Suspense
+        fallback={
+          <article className="screen">
+            <p className="screen__note">Loading the Reporting concept…</p>
+          </article>
+        }
+      >
+        <ReportingConcept />
       </Suspense>
     ),
   },

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { AppSurface } from '../../components/design-system'
 import { EVENT_CONFIG } from '../../config/event'
 import { ReportingLogin } from './ReportingLogin'
 import { ReportingWorkspace } from './ReportingWorkspace'
@@ -15,7 +16,10 @@ import { ReportingSessionProvider } from './session'
  * This component holds the credential and nothing else. Everything that reads
  * central data lives in `ReportingWorkspace`, inside the session provider, so
  * that clearing the secret unmounts the data in the same render, whether the
- * operator signed out or the server rejected the credential mid-session.
+ * operator signed out or the server rejected the credential mid-session. That
+ * includes an open detail Sheet: it is rendered inside the workspace subtree,
+ * so a 401 takes its contents with it rather than leaving a portalled panel of
+ * contact details floating over a sign-in form.
  *
  * The secret lives in the state below and nowhere else: not in IndexedDB, not
  * in localStorage, not in a cookie, not in a URL. Closing the tab ends the
@@ -43,23 +47,22 @@ export function ReportingScreen() {
 
   if (secret === null) {
     return (
-      <article className="screen">
-        <h1>Central reporting</h1>
-        {rejected && (
-          <p className="notice notice--error" role="alert">
-            The reporting secret was rejected, so this session has ended and the
-            data has been cleared. If it was rotated on the server, sign in with
-            the new one.
-          </p>
-        )}
+      /*
+        Narrow measure while signed out: one field and a paragraph do not need a
+        laptop's width, and the change in shape is itself a signal that nothing
+        has loaded.
+      */
+      <AppSurface width="measure" className="flex flex-col">
         <ReportingLogin
           eventId={EVENT_CONFIG.eventId}
+          eventName={EVENT_CONFIG.eventName}
+          rejected={rejected}
           onAuthenticated={(value) => {
             setRejected(false)
             setSecret(value)
           }}
         />
-      </article>
+      </AppSurface>
     )
   }
 

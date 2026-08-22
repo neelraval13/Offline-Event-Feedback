@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  AppButton,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  type DataColumn,
+} from '../../components/design-system'
 import {
   describeFailure,
   queryRegistrations,
@@ -8,6 +15,12 @@ import type {
   RegistrationReconciliationStatus,
 } from '../../lib/reporting/types'
 import { RegistrationDetail } from './RegistrationDetail'
+import {
+  FilterChips,
+  REGISTRATION_STATUS_LABELS,
+  RegistrationStatusPill,
+  SearchForm,
+} from './statusPills'
 import { useReportingSession } from './session'
 
 /*
@@ -20,16 +33,25 @@ import { useReportingSession } from './session'
  * The search term is sent in a POST body. It is very often a phone number, and
  * a phone number in a URL ends up in the server's access log and the browser's
  * history.
+ *
+ * ## What V2 changed
+ *
+ * Presentation. The query, the cursor, the filters and the detail request are
+ * untouched. The detail moved from a panel appended below the table into a
+ * right-side Sheet, because opening one participant in a list of a thousand
+ * should not move the rows around them: the next action is almost always to
+ * close it and open the next, and a layout that shifts several hundred pixels
+ * each time makes that a hunt.
  */
 
 type StatusFilter = RegistrationReconciliationStatus | 'all'
 
-const STATUS_LABELS: Record<StatusFilter, string> = {
-  all: 'All',
-  matched: 'Matched',
-  without_feedback: 'No response',
-  multiple_feedback: 'Several responses',
-}
+const FILTERS: readonly { readonly key: StatusFilter; readonly label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'matched', label: REGISTRATION_STATUS_LABELS.matched },
+  { key: 'without_feedback', label: REGISTRATION_STATUS_LABELS.without_feedback },
+  { key: 'multiple_feedback', label: REGISTRATION_STATUS_LABELS.multiple_feedback },
+]
 
 interface RegistrationTableProps {
   readonly eventId: string
@@ -38,6 +60,12 @@ interface RegistrationTableProps {
   /** Opens the browser pre-filtered, used by the anomaly screens. */
   readonly initialStatus?: StatusFilter
   readonly duplicatesOnly?: boolean
+  /**
+   * Hides the status chips where something above has already chosen the
+   * filter. Needs review picks a category and then shows this table; two rows
+   * of status controls that can disagree with each other is one row too many.
+   */
+  readonly filtersHidden?: boolean
 }
 
 export function RegistrationTable({
@@ -46,6 +74,7 @@ export function RegistrationTable({
   refreshToken,
   initialStatus = 'all',
   duplicatesOnly = false,
+  filtersHidden = false,
 }: RegistrationTableProps) {
   const session = useReportingSession()
   const [status, setStatus] = useState<StatusFilter>(initialStatus)
@@ -92,142 +121,150 @@ export function RegistrationTable({
     void load(null)
   }, [load, refreshToken])
 
-  function submitSearch(event: FormEvent) {
-    event.preventDefault()
-    setSearch(searchInput.trim())
-  }
+  const columns: readonly DataColumn<RegistrationRow>[] = [
+    {
+      key: 'code',
+      header: 'Code',
+      width: '13rem',
+      cell: (row) => (
+        <span className="flex flex-col gap-0.5">
+          <span className="font-mono text-small text-ink">{row.publicCode}</span>
+          {row.potentialDuplicate && (
+            <span className="font-ui text-caption uppercase tracking-[0.08em] text-warn">
+              Possible duplicate
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'participant',
+      header: 'Participant',
+      cell: (row) => (
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate font-body text-base text-ink">{row.name}</span>
+          <span className="truncate font-ui text-small text-faint">{row.email}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      width: '10rem',
+      hideOnNarrow: true,
+      cell: (row) => (
+        <span className="font-ui text-small tabular-nums text-muted">{row.phone}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '11rem',
+      /* Always a status: a run contains exactly what it classified. */
+      cell: (row) => <RegistrationStatusPill status={row.reconciliationStatus} />,
+    },
+    {
+      key: 'responses',
+      header: 'Responses',
+      numeric: true,
+      width: '9rem',
+      cell: (row) => (
+        <span className="flex flex-col items-end gap-0.5">
+          <span className="font-ui text-small tabular-nums text-ink">
+            {row.validFeedbackCount}
+          </span>
+          {/*
+            Absent for several responses, because the server sends no summary
+            there: showing one of them would present a guess as the
+            participant's answer.
+
+            Also absent when the summary carries no rating. `overallRating` is
+            the `feedback-v1` field and is null under any other questionnaire,
+            so V1's "rated none" told a reader that a Flying Flea rider had
+            skipped a question they had in fact answered on a different scale.
+            The count beside it is unaffected, and the answer itself is one
+            click away in the detail panel. This is the same mistake
+            `ratingCell.ts` exists to prevent in the response list.
+          */}
+          {row.feedbackSummary?.overallRating != null && (
+            <span className="font-ui text-caption text-faint">
+              rated {row.feedbackSummary.overallRating}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'open',
+      header: '',
+      width: '5rem',
+      cell: () => <span className="font-ui text-small text-interactive">Open</span>,
+    },
+  ]
 
   return (
-    <section aria-labelledby="registration-table-heading">
-      <h2 id="registration-table-heading" className="pending__title">
-        Participants
-      </h2>
+    <div className="flex flex-col gap-5">
+      <SearchForm
+        id="registration-search"
+        label="Search name, code, phone or email"
+        placeholder="Name, code, phone or email"
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={() => setSearch(searchInput.trim())}
+        onClear={() => {
+          setSearchInput('')
+          setSearch('')
+        }}
+        hasSearch={search.length > 0}
+      />
 
-      <form className="button-row" onSubmit={submitSearch} role="search">
-        <label className="field__label" htmlFor="registration-search">
-          Search name, code, phone or email
-        </label>
-        <input
-          id="registration-search"
-          className="field__input"
-          type="search"
-          autoComplete="off"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
+      {!duplicatesOnly && !filtersHidden && (
+        <FilterChips
+          label="Filter by status"
+          options={FILTERS}
+          value={status}
+          onChange={setStatus}
         />
-        <button type="submit" className="button">
-          Search
-        </button>
-        {search.length > 0 && (
-          <button
-            type="button"
-            className="button button--small"
-            onClick={() => {
-              setSearchInput('')
-              setSearch('')
-            }}
-          >
-            Clear
-          </button>
-        )}
-      </form>
-
-      {!duplicatesOnly && (
-        <div className="button-row" role="group" aria-label="Filter by status">
-          {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              className="choice"
-              aria-pressed={status === option}
-              onClick={() => setStatus(option)}
-            >
-              {STATUS_LABELS[option]}
-            </button>
-          ))}
-        </div>
       )}
 
       {error !== null && (
-        <p className="notice notice--error" role="alert">
-          {error}
-        </p>
+        <ErrorState title="Participants could not be read">{error}</ErrorState>
       )}
 
-      <p className="screen__note" aria-live="polite">
+      <p aria-live="polite" className="font-body text-small text-muted">
         {loading && rows.length === 0
           ? 'Loading…'
           : `Showing ${rows.length.toLocaleString()} participant(s)${cursor === null ? '' : ', more available'}.`}
       </p>
 
-      <table className="report-table">
-        <thead>
-          <tr>
-            <th scope="col">Code</th>
-            <th scope="col">Name</th>
-            <th scope="col">Phone</th>
-            <th scope="col">Status</th>
-            <th scope="col">Responses</th>
-            <th scope="col" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.recordId}>
-              <td>
-                <span className="recent__code">{row.publicCode}</span>
-                {row.potentialDuplicate && (
-                  <span className="report-flag" title="Possible duplicate registration">
-                    {' '}
-                    possible duplicate
-                  </span>
-                )}
-              </td>
-              <td>{row.name}</td>
-              <td>{row.phone}</td>
-              {/* Always a status: a run contains exactly what it classified. */}
-              <td>{STATUS_LABELS[row.reconciliationStatus]}</td>
-              <td>
-                {row.validFeedbackCount}
-                {/*
-                  Deliberately blank for several responses: showing one of them
-                  would present a guess as the participant's answer.
-                */}
-                {row.feedbackSummary !== null &&
-                  `, rated ${row.feedbackSummary.overallRating ?? 'none'}`}
-              </td>
-              <td>
-                <button
-                  type="button"
-                  className="button button--small"
-                  onClick={() =>
-                    setSelected((current) =>
-                      current === row.recordId ? null : row.recordId,
-                    )
-                  }
-                >
-                  {selected === row.recordId ? 'Hide' : 'Open'}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {rows.length === 0 && !loading && error === null && (
-        <p className="screen__note">No participants match this view.</p>
-      )}
+      <DataTable
+        label="Participants"
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.recordId}
+        loading={loading && rows.length === 0}
+        onRowClick={(row) => setSelected(row.recordId)}
+        isRowSelected={(row) => row.recordId === selected}
+        empty={
+          error === null ? (
+            <EmptyState
+              title="No participants match this view"
+              description="Clear the search or choose a different filter."
+            />
+          ) : null
+        }
+      />
 
       {cursor !== null && (
-        <div className="button-row">
-          <button
-            type="button"
-            className="button"
-            disabled={loading}
+        <div>
+          <AppButton
+            variant="secondary"
+            busy={loading}
+            busyLabel="Loading…"
             onClick={() => void load(cursor)}
           >
-            {loading ? 'Loading…' : 'Load more'}
-          </button>
+            Load more
+          </AppButton>
         </div>
       )}
 
@@ -239,6 +276,6 @@ export function RegistrationTable({
           onClose={() => setSelected(null)}
         />
       )}
-    </section>
+    </div>
   )
 }

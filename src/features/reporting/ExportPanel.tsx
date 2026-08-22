@@ -1,4 +1,12 @@
+import {
+  CheckCircle2Icon,
+  DownloadIcon,
+  FileSpreadsheetIcon,
+  ShieldAlertIcon,
+} from 'lucide-react'
 import { useState } from 'react'
+import { AppButton, ErrorState, Section } from '../../components/design-system'
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert'
 import {
   describeFailure,
   downloadExport,
@@ -19,9 +27,56 @@ import { useReportingSession } from './session'
  * Filenames come from the server and carry an event, a kind and a date. Never a
  * participant: a filename is visible in a downloads folder and an email client
  * long before anyone opens the file.
+ *
+ * ## What V2 changed
+ *
+ * Emphasis and honesty, not mechanics. `downloadExport` and `saveExport` are
+ * called exactly as before.
+ *
+ * Four exports of equal weight is an accurate list and unhelpful guidance. The
+ * workbook is the complete report and the thing a client is handed; the three
+ * CSVs are extracts for somebody doing further work. So the workbook is primary
+ * and its sheets are named.
+ *
+ * Those sheet names were checked against `server/reporting/exportXlsx.ts`
+ * rather than carried over from the previous copy, which listed five and
+ * omitted `Participant Feedback`, the sheet `participantFeedback.ts` calls the
+ * one most readers actually want.
  */
 
-const EXPORTS: readonly {
+/** Read from the workbook builder, in the order it adds them. */
+const WORKBOOK_SHEETS: readonly { readonly name: string; readonly purpose: string }[] = [
+  {
+    name: 'Summary',
+    purpose:
+      'Run identity, every count, and the coverage figures with the rule that produced each one spelled out.',
+  },
+  {
+    name: 'Participant Feedback',
+    purpose:
+      'One readable row per rider and what they said, including riders with no registration. A view over the audit sheets, never a source of truth.',
+  },
+  {
+    name: 'Registrations',
+    purpose: 'One row per registration exactly as the run classified it.',
+  },
+  {
+    name: 'Feedback',
+    purpose:
+      'One row per response, including responses that matched no registration and both halves of an ambiguous pair.',
+  },
+  {
+    name: 'Duplicate Candidates',
+    purpose: 'Registration pairs sharing a normalised phone number or email.',
+  },
+  {
+    name: 'Metadata',
+    purpose:
+      'Which run produced the file, and the membership, analytics, coverage and matching rules behind its figures.',
+  },
+]
+
+const CSV_EXPORTS: readonly {
   readonly kind: ExportKind
   readonly label: string
   readonly description: string
@@ -41,13 +96,8 @@ const EXPORTS: readonly {
   {
     kind: 'duplicate-candidates.csv',
     label: 'Possible duplicates (CSV)',
-    description: 'Registration pairs sharing a normalised phone number or email.',
-  },
-  {
-    kind: 'report.xlsx',
-    label: 'Full workbook (XLSX)',
     description:
-      'Summary, participants, responses, duplicate candidates and a metadata sheet recording exactly which rule produced each figure.',
+      'Registration pairs sharing a normalised phone number or email. Never truncated, unlike the on-screen preview.',
   },
 ]
 
@@ -58,6 +108,7 @@ interface ExportPanelProps {
 
 export function ExportPanel({ eventId, runId }: ExportPanelProps) {
   const session = useReportingSession()
+  /** Only one export prepares at a time; the rest are disabled while it does. */
   const [busy, setBusy] = useState<ExportKind | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
@@ -82,51 +133,112 @@ export function ExportPanel({ eventId, runId }: ExportPanelProps) {
   }
 
   return (
-    <section aria-labelledby="export-heading">
-      <h2 id="export-heading" className="pending__title">
-        Export
-      </h2>
-
-      <p className="screen__note">
-        Exports contain participants&rsquo; names, phone numbers and email
-        addresses. They are generated from the selected reconciliation run and
-        leave this screen as files on the organiser&rsquo;s machine, so handle
-        them accordingly.
-      </p>
+    <div className="flex flex-col gap-page">
+      <Alert tone="warn">
+        <ShieldAlertIcon aria-hidden="true" />
+        <AlertTitle>These files contain participant contact details</AlertTitle>
+        <AlertDescription>
+          Every export carries participants&rsquo; names, phone numbers, email
+          addresses and their responses, and the workbook and participants CSV
+          also carry driving licence numbers where riders gave them. Files leave
+          this protected workspace and are handed to your browser, after which
+          nothing in this application can reach them again.
+        </AlertDescription>
+      </Alert>
 
       {error !== null && (
-        <p className="notice notice--error" role="alert">
-          {error}
-        </p>
+        <ErrorState title="That export could not be prepared">{error}</ErrorState>
       )}
 
       {saved !== null && (
-        <p className="notice notice--success" role="status">
-          Downloaded {saved}.
-        </p>
+        <Alert tone="ok" role="status">
+          <CheckCircle2Icon aria-hidden="true" />
+          <AlertDescription>Downloaded {saved}.</AlertDescription>
+        </Alert>
       )}
 
-      <ul className="surface-list">
-        {EXPORTS.map((entry) => (
-          <li key={entry.kind}>
-            <button
-              type="button"
-              className="button"
-              disabled={busy !== null}
-              onClick={() => void run(entry.kind)}
-            >
-              {busy === entry.kind ? 'Preparing…' : entry.label}
-            </button>
-            <p className="surface-list__description">{entry.description}</p>
-          </li>
-        ))}
-      </ul>
+      <Section
+        title="Full report"
+        description="The complete event report, and the file to hand over. Six sheets in one workbook."
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-10">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <p className="flex items-center gap-2.5">
+              <FileSpreadsheetIcon aria-hidden="true" className="size-5 text-accent" />
+              <span className="font-display text-title tracking-wide text-ink">
+                Full workbook (XLSX)
+              </span>
+            </p>
 
-      <p className="screen__note">
+            <dl className="flex flex-col">
+              {WORKBOOK_SHEETS.map((sheet) => (
+                <div
+                  key={sheet.name}
+                  className="flex flex-col gap-0.5 border-t border-line py-2.5 sm:flex-row sm:gap-6"
+                >
+                  <dt className="font-ui text-small font-semibold text-ink sm:w-[12rem] sm:shrink-0">
+                    {sheet.name}
+                  </dt>
+                  <dd className="font-body text-small text-muted">{sheet.purpose}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="shrink-0">
+            <AppButton
+              busy={busy === 'report.xlsx'}
+              busyLabel="Preparing…"
+              disabled={busy !== null && busy !== 'report.xlsx'}
+              onClick={() => void run('report.xlsx')}
+            >
+              <DownloadIcon />
+              Download workbook
+            </AppButton>
+          </div>
+        </div>
+      </Section>
+
+      <Section
+        title="Data extracts"
+        description="Single-table CSVs for further analysis. Everything in them is also in the workbook."
+      >
+        <div className="flex flex-col">
+          {CSV_EXPORTS.map((entry) => (
+            <div
+              key={entry.kind}
+              className="flex flex-col gap-3 border-t border-line py-4 first:border-t-0 first:pt-0 sm:flex-row sm:items-start sm:gap-8"
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="font-ui text-base font-semibold text-ink">
+                  {entry.label}
+                </span>
+                <span className="max-w-measure font-body text-small text-muted">
+                  {entry.description}
+                </span>
+              </div>
+              <div className="shrink-0">
+                <AppButton
+                  variant="secondary"
+                  busy={busy === entry.kind}
+                  busyLabel="Preparing…"
+                  disabled={busy !== null && busy !== entry.kind}
+                  onClick={() => void run(entry.kind)}
+                >
+                  Download
+                </AppButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <p className="max-w-measure font-body text-small text-faint">
         Text captured from participants is written so that a spreadsheet treats
         it as text. A comment beginning <code>=</code> and a phone number
-        beginning <code>+</code> are otherwise interpreted as formulas.
+        beginning <code>+</code> are otherwise interpreted as formulas. Filenames
+        carry the event, the kind and the date, never a participant.
       </p>
-    </section>
+    </div>
   )
 }

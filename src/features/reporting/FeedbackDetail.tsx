@@ -1,4 +1,14 @@
-import { useEffect, useState } from 'react'
+import { InfoIcon, OctagonAlertIcon } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ErrorState, LoadingState } from '../../components/design-system'
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '../../components/ui/sheet'
 import {
   describeFailure,
   fetchFeedbackDetail,
@@ -8,6 +18,8 @@ import type {
   FeedbackReconciliationStatus,
 } from '../../lib/reporting/types'
 import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
+import { captureLabel } from './responseIdentity'
+import { FeedbackStatusPill } from './statusPills'
 import { useReportingSession } from './session'
 
 /*
@@ -20,22 +32,26 @@ import { useReportingSession } from './session'
  *
  * For an identity conflict, where the scanned participant ID and the printed
  * code point at different people, the screen shows what each identifier resolves
- * to *right now*. That is a diagnostic to help an organiser work out what happened
- * at the desk, not a decision: nothing here resolves the conflict or picks a side.
+ * to *right now*. That is a diagnostic to help an organiser work out what
+ * happened at the desk, not a decision: nothing here resolves the conflict,
+ * reassigns the response or picks a side.
+ *
+ * ## Read-only, in a Sheet inside the session
+ *
+ * No edit, no reassign, no delete. The component stays in the workspace subtree,
+ * so a 401 unmounts it along with everything else it was showing.
  */
 
-const STATUS_LABELS: Record<FeedbackReconciliationStatus, string> = {
-  matched: 'Matched to one participant',
-  without_registration: 'No matching registration',
-  standalone: 'Direct feedback: rider has no Point A registration',
-  identity_conflict: 'Identity conflict: identifiers disagree',
-  multiple_feedback: 'One of several responses for one participant',
-}
-
-const CAPTURE_LABELS: Record<Detail['captureMethod'], string> = {
-  qr: 'Scanned sticker',
-  manual: 'Typed code',
-  contact: 'Contact details given at Point B',
+const STATUS_EXPLANATION: Record<FeedbackReconciliationStatus, string> = {
+  matched: 'Matched to exactly one participant.',
+  without_registration:
+    'The code on this response matches no registration in this event. Usually a mistyped code at Point B, or a Point A device that has not synced. The response is kept in full.',
+  standalone:
+    'No registration in this event has both this phone number and this email address, so this rider did not go through Point A. That is the expected outcome for the contact path, not a problem to resolve. Their answers count towards the event figures.',
+  identity_conflict:
+    'Identifiers that should describe one person do not. Nothing on this screen picks one.',
+  multiple_feedback:
+    'One of several valid responses for one participant. None of them is treated as the answer.',
 }
 
 const MATCH_LABELS: Record<string, string> = {
@@ -114,235 +130,251 @@ export function FeedbackDetail({
     }
   }, [session, eventId, recordId, runId])
 
+  const readable =
+    detail !== null &&
+    (detail.formVersion === SUPPORTED_FORM_VERSION ||
+      detail.formVersion === CAMPAIGN_FORM_VERSION)
+
   return (
-    <aside className="report-detail" aria-label="Response detail">
-      <div className="button-row">
-        <button type="button" className="button button--small" onClick={onClose}>
-          Close
-        </button>
-      </div>
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="sm:max-w-2xl" aria-label="Response detail">
+        <SheetHeader>
+          <SheetTitle>
+            {detail === null
+              ? 'Response'
+              : (detail.publicCode ?? detail.respondentName ?? 'Response without a code')}
+          </SheetTitle>
+          <SheetDescription>
+            {detail === null
+              ? 'Loading this response.'
+              : `${new Date(detail.createdAt).toLocaleString()} · Read only. Nothing on this panel edits, reassigns or deletes a response.`}
+          </SheetDescription>
+        </SheetHeader>
 
-      {error !== null && (
-        <p className="notice notice--error" role="alert">
-          {error}
-        </p>
-      )}
+        {error !== null && (
+          <ErrorState title="This response could not be read">{error}</ErrorState>
+        )}
 
-      {detail === null && error === null && <p className="screen__note">Loading…</p>}
+        {detail === null && error === null && (
+          <LoadingState label="Reading this response…" rows={4} />
+        )}
 
-      {detail !== null && (
-        <>
-          <h3 className="section-title">
-            Response{' '}
-            {detail.publicCode === null ? (
-              <span>{detail.respondentName ?? 'without a code'}</span>
-            ) : (
-              <span className="recent__code">{detail.publicCode}</span>
-            )}
-          </h3>
+        {detail !== null && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <FeedbackStatusPill status={detail.reconciliationStatus} />
+              <p className="font-body text-small text-muted">
+                {STATUS_EXPLANATION[detail.reconciliationStatus]}
+              </p>
+            </div>
 
-          <dl className="station-badge">
-            <div>
-              <dt>Public code</dt>
+            <Group title="Identity resolution">
               {/* A contact response never had a sticker. An empty cell would
                   read as a code that failed to load. */}
-              <dd>{detail.publicCode ?? 'No code'}</dd>
-            </div>
-            <div>
-              <dt>Reconciliation status</dt>
-              <dd>{STATUS_LABELS[detail.reconciliationStatus]}</dd>
-            </div>
-            <div>
-              <dt>Captured</dt>
-              <dd>{CAPTURE_LABELS[detail.captureMethod]}</dd>
-            </div>
-            <div>
-              <dt>Matched by</dt>
-              <dd>
-                {detail.matchMethod === null
-                  ? 'Not matched'
-                  : (MATCH_LABELS[detail.matchMethod] ?? detail.matchMethod)}
-              </dd>
-            </div>
-            <div>
-              <dt>Linked registration</dt>
-              <dd>
-                {detail.linkedRegistration === null
-                  ? 'None'
-                  : `${detail.linkedRegistration.name} (${detail.linkedRegistration.publicCode})`}
-              </dd>
-            </div>
-            <div>
-              <dt>Questionnaire</dt>
-              <dd>
-                {detail.formVersion}
-                {detail.formVersion === SUPPORTED_FORM_VERSION ||
-                detail.formVersion === CAMPAIGN_FORM_VERSION
-                  ? ''
-                  : ' (not readable by this build)'}
-              </dd>
-            </div>
-            <div>
-              <dt>Answered</dt>
-              <dd>{new Date(detail.createdAt).toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Last updated</dt>
-              <dd>{new Date(detail.updatedAt).toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Revision</dt>
-              <dd>{detail.revision}</dd>
-            </div>
-            <div>
-              <dt>Station</dt>
-              <dd>{detail.stationId}</dd>
-            </div>
-            <div>
-              <dt>Record ID</dt>
-              <dd>{detail.recordId}</dd>
-            </div>
-            {detail.participantId !== null && (
-              <div>
-                <dt>Participant ID</dt>
-                <dd>{detail.participantId}</dd>
-              </div>
+              <Row label="Public code" value={detail.publicCode ?? 'No code'} />
+              <Row label="Captured" value={captureLabel(detail)} />
+              <Row
+                label="Matched by"
+                value={
+                  detail.matchMethod === null
+                    ? 'Not matched'
+                    : (MATCH_LABELS[detail.matchMethod] ?? detail.matchMethod)
+                }
+              />
+              <Row
+                label="Linked registration"
+                value={
+                  detail.linkedRegistration === null
+                    ? 'None'
+                    : `${detail.linkedRegistration.name} (${detail.linkedRegistration.publicCode})`
+                }
+              />
+              <Row
+                label="Questionnaire"
+                value={
+                  readable
+                    ? detail.formVersion
+                    : `${detail.formVersion} (not readable by this build)`
+                }
+                mono
+              />
+            </Group>
+
+            {/*
+              The rider's own details, when they are what identifies the
+              response. Privileged PII on a privileged screen, shown exactly as
+              the rider typed it: this is the evidence a match was made from,
+              or, on a direct response, the only way to reach the person at all.
+            */}
+            {detail.captureMethod === 'contact' && (
+              <Group title="Details given by the rider">
+                <p className="pb-2 font-body text-small text-faint">
+                  Entered at Point B by the rider themselves. Nothing was looked
+                  up: these details are the identity of this response.
+                </p>
+                <Row label="Name" value={detail.respondentName ?? 'None'} />
+                <Row label="Phone" value={detail.respondentPhone ?? 'None'} />
+                <Row label="Email" value={detail.respondentEmail ?? 'None'} />
+              </Group>
             )}
-            <div>
-              <dt>Captured on device</dt>
-              <dd>{detail.sourceDeviceId}</dd>
-            </div>
-            <div>
-              <dt>Uploaded by device</dt>
-              <dd>{detail.lastUploaderDeviceId}</dd>
-            </div>
-          </dl>
 
-          {/*
-            The rider's own details, when they are what identifies the response.
-            Privileged PII, on a privileged screen, shown exactly as the rider
-            typed it: this is the evidence a match was made from, or, on a
-            direct response, the only way to reach the person at all.
-          */}
-          {detail.captureMethod === 'contact' && (
-            <>
-              <h4 className="section-title">Details given by the rider</h4>
-              <p className="screen__note">
-                Entered at Point B by the rider themselves. Nothing was looked
-                up: these details are the identity of this response.
-              </p>
-              <dl className="station-badge">
-                <div>
-                  <dt>Name</dt>
-                  <dd>{detail.respondentName ?? 'None'}</dd>
-                </div>
-                <div>
-                  <dt>Phone</dt>
-                  <dd>{detail.respondentPhone ?? 'None'}</dd>
-                </div>
-                <div>
-                  <dt>Email</dt>
-                  <dd>{detail.respondentEmail ?? 'None'}</dd>
-                </div>
-              </dl>
-
-              {detail.reconciliationStatus === 'standalone' && (
-                <p className="notice" role="status">
-                  No registration in this event has both this phone number and
-                  this email address, so this rider did not go through Point A.
-                  That is the expected outcome for this path and not a problem
-                  to resolve. Their answers count towards the event figures.
-                </p>
+            {detail.reconciliationStatus === 'identity_conflict' &&
+              detail.captureMethod === 'contact' && (
+                <Alert tone="danger">
+                  <OctagonAlertIcon aria-hidden="true" />
+                  <AlertDescription>
+                    More than one registration in this event has both this phone
+                    number and this email address, so there is no single rider
+                    this response could belong to. Nothing on this screen picks
+                    one. The registrations concerned are listed under possible
+                    duplicate registrations.
+                  </AlertDescription>
+                </Alert>
               )}
 
-              {detail.reconciliationStatus === 'identity_conflict' && (
-                <p className="notice notice--error" role="alert">
-                  More than one registration in this event has both this phone
-                  number and this email address, so there is no single rider
-                  this response could belong to. Nothing on this screen picks
-                  one. The registrations concerned are listed under possible
-                  duplicate registrations.
-                </p>
-              )}
-            </>
-          )}
-
-          <h4 className="section-title">Answers as recorded</h4>
-
-          {/*
-            The campaign's own questions, in its own words. Rendered from the
-            campaign config rather than from the stored keys, so a reader sees
-            what the rider was asked rather than what the database calls it.
-          */}
-          {detail.formVersion === CAMPAIGN_FORM_VERSION && (
-            <dl className="station-badge">
-              {CAMPAIGN_QUESTIONS.map((question) => (
-                <div key={question.key}>
-                  <dt>{question.prompt}</dt>
-                  <dd>{renderAnswer(detail.answers[question.key])}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-
-          {detail.formVersion !== SUPPORTED_FORM_VERSION &&
-            detail.formVersion !== CAMPAIGN_FORM_VERSION && (
-            <p className="notice" role="status">
-              This response was captured under questionnaire{' '}
-              <strong>{detail.formVersion}</strong>, which this build does not
-              know. The answers are shown exactly as
-              stored and are excluded from every rating, experience and
-              recommendation figure. A later questionnaire may reuse a field name
-              for a different question, and reading it as if it were the same
-              would produce a number that looks right and means nothing.
-            </p>
-          )}
-
-          {/*
-            The raw fallback, for `feedback-v1` and for any questionnaire this
-            build does not know. Nothing is hidden and nothing is relabelled.
-          */}
-          {detail.formVersion !== CAMPAIGN_FORM_VERSION && (
-            <dl className="station-badge">
-              {Object.entries(detail.answers).map(([question, answer]) => (
-                <div key={question}>
-                  <dt>{question.replace(/_/g, ' ')}</dt>
-                  <dd>{renderAnswer(answer)}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-
-          {detail.diagnostics !== null && (
-            <>
-              <h4 className="section-title">Identity conflict</h4>
-              <p className="notice" role="status">
-                The scanned participant ID and the printed code on this response
-                point at different registrations. Shown for diagnosis only.
-                Nothing on this screen resolves the conflict.
-              </p>
-              <dl className="station-badge">
-                <div>
-                  <dt>Participant ID resolves to</dt>
-                  <dd>
+            {detail.diagnostics !== null && (
+              <Alert tone="danger">
+                <OctagonAlertIcon aria-hidden="true" />
+                <AlertTitle>Identifiers disagree</AlertTitle>
+                <AlertDescription>
+                  <span className="block pb-1">
+                    Participant ID resolves to{' '}
                     {detail.diagnostics.participantIdResolvesTo === null
-                      ? 'No registration'
+                      ? 'no registration'
                       : `${detail.diagnostics.participantIdResolvesTo.name} (${detail.diagnostics.participantIdResolvesTo.publicCode})`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Printed code resolves to</dt>
-                  <dd>
+                    .
+                  </span>
+                  <span className="block pb-1">
+                    Printed code resolves to{' '}
                     {detail.diagnostics.publicCodeResolvesTo === null
-                      ? 'No registration'
+                      ? 'no registration'
                       : `${detail.diagnostics.publicCodeResolvesTo.name} (${detail.diagnostics.publicCodeResolvesTo.publicCode})`}
-                  </dd>
-                </div>
-              </dl>
-            </>
-          )}
-        </>
-      )}
-    </aside>
+                    .
+                  </span>
+                  Shown for diagnosis only. Nothing on this screen resolves the
+                  conflict.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Group title="Answers as recorded">
+              {!readable && (
+                <Alert tone="neutral" className="mb-3">
+                  <InfoIcon aria-hidden="true" />
+                  <AlertDescription>
+                    Captured under questionnaire{' '}
+                    <span className="font-mono">{detail.formVersion}</span>, which
+                    this build does not know. The answers are shown exactly as
+                    stored and are excluded from every rating, experience and
+                    recommendation figure. A later questionnaire may reuse a field
+                    name for a different question, and reading it as if it were
+                    the same would produce a number that looks right and means
+                    nothing.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/*
+                The campaign's own questions, in its own words, rendered from the
+                campaign config rather than from the stored keys so a reader sees
+                what the rider was asked.
+              */}
+              {detail.formVersion === CAMPAIGN_FORM_VERSION
+                ? CAMPAIGN_QUESTIONS.map((question) => (
+                    <Answer
+                      key={question.key}
+                      prompt={question.prompt}
+                      value={renderAnswer(detail.answers[question.key])}
+                    />
+                  ))
+                : /* The raw fallback, for `feedback-v1` and for any questionnaire
+                     this build does not know. Nothing hidden, nothing relabelled. */
+                  Object.entries(detail.answers).map(([question, answer]) => (
+                    <Answer
+                      key={question}
+                      prompt={question.replace(/_/g, ' ')}
+                      value={renderAnswer(answer)}
+                    />
+                  ))}
+            </Group>
+
+            <Group title="Identifiers, for support">
+              <Row label="Record ID" value={detail.recordId} mono />
+              {detail.participantId !== null && (
+                <Row label="Participant ID" value={detail.participantId} mono />
+              )}
+              <Row label="Station" value={detail.stationId} mono />
+              <Row label="Revision" value={String(detail.revision)} mono />
+              <Row
+                label="Last updated"
+                value={new Date(detail.updatedAt).toLocaleString()}
+              />
+              <Row label="Captured on device" value={detail.sourceDeviceId} mono />
+              <Row label="Uploaded by device" value={detail.lastUploaderDeviceId} mono />
+            </Group>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function Group({
+  title,
+  children,
+}: {
+  readonly title: string
+  readonly children: ReactNode
+}) {
+  return (
+    <section className="flex flex-col">
+      <h3 className="border-b border-line pb-2 font-ui text-label font-semibold uppercase tracking-[0.14em] text-muted">
+        {title}
+      </h3>
+      <div className="flex flex-col">{children}</div>
+    </section>
+  )
+}
+
+/** A free-text answer can be a paragraph, so it wraps rather than truncating. */
+function Answer({
+  prompt,
+  value,
+}: {
+  readonly prompt: string
+  readonly value: string
+}) {
+  return (
+    <div className="flex flex-col gap-1 border-b border-line py-3 last:border-b-0">
+      <span className="font-body text-small text-muted">{prompt}</span>
+      <span className="font-body text-base break-words whitespace-pre-wrap text-ink">
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly mono?: boolean
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-0.5 border-b border-line py-2.5 last:border-b-0">
+      <span className="font-body text-small text-muted">{label}</span>
+      <span
+        className={
+          mono
+            ? 'break-all select-all font-mono text-small text-ink'
+            : 'break-words text-right font-body text-base text-ink'
+        }
+      >
+        {value}
+      </span>
+    </div>
   )
 }
