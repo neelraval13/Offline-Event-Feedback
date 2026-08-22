@@ -168,6 +168,17 @@
   --text-label: 0.75rem;       /* 12px. Field labels, table headers.      */
   --text-small: 0.8125rem;     /* 13px. Metadata, helper text.            */
   --text-base: 0.9375rem;      /* 15px. Body and controls.                */
+  /*
+   * 16px, and it exists for one reason: iOS and iPadOS Safari zoom the page
+   * when a text control smaller than 16px takes focus, and there is no way to
+   * decline that zoom without also taking away the reader's own zoom.
+   *
+   * So the control keeps `--text-base` on a desktop pointer, where the
+   * behaviour does not exist and 15px is the intended typography, and steps up
+   * to this on the devices that do it. See `CONTROL_TEXT` in
+   * `src/lib/ui/controlText.ts`, which is what every editable control uses.
+   */
+  --text-control: 1rem;        /* 16px. Editable controls on touch devices. */
   --text-lead: 1.0625rem;      /* 17px. Page descriptions, questions.     */
   --text-title: 1.375rem;      /* 22px. Section and card titles.          */
   --text-page: 1.875rem;       /* 30px. One per screen.                   */

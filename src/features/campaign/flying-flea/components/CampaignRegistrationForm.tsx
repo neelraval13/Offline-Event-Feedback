@@ -3,6 +3,7 @@ import { AppButton, FormField } from '../../../../components/design-system'
 import { Input } from '../../../../components/ui/input'
 import { StationStep } from '../../../registration/StationStep'
 import { cn } from '../../../../lib/ui/cn'
+import { CONTROL_TEXT } from '../../../../lib/ui/controlText'
 import type {
   CampaignFieldCorrections,
   FlyingFleaColour,
@@ -227,7 +228,8 @@ export function CampaignRegistrationForm({
                 className={cn(
                   'flex min-h-touch w-full appearance-none rounded-control',
                   'border border-line bg-field px-3.5 py-2',
-                  'font-ui text-base text-ink',
+                  'font-ui text-ink',
+                  CONTROL_TEXT,
                   'transition-[border-color] duration-150 hover:border-line-strong',
                   'focus-visible:border-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive/40',
                   'disabled:cursor-not-allowed disabled:opacity-50',

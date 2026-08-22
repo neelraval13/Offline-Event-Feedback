@@ -36,6 +36,7 @@ import {
 } from '../../lib/backup/backupMetadata'
 import { db, peekDeviceId } from '../../lib/storage'
 import { cn } from '../../lib/ui/cn'
+import { CONTROL_TEXT } from '../../lib/ui/controlText'
 import { FactRow, formatMoment, SectionHead } from './console'
 
 /** Short enough to type at a desk, long enough to be worth encrypting behind. */
@@ -907,7 +908,8 @@ function BackupFileField({
           disabled={disabled}
           className={cn(
             'flex min-h-touch w-full items-center rounded-control border border-line bg-field px-3.5 py-2',
-            'font-ui text-base text-ink',
+            'font-ui text-ink',
+            CONTROL_TEXT,
             'file:mr-3 file:rounded-chip file:border file:border-line file:bg-surface',
             'file:px-3 file:py-1.5 file:font-ui file:text-small file:text-ink',
             'hover:border-line-strong',

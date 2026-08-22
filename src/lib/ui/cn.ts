@@ -58,6 +58,13 @@ export const V2_FONT_SIZES = [
   'label',
   'small',
   'base',
+  /*
+   * Not a step in the reading scale: the size an editable control takes on a
+   * device that would otherwise zoom it. It has to be listed here all the same,
+   * or `cn` treats `text-control` as an unknown class and a later `text-*`
+   * colour silently deletes it, which is precisely the zoom bug returning.
+   */
+  'control',
   'lead',
   'title',
   'page',

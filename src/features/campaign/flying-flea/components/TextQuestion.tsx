@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { MAX_CAMPAIGN_TEXT_LENGTH } from '../../../../types'
 import { cn } from '../../../../lib/ui/cn'
+import { CONTROL_TEXT } from '../../../../lib/ui/controlText'
 import { QuestionBand } from './QuestionBand'
 
 /*
@@ -46,7 +47,8 @@ export function TextQuestion({
         onChange={(event) => onChange(event.target.value)}
         className={cn(
           'w-full rounded-control border border-line bg-field px-3.5 py-2.5',
-          'font-body text-base text-ink',
+          'font-body text-ink',
+          CONTROL_TEXT,
           'transition-[border-color,box-shadow] duration-150',
           'placeholder:text-faint hover:border-line-strong',
           'focus-visible:border-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive/40',

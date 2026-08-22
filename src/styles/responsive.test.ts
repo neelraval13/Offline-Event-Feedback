@@ -65,19 +65,19 @@ describe('text inputs', () => {
   it('are set in the largest of the small type steps, never a smaller one', () => {
     /*
      * A control that is typed into on a phone must not shrink with the
-     * viewport. `text-base` is the step the V2 scale gives to body and
-     * controls; anything below it is metadata sizing and belongs on a caption,
-     * not on a field an operator is reading their own typing in.
+     * viewport. The size itself now comes from `CONTROL_TEXT`, which
+     * `mobileInputZoom.test.ts` checks against the 16px threshold that mobile
+     * Safari zooms below; what is left here is the other half of the same
+     * guarantee, that nothing in this file quietly sets a metadata size on a
+     * field an operator reads their own typing in.
      *
      * `file:`-prefixed utilities are excluded: they style the button inside a
      * file input, not the value.
      */
-    // Comments stripped first: the note above the component discusses
-    // `md:text-small` in order to say it is deliberately absent.
     const input = withoutComments(readFileSync('src/components/ui/input.tsx', 'utf8'))
     const ownText = input.replace(/file:[a-z0-9:[\]/-]+/g, '')
 
-    expect(ownText).toMatch(/\btext-base\b/)
+    expect(ownText).toMatch(/\bCONTROL_TEXT\b/)
     expect(ownText).not.toMatch(/\btext-(?:small|caption|label)\b/)
     // And it never trades height for density at a breakpoint.
     expect(input).toMatch(/min-h-touch/)

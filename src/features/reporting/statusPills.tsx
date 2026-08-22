@@ -1,4 +1,5 @@
 import { cn } from '@/lib/ui/cn'
+import { CONTROL_TEXT } from '@/lib/ui/controlText'
 import type {
   FeedbackReconciliationStatus,
   RegistrationReconciliationStatus,
@@ -198,7 +199,8 @@ export function SearchForm({
             onChange={(event) => onChange(event.target.value)}
             className={cn(
               'flex min-h-touch w-full rounded-control border border-line bg-field px-3.5 py-2',
-              'font-ui text-base text-ink placeholder:text-faint',
+              'font-ui text-ink placeholder:text-faint',
+              CONTROL_TEXT,
               'hover:border-line-strong',
               'focus-visible:border-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive/40',
             )}

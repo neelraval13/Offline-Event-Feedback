@@ -1,6 +1,7 @@
 import { useId, type ChangeEvent } from 'react'
 import { Label } from '../../../../components/ui/label'
 import { cn } from '../../../../lib/ui/cn'
+import { CONTROL_TEXT } from '../../../../lib/ui/controlText'
 
 /*
  * A fixed-length number: the phone number and the pincode.
@@ -136,7 +137,8 @@ export function NumericField({
             'flex min-h-touch w-full rounded-control border border-line bg-field',
             // Room on the right for the counter, which sits over the field.
             'py-2 pr-16 pl-3.5',
-            'font-mono text-base tabular-nums tracking-[0.28em] text-ink',
+            'font-mono tabular-nums tracking-[0.28em] text-ink',
+            CONTROL_TEXT,
             'transition-[border-color,box-shadow] duration-150',
             'hover:border-line-strong',
             'focus-visible:border-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive/40',
