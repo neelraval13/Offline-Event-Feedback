@@ -114,9 +114,17 @@ describe('backup, verify, restore', () => {
     }
 
     const envelope = JSON.parse(backup.contents) as { ciphertext: string }
+    /*
+     * Pick a replacement that differs from the character already there.
+     * Hardcoding 'A' made this a no-op on the roughly one run in sixty-four
+     * where the ciphertext already began with 'A': the "tampered" file was then
+     * byte-identical to the original, decrypted correctly, and the test failed
+     * claiming tampering had gone undetected.
+     */
+    const first = envelope.ciphertext.slice(0, 1)
     const tampered = JSON.stringify({
       ...envelope,
-      ciphertext: `A${envelope.ciphertext.slice(1)}`,
+      ciphertext: `${first === 'A' ? 'B' : 'A'}${envelope.ciphertext.slice(1)}`,
     })
 
     expect((await verifyBackupFile(tampered, PASSPHRASE)).ok).toBe(false)

@@ -1,0 +1,48 @@
+{
+  /*
+   * The config the hosted Vercel function build actually uses.
+   *
+   * Vercel's function compiler resolves the tsconfig nearest to the entrypoint,
+   * so this file governs `api/index.ts` and every `server/` and `shared/`
+   * module it imports. Without it the compiler walked up to the root
+   * `tsconfig.json`, which is a solution-style file carrying no
+   * `compilerOptions` at all, and so compiled the entire server tree on
+   * TypeScript's bare defaults: no `types: ["node"]`, `strict` off. That is
+   * where the fifteen hosted diagnostics came from, on code that
+   * `pnpm server:typecheck` had always called clean.
+   *
+   * ## Why the options are repeated here instead of extended
+   *
+   * `extends: "../server/tsconfig.json"` is the obvious spelling and it does
+   * not work. Vercel's compiler honours an inherited `types` but not inherited
+   * strictness, which silently returns `strict`, `noUncheckedIndexedAccess` and
+   * `exactOptionalPropertyTypes` to their defaults and brings back five of the
+   * diagnostics. Declaring them directly is the only form that produces a clean
+   * hosted build.
+   *
+   * These must stay identical to `server/tsconfig.json`, so that the hosted
+   * build and `pnpm server:typecheck` are compiling the same code the same way.
+   * `apiTsconfig.test.ts` fails if they diverge or if this file is deleted.
+   */
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../server/**/*.ts", "../shared/**/*.ts"]
+}
