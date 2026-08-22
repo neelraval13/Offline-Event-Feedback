@@ -69,6 +69,27 @@ async function registerParticipant(values = PARTICIPANT) {
   return user
 }
 
+/**
+ * Opens the reprint-recovery list and returns it.
+ *
+ * V2 collapses it by default, so eight rows of codes do not compete with the
+ * rider standing in front of the operator and the page does not grow for every
+ * rider registered. What it contains once open is unchanged, which is what
+ * every assertion below is about.
+ */
+async function openRecent(
+  user: ReturnType<typeof userEvent.setup>,
+): Promise<HTMLElement> {
+  const recent = await screen.findByRole('region', {
+    name: 'Recent registrations on this device',
+  })
+
+  await user.click(
+    within(recent).getByRole('button', { name: /^Reprint an earlier sticker/ }),
+  )
+  return recent
+}
+
 /** The single record the tests just created. */
 async function onlyRecord(): Promise<RegistrationRecord> {
   const records = await listRecentRegistrations(db, 10)
@@ -194,7 +215,7 @@ describe('persistence before sticker (invariant 1)', () => {
     const user = await fillForm()
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
-    expect(await screen.findByText(/Could not save this registration/)).toBeDefined()
+    expect(await screen.findByText(/Registration not saved/)).toBeDefined()
     expect(screen.queryByTestId('sticker')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Print sticker' })).toBeNull()
     expect(window.print).not.toHaveBeenCalled()
@@ -209,7 +230,7 @@ describe('persistence before sticker (invariant 1)', () => {
     render(<RegistrationScreen />)
     const user = await fillForm()
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
-    await screen.findByText(/Could not save this registration/)
+    await screen.findByText(/Registration not saved/)
 
     add.mockRestore()
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
@@ -252,8 +273,13 @@ describe('identity comes from the saved record', () => {
     const user = await registerParticipant()
     const before = await onlyRecord()
 
-    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
+    /*
+     * Print, then reprint. The label on the button changes once a print has
+     * been attempted (see `printAttempted`); what must not change is the
+     * identity behind it, however many times it is pressed.
+     */
     await user.click(screen.getByRole('button', { name: 'Print sticker' }))
+    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
 
     const after = await onlyRecord()
     expect(after.participantId).toBe(before.participantId)
@@ -416,10 +442,11 @@ describe('printing', () => {
       .getByTestId('sticker')
       .querySelector('.sticker__qr')?.innerHTML
 
+    await user.click(screen.getByRole('button', { name: 'Print sticker' }))
     await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
     await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
 
-    expect(window.print).toHaveBeenCalledTimes(2)
+    expect(window.print).toHaveBeenCalledTimes(3)
     expect(
       screen.getByTestId('sticker').querySelector('.sticker__qr')?.innerHTML,
     ).toBe(svgBefore)
@@ -446,7 +473,7 @@ describe('correcting contact details', () => {
 
     await user.click(screen.getByRole('button', { name: 'Correct details' }))
 
-    const correction = screen.getByRole('region', {
+    const correction = screen.getByRole('dialog', {
       name: 'Correct rider details',
     })
     const email = within(correction).getByLabelText(/^Email ID/)
@@ -478,7 +505,7 @@ describe('correcting contact details', () => {
     const user = await registerParticipant()
 
     await user.click(screen.getByRole('button', { name: 'Correct details' }))
-    const correction = screen.getByRole('region', {
+    const correction = screen.getByRole('dialog', {
       name: 'Correct rider details',
     })
     const name = within(correction).getByLabelText(/^Name/)
@@ -631,7 +658,7 @@ describe('the venue and the time the operator no longer types', () => {
       vi.setSystemTime(new Date('2026-08-23T10:40:00.000Z'))
       await user.click(screen.getByRole('button', { name: 'Correct details' }))
 
-      const correction = screen.getByRole('region', {
+      const correction = screen.getByRole('dialog', {
         name: 'Correct rider details',
       })
       const email = within(correction).getByLabelText(/^Email ID/)
@@ -666,9 +693,7 @@ describe('recovery after a page refresh', () => {
     cleanup()
     render(<RegistrationScreen />)
 
-    const recent = await screen.findByRole('region', {
-      name: 'Recent registrations on this device',
-    })
+    const recent = await openRecent(userEvent.setup())
     expect(within(recent).getByText(record.publicCode)).toBeDefined()
   })
 
@@ -681,9 +706,7 @@ describe('recovery after a page refresh', () => {
     render(<RegistrationScreen />)
     const user = userEvent.setup()
 
-    const recent = await screen.findByRole('region', {
-      name: 'Recent registrations on this device',
-    })
+    const recent = await openRecent(user)
     await user.click(within(recent).getByRole('button', { name: 'Reprint' }))
 
     const sticker = await screen.findByTestId('sticker')
@@ -708,9 +731,7 @@ describe('recovery after a page refresh', () => {
     cleanup()
     render(<RegistrationScreen />)
     const user = userEvent.setup()
-    const recent = await screen.findByRole('region', {
-      name: 'Recent registrations on this device',
-    })
+    const recent = await openRecent(user)
     await user.click(within(recent).getByRole('button', { name: 'Reprint' }))
 
     await screen.findByTestId('sticker')
@@ -730,9 +751,7 @@ describe('recovery after a page refresh', () => {
     await user.click(screen.getByRole('button', { name: 'Next rider' }))
     await registerParticipant({ ...PARTICIPANT, name: 'Grace Hopper' })
 
-    const recent = await screen.findByRole('region', {
-      name: 'Recent registrations on this device',
-    })
+    const recent = await openRecent(user)
     const codes = within(recent)
       .getAllByText(/^A1-[0-9A-F]{6}-\d{5}-[0-9A-Z]$/)
       .map((node) => node.textContent)

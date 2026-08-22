@@ -1,10 +1,6 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type RefObject,
-} from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { AppButton, FormField } from '../../components/design-system'
+import { Input } from '../../components/ui/input'
 import {
   validateRegistrationForm,
   type RegistrationFieldErrors,
@@ -23,15 +19,19 @@ interface RegistrationFormProps {
 }
 
 /**
- * The participant details form.
+ * The generic contact-details form.
  *
- * Built for someone doing this several hundred times with a queue in front of
- * them: Name is focused on arrival, tab order runs straight down the fields to
- * the button, and Enter from any field submits. The mouse is optional.
+ * Now reached on one path only: correcting a registration captured before this
+ * campaign existed. Such a record has no vehicle, no colour and no venue,
+ * because nobody was asked, and correcting it through the campaign form would
+ * demand all three and default the colour, so an operator fixing a typo in an
+ * email address would save a bike, a colour and a venue that rider never chose.
  *
- * Validation runs on submit rather than on every keystroke, errors that appear
- * while someone is still typing their address are noise, and a failed
- * submission never clears the other fields.
+ * Migrated to the V2 field components so both correction paths look like one
+ * product. Nothing about its behaviour moved: `validateRegistrationForm` is
+ * still the only rule, validation still runs on submit rather than per
+ * keystroke, a failed submission still keeps every other field, Name is still
+ * focused on arrival and Enter from any field still submits.
  */
 export function RegistrationForm({
   onSubmit,
@@ -74,90 +74,64 @@ export function RegistrationForm({
   }
 
   return (
-    <form className="registration-form" onSubmit={handleSubmit} noValidate>
-      <Field
-        id="registration-name"
-        label="Name"
-        value={values.name}
-        error={errors.name}
-        onChange={(value) => update('name', value)}
-        inputRef={nameRef}
-        autoComplete="off"
-        autoFocus
-      />
-      <Field
-        id="registration-phone"
-        label="Phone number"
-        type="tel"
-        value={values.phone}
-        error={errors.phone}
-        onChange={(value) => update('phone', value)}
-        autoComplete="off"
-      />
-      <Field
-        id="registration-email"
-        label="Email address"
-        type="email"
-        value={values.email}
-        error={errors.email}
-        onChange={(value) => update('email', value)}
-        autoComplete="off"
-      />
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+        <FormField label="Name" required error={errors.name}>
+          {(field) => (
+            <Input
+              {...field}
+              ref={nameRef}
+              type="text"
+              autoComplete="off"
+              value={values.name}
+              disabled={busy}
+              onChange={(event) => update('name', event.target.value)}
+            />
+          )}
+        </FormField>
 
-      <button type="submit" className="button button--primary" disabled={busy}>
-        {busy ? 'Saving…' : submitLabel}
-      </button>
+        <FormField label="Email ID" required error={errors.email}>
+          {(field) => (
+            <Input
+              {...field}
+              type="email"
+              autoComplete="off"
+              autoCapitalize="none"
+              value={values.email}
+              disabled={busy}
+              onChange={(event) => update('email', event.target.value)}
+            />
+          )}
+        </FormField>
+
+        {/*
+          A plain text input rather than the campaign's `NumericField`. This
+          path exists for records captured before the campaign, whose phone
+          numbers were stored under the generic rule and are not guaranteed to
+          be ten Indian digits. A control that silently dropped every character
+          that did not fit that rule would turn opening a correction into an
+          edit nobody asked for.
+        */}
+        <FormField label="Phone Number" required error={errors.phone}>
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
+              value={values.phone}
+              disabled={busy}
+              onChange={(event) => update('phone', event.target.value)}
+            />
+          )}
+        </FormField>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-line pt-4">
+        <AppButton type="submit" busy={busy} busyLabel="Saving…">
+          {submitLabel}
+        </AppButton>
+      </div>
     </form>
-  )
-}
-
-interface FieldProps {
-  readonly id: string
-  readonly label: string
-  readonly value: string
-  readonly error: string | undefined
-  readonly onChange: (value: string) => void
-  readonly type?: string
-  readonly autoComplete?: string
-  readonly autoFocus?: boolean
-  readonly inputRef?: RefObject<HTMLInputElement | null>
-}
-
-function Field({
-  id,
-  label,
-  value,
-  error,
-  onChange,
-  type = 'text',
-  autoComplete,
-  autoFocus,
-  inputRef,
-}: FieldProps) {
-  const errorId = `${id}-error`
-
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        ref={inputRef}
-        className={error === undefined ? 'field__input' : 'field__input field__input--invalid'}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error !== undefined}
-        aria-describedby={error === undefined ? undefined : errorId}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-      />
-      {error !== undefined && (
-        <p className="field__error" id={errorId} role="alert">
-          {error}
-        </p>
-      )}
-    </div>
   )
 }

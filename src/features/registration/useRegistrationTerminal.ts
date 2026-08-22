@@ -41,6 +41,27 @@ export type TerminalPhase =
       readonly status: 'saved'
       readonly record: RegistrationRecord
       readonly sticker: StickerState
+      /**
+       * Whether `print()` has been invoked for the record currently in hand.
+       *
+       * Screen state and nothing else. It is never written to IndexedDB, never
+       * put on the wire, never part of a `RegistrationRecord` and never moves
+       * `revision`: a registration is the same registration whether or not
+       * somebody has pressed print, and persisting this would be inventing a
+       * fact about a participant out of a UI event.
+       *
+       * It also means less than it sounds like. The browser cannot tell us
+       * whether a label came out, whether the printer was on, or whether the
+       * operator cancelled the dialog, so this records exactly one thing: the
+       * print path was invoked. That is enough for the only thing it is used
+       * for, which is deciding whether the obvious next action is "print this"
+       * or "next rider".
+       *
+       * It resets whenever the active record changes: a new save starts false,
+       * and so does bringing an earlier record back through `reprint`. A
+       * sticker retry keeps it, because the rider in hand has not changed.
+       */
+      readonly printAttempted: boolean
     }
   /** Nothing was written. Safe to correct the details and try again. */
   | { readonly status: 'save-failed'; readonly message: string }
@@ -110,27 +131,43 @@ export function useRegistrationTerminal() {
     })()
   }, [refreshRecent])
 
-  /** Renders the sticker for an already-saved record. Never creates anything. */
-  const renderStickerFor = useCallback(async (record: RegistrationRecord) => {
-    try {
-      const payload = serializeQrPayload(qrPayloadForRegistration(record))
-      const qrSvg = await renderQrSvg(payload)
+  /**
+   * Renders the sticker for an already-saved record. Never creates anything.
+   *
+   * `printAttempted` is carried in rather than reset here, because this is
+   * reached from three places that disagree about it: a new save and a reprint
+   * both start a fresh record and pass `false`, while a sticker retry is the
+   * same rider still in hand and passes whatever was already true.
+   */
+  const renderStickerFor = useCallback(
+    async (record: RegistrationRecord, printAttempted: boolean) => {
+      try {
+        const payload = serializeQrPayload(qrPayloadForRegistration(record))
+        const qrSvg = await renderQrSvg(payload)
 
-      if (mountedRef.current) {
-        setPhase({ status: 'saved', record, sticker: { status: 'ready', qrSvg } })
+        if (mountedRef.current) {
+          setPhase({
+            status: 'saved',
+            record,
+            sticker: { status: 'ready', qrSvg },
+            printAttempted,
+          })
+        }
+      } catch (error) {
+        // The registration is already safe. This is a rendering problem, and the
+        // operator must not be told to register the participant again.
+        if (mountedRef.current) {
+          setPhase({
+            status: 'saved',
+            record,
+            sticker: { status: 'failed', message: describe(error) },
+            printAttempted,
+          })
+        }
       }
-    } catch (error) {
-      // The registration is already safe. This is a rendering problem, and the
-      // operator must not be told to register the participant again.
-      if (mountedRef.current) {
-        setPhase({
-          status: 'saved',
-          record,
-          sticker: { status: 'failed', message: describe(error) },
-        })
-      }
-    }
-  }, [])
+    },
+    [],
+  )
 
   const submit = useCallback(
     async (values: RegistrationFormValues) => {
@@ -160,9 +197,14 @@ export function useRegistrationTerminal() {
       // Past this line the participant exists on disk. Everything that follows
       // is recoverable and must never invalidate the record.
       if (mountedRef.current) {
-        setPhase({ status: 'saved', record: saved, sticker: { status: 'rendering' } })
+        setPhase({
+          status: 'saved',
+          record: saved,
+          sticker: { status: 'rendering' },
+          printAttempted: false,
+        })
       }
-      await renderStickerFor(saved)
+      await renderStickerFor(saved, false)
       await refreshRecent()
     },
     [refreshRecent, renderStickerFor],
@@ -173,9 +215,11 @@ export function useRegistrationTerminal() {
     if (phase.status !== 'saved') {
       return
     }
-    const { record } = phase
-    setPhase({ status: 'saved', record, sticker: { status: 'rendering' } })
-    await renderStickerFor(record)
+    // The same rider is still in hand, so whether they have been printed for is
+    // still whatever it was. Only the sticker is being redone.
+    const { record, printAttempted } = phase
+    setPhase({ status: 'saved', record, sticker: { status: 'rendering' }, printAttempted })
+    await renderStickerFor(record, printAttempted)
   }, [phase, renderStickerFor])
 
   /**
@@ -187,16 +231,38 @@ export function useRegistrationTerminal() {
    */
   const reprint = useCallback(
     async (record: RegistrationRecord) => {
-      setPhase({ status: 'saved', record, sticker: { status: 'rendering' } })
-      await renderStickerFor(record)
+      /*
+       * A different rider is now in hand, so the print question starts again.
+       * Recovering a label from three riders ago and being told the obvious
+       * next action is "next rider" would be the screen answering a question
+       * about somebody else.
+       */
+      setPhase({
+        status: 'saved',
+        record,
+        sticker: { status: 'rendering' },
+        printAttempted: false,
+      })
+      await renderStickerFor(record, false)
     },
     [renderStickerFor],
   )
 
-  /** Hands the current document to the browser's print dialog. */
+  /**
+   * Hands the current document to the browser's print dialog.
+   *
+   * Recording the attempt is the whole of the state change. Nothing is written,
+   * nothing is synced, and the record is not touched: the only thing that moves
+   * is which button the screen offers next.
+   */
   const print = useCallback(() => {
     if (phase.status === 'saved' && phase.sticker.status === 'ready') {
       printDocument()
+      setPhase((current) =>
+        current.status === 'saved' && !current.printAttempted
+          ? { ...current, printAttempted: true }
+          : current,
+      )
     }
   }, [phase])
 

@@ -1,59 +1,67 @@
-import { useEffect, useRef, useState } from 'react'
-import { BrandButton } from '../../components/brand/BrandButton'
-import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignHeroHeader'
-import { stationFor } from '../../config/event'
+import {
+  CheckCircle2Icon,
+  OctagonAlertIcon,
+  PrinterIcon,
+  TriangleAlertIcon,
+  UserPlusIcon,
+} from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AppButton, AppSurface, StatusPill } from '../../components/design-system'
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert'
+import { EVENT_CONFIG, stationFor } from '../../config/event'
+import { formatEventDay } from '../../config/eventTime'
 import { CampaignRegistrationForm } from '../campaign/flying-flea/components/CampaignRegistrationForm'
-import { needsLegacyCorrection } from '../campaign/flying-flea/campaignRecord'
+import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 import { stampEventFields } from '../campaign/flying-flea/eventStamp'
-import { RegistrationForm } from './RegistrationForm'
-import type { CampaignRegistrationDraft } from '../campaign/flying-flea/registrationForm'
-import { emptyCampaignDraft } from '../campaign/flying-flea/registrationForm'
-import type {
-  CampaignFieldCorrections,
-  FlyingFleaColour,
-  FlyingFleaGender,
-  RegistrationRecord,
-} from '../../types'
+import { cn } from '../../lib/ui/cn'
+import { CorrectionSheet } from './CorrectionSheet'
 import { PrintableSticker } from './PrintableSticker'
+import { RecentReprints } from './RecentReprints'
 import { Sticker } from './Sticker'
-import { useRegistrationTerminal } from './useRegistrationTerminal'
+import { useRegistrationTerminal, type StickerState } from './useRegistrationTerminal'
+import type { CampaignFieldCorrections, RegistrationRecord } from '../../types'
 import type { RegistrationFormValues } from './validation'
 
-/**
- * Re-opens a saved registration for correction.
+/*
+ * Point A: the registration terminal, in the V2 design.
  *
- * Every campaign answer is carried back into the form, so a correction to one
- * field cannot silently blank the rest, `undefined` on a record means "not
- * captured", and a form that started empty would write that back as an erasure.
- */
-function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
-  const empty = emptyCampaignDraft()
-
-  return {
-    name: record.name,
-    phone: record.phone,
-    email: record.email,
-    vehicle: record.vehicle ?? null,
-    interestedColour:
-      (record.interestedColour as FlyingFleaColour | undefined) ??
-      empty.interestedColour,
-    location: record.location ?? empty.location,
-    gender: (record.gender as FlyingFleaGender | undefined) ?? '',
-    testRideAt: record.testRideAt ?? '',
-    drivingLicence: record.drivingLicence ?? '',
-    pincode: record.pincode ?? '',
-  }
-}
-
-/**
- * Point A: the registration terminal.
+ * ## The one invariant this screen exists to make visible
  *
- * Two states share the screen: taking a participant's details, and dealing with
- * the sticker for the one just saved. They are kept visually distinct because
- * confusing them is how a participant ends up registered twice.
+ * A registration becomes durable in IndexedDB *before* a sticker is rendered,
+ * and nothing that happens afterwards can invalidate it. The QR renderer can
+ * fail, the printer can jam, the label can come out blank, and the browser
+ * cannot even confirm that printing happened. None of that is a registration
+ * problem, and an operator who thinks it is will register somebody twice.
+ *
+ * So the two sides of that line are given different *shapes*, not different
+ * wording:
+ *
+ *   saved     a green band, a public code, a sticker area
+ *   not saved a red band, and none of those three things
+ *
+ * They are told apart from across a desk before a word is read. The green band
+ * is unconditional inside the saved state: it does not change tone or wording
+ * when the sticker fails, because the sticker failing does not change what it
+ * says.
+ *
+ * ## Entry and saved never coexist
+ *
+ * The screen swaps them, exactly as V1 did. There is no state in which a filled
+ * registration form and a saved rider's actions are both on screen, because
+ * that is the state in which somebody gets registered twice.
+ *
+ * ## What this file does not decide
+ *
+ * Identity, ordering, storage and stamping all live elsewhere and are untouched
+ * by the V2 migration. `useRegistrationTerminal` still owns the sequence, and
+ * `stampEventFields` is still called on the new-registration path only, so
+ * fixing an email address at 16:10 cannot rewrite a ride that happened at
+ * 15:42.
  */
+
+const STATION = stationFor('registration')
+
 export function RegistrationScreen() {
-  const station = stationFor('registration')
   const {
     phase,
     recent,
@@ -74,7 +82,7 @@ export function RegistrationScreen() {
 
   // Once the sticker is ready, put the keyboard on the print button: the next
   // thing staff does is print, and Enter should do it without a reach for the
-  // mouse.
+  // mouse. Preserved from V1 exactly.
   useEffect(() => {
     if (phase.status === 'saved' && phase.sticker.status === 'ready') {
       printButtonRef.current?.focus()
@@ -98,235 +106,402 @@ export function RegistrationScreen() {
   }
 
   return (
-    <article className="screen">
-      <CampaignHeroHeader
-        lead="Test Ride"
-        accent="Registration"
-        subtitle={`${station.label} · ${station.stationId}`}
+    <AppSurface width="station" className="flex flex-col gap-page">
+      <StationHeader
+        title={phase.status === 'saved' ? 'Rider registered' : 'New rider'}
       />
 
+      {/*
+        The only condition that stops registration, and the reason it looks
+        nothing like the other two failures: no network is normal here and gets
+        no banner at all, but a device that cannot write locally cannot take a
+        rider safely.
+      */}
       {deviceError !== null && (
-        <p className="notice notice--error" role="alert">
-          This device cannot reach local storage: {deviceError}. Do not register
-          participants until this is resolved. Nothing can be saved.
-        </p>
+        <Alert tone="danger">
+          <OctagonAlertIcon aria-hidden="true" />
+          <AlertTitle className="font-display text-title tracking-wide">
+            Do not register riders on this device
+          </AlertTitle>
+          <AlertDescription>
+            This device cannot reach local storage: {deviceError}. Nothing can be
+            saved, so nothing typed here would survive. Use another tablet and
+            tell whoever is running the event.
+          </AlertDescription>
+        </Alert>
       )}
 
       {phase.status !== 'saved' && (
-        <section aria-labelledby="registration-heading">
-          <h2 id="registration-heading" className="section-title">
-            Participant details
-          </h2>
-
+        <>
           {phase.status === 'save-failed' && (
-            <p className="notice notice--error" role="alert">
-              Could not save this registration: {phase.message}. Nothing was
-              written and no sticker was produced. Check the details and try
-              again.
-            </p>
+            <Alert tone="danger">
+              <TriangleAlertIcon aria-hidden="true" />
+              <AlertTitle className="font-display text-title tracking-wide">
+                Registration not saved
+              </AlertTitle>
+              <AlertDescription>
+                Nothing was written and no sticker exists: {phase.message}. This
+                rider is <strong>not</strong> registered. Everything typed below
+                is still here, so check the details and press Register &amp;
+                Print again.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/*
-            The venue and the test-ride time are attached here, on the way to
-            the store, and nowhere else. This is the new-registration path: the
-            correction path below calls `handleCorrection`, which never stamps,
-            so fixing an email address at 16:10 cannot rewrite a ride that
-            happened at 15:42.
+            The venue and the test-ride time are attached here, on the way to the
+            store, and nowhere else. This is the new-registration path: the
+            correction path calls `handleCorrection`, which never stamps.
           */}
           <CampaignRegistrationForm
             onSubmit={(values) => void submit(stampEventFields(values))}
             busy={phase.status === 'saving'}
             resetKey={formGeneration}
           />
-        </section>
+        </>
       )}
 
       {phase.status === 'saved' && (
-        <section aria-labelledby="saved-heading">
-          <h2 id="saved-heading" className="section-title">
-            Registration saved
-          </h2>
-
-          <p className="notice notice--success" role="status">
-            Saved to this device. The participant’s identity is safe even if
-            printing fails.
-          </p>
-
-          <p className="public-code" data-testid="saved-public-code">
-            {phase.record.publicCode}
-          </p>
-
-          {phase.sticker.status === 'rendering' && (
-            <p className="notice">Preparing sticker…</p>
-          )}
-
-          {phase.sticker.status === 'failed' && (
-            <div className="notice notice--error" role="alert">
-              <p>
-                The registration is saved, so do <strong>not</strong> register
-                this participant again. Only the sticker image failed to
-                render: {phase.sticker.message}
-              </p>
-              <button
-                type="button"
-                className="button"
-                onClick={() => void retrySticker()}
-              >
-                Retry sticker
-              </button>
-            </div>
-          )}
-
-          {phase.sticker.status === 'ready' && (
-            <>
-              {/* On-screen proof, at true physical size. */}
-              <Sticker
-                qrSvg={phase.sticker.qrSvg}
-                publicCode={phase.record.publicCode}
-              />
-              {/* The copy the printer receives, portalled outside #root so
-                  print can switch the application off entirely. */}
-              <PrintableSticker
-                qrSvg={phase.sticker.qrSvg}
-                publicCode={phase.record.publicCode}
-              />
-              <p className="screen__note">
-                Printing cannot be confirmed by the browser. If the label did
-                not come out, or came out badly, print it again; it will be
-                the same sticker.
-              </p>
-            </>
-          )}
-
-          <div className="button-row">
-            <button
-              type="button"
-              ref={printButtonRef}
-              className="button button--primary"
-              onClick={print}
-              disabled={phase.sticker.status !== 'ready'}
-            >
-              Print sticker
-            </button>
-            <button
-              type="button"
-              className="button"
-              onClick={print}
-              disabled={phase.sticker.status !== 'ready'}
-            >
-              Reprint sticker
-            </button>
-            <button
-              type="button"
-              className="button"
-              onClick={() => setEditing((current) => !current)}
-            >
-              {editing ? 'Cancel correction' : 'Correct details'}
-            </button>
-            <BrandButton type="button" onClick={handleNextParticipant}>
-              Next rider
-            </BrandButton>
-          </div>
-
-          {editing && (
-            <section className="correction" aria-labelledby="correction-heading">
-              <h3 id="correction-heading" className="section-title">
-                Correct rider details
-              </h3>
-              <p className="screen__note">
-                The sticker does not need reprinting: it carries no name, phone,
-                email, licence or campaign answer. Identity stays as issued.
-              </p>
-              {/*
-                A registration captured before this campaign has no vehicle, no
-                colour and no venue, because nobody was asked. Correcting it
-                through the campaign form would demand all three and default the
-                colour, so an operator fixing a typo in an email address would
-                save a bike, a colour and a venue that this rider never chose.
-                Legacy records therefore keep the generic contact-details form.
-              */}
-              {needsLegacyCorrection(phase.record) ? (
-                <RegistrationForm
-                  onSubmit={(values) => void handleCorrection(values)}
-                  busy={false}
-                  resetKey={-phase.record.revision}
-                  submitLabel="Save correction"
-                  initialValues={{
-                    name: phase.record.name,
-                    phone: phase.record.phone,
-                    email: phase.record.email,
-                  }}
-                />
-              ) : (
-                <CampaignRegistrationForm
-                  onSubmit={(values) => void handleCorrection(values)}
-                  busy={false}
-                  resetKey={-phase.record.revision}
-                  submitLabel="Save correction"
-                  initialDraft={draftFrom(phase.record)}
-                />
-              )}
-            </section>
-          )}
-        </section>
+        <SavedRider
+          record={phase.record}
+          sticker={phase.sticker}
+          printAttempted={phase.printAttempted}
+          printButtonRef={printButtonRef}
+          onPrint={print}
+          onRetrySticker={() => void retrySticker()}
+          onCorrect={() => setEditing(true)}
+          onNextRider={handleNextParticipant}
+        />
       )}
 
-      <RecentRegistrations
+      <RecentReprints
         records={recent}
         activeRecordId={saved?.recordId ?? null}
         onReprint={(record) => void reprint(record)}
       />
-    </article>
+
+      {saved !== null && (
+        <CorrectionSheet
+          open={editing}
+          onOpenChange={setEditing}
+          record={saved}
+          onSubmit={(values) => void handleCorrection(values)}
+        />
+      )}
+    </AppSurface>
   )
 }
 
-interface RecentRegistrationsProps {
-  readonly records: readonly RegistrationRecord[]
-  readonly activeRecordId: string | null
-  readonly onReprint: (record: RegistrationRecord) => void
+/*
+ * The terminal's own heading.
+ *
+ * Two lines and a stated fact, replacing V1's photographic hero. The banner is
+ * the campaign's best asset and it is right on Home and Point B, where somebody
+ * arrives once; at Point A it was roughly 300px of photograph at the top of a
+ * form the operator returns to several hundred times, and after the third rider
+ * it is scroll.
+ *
+ * The venue and the day are stated here rather than asked, exactly as
+ * `EventMeta` did: they are attached at submit from configuration and the venue
+ * clock, and a disabled input holding an answer nobody can change is still a
+ * control to look at and tab past.
+ *
+ * The title names which of the screen's two jobs is in hand. Leaving it on "New
+ * rider" after a save would be the screen saying, at the top, that it is ready
+ * for the next person while the last person's sticker is still on it.
+ */
+function StationHeader({ title }: { readonly title: string }) {
+  return (
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-line pb-4">
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="font-ui text-label font-semibold uppercase tracking-[0.16em] text-accent">
+          Point A · Registration
+        </span>
+        <h1 className="font-display text-page leading-none tracking-wide text-ink">
+          {title}
+        </h1>
+      </div>
+
+      {/*
+        Each fact in its own element. The venue and the day are two separate
+        things an operator checks, and running them into one text node would
+        also mean nothing could assert on either alone.
+      */}
+      <p className="flex flex-col text-right font-ui text-small leading-tight text-muted">
+        <span>{FLYING_FLEA_CAMPAIGN.lockedLocation}</span>
+        <span className="text-faint">
+          <span>{formatEventDay(EVENT_CONFIG.eventDay)}</span>
+          <span aria-hidden="true"> · </span>
+          <span>{STATION.stationId}</span>
+        </span>
+      </p>
+    </header>
+  )
+}
+
+interface SavedRiderProps {
+  readonly record: RegistrationRecord
+  readonly sticker: StickerState
+  readonly printAttempted: boolean
+  readonly printButtonRef: React.RefObject<HTMLButtonElement | null>
+  readonly onPrint: () => void
+  readonly onRetrySticker: () => void
+  readonly onCorrect: () => void
+  readonly onNextRider: () => void
+}
+
+function SavedRider({
+  record,
+  sticker,
+  printAttempted,
+  printButtonRef,
+  onPrint,
+  onRetrySticker,
+  onCorrect,
+  onNextRider,
+}: SavedRiderProps) {
+  const ready = sticker.status === 'ready'
+
+  return (
+    <section aria-labelledby="saved-heading" className="flex flex-col gap-6">
+      <h2 id="saved-heading" className="sr-only">
+        Registration saved
+      </h2>
+
+      {/*
+        Unconditional, in every branch below. This is the sentence the operator
+        needs before they have finished reading anything else on the screen, and
+        it does not soften or change colour when the sticker goes wrong.
+      */}
+      <Alert tone="ok">
+        <CheckCircle2Icon aria-hidden="true" />
+        <AlertTitle className="font-display text-title tracking-wide">
+          Registration saved
+        </AlertTitle>
+        <AlertDescription>
+          This rider is in the system on this device. Nothing that happens to the
+          label can undo that, so do not register them again.
+        </AlertDescription>
+      </Alert>
+
+      {/* The identity. Large, monospaced, and read aloud off a desk. */}
+      <div className="flex flex-col gap-1">
+        <span className="font-ui text-label font-semibold uppercase tracking-[0.16em] text-muted">
+          Public code
+        </span>
+        <p
+          data-testid="saved-public-code"
+          className="font-mono text-page leading-none tracking-tight text-ink tabular-nums [font-feature-settings:'zero'_1]"
+        >
+          {record.publicCode}
+        </p>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+        <StickerArea sticker={sticker} publicCode={record.publicCode} />
+
+        <div className="flex flex-col gap-4">
+          {sticker.status === 'failed' && (
+            <Alert tone="warn">
+              <TriangleAlertIcon aria-hidden="true" />
+              <AlertTitle>Sticker unavailable</AlertTitle>
+              <AlertDescription>
+                The registration is saved, so do not register this rider again.
+                Only the sticker image failed to render: {sticker.message}. Retry
+                the sticker, or move on and reprint it from the recent list.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {ready && (
+            <p className="max-w-measure font-body text-small text-muted">
+              Printing cannot be confirmed by the browser. If the label did not
+              come out, or came out badly, print it again: it will be the same
+              sticker, with the same code.
+            </p>
+          )}
+
+          <ActionRow
+            sticker={sticker}
+            printAttempted={printAttempted}
+            printButtonRef={printButtonRef}
+            onPrint={onPrint}
+            onRetrySticker={onRetrySticker}
+            onCorrect={onCorrect}
+            onNextRider={onNextRider}
+          />
+        </div>
+      </div>
+    </section>
+  )
 }
 
 /**
- * Recent local registrations, newest first.
+ * The label, or an explanation of why there is not one.
  *
- * This is the recovery path, not a dashboard: after a refresh, or after
- * noticing three participants later that a label never came out, staff needs
- * to reach an earlier sticker and print it again. It shows public codes and
- * times only. No names, because a list of participant names on a desk-facing
- * screen is a privacy leak that buys nothing here.
+ * The frame is drawn at the sticker's own footprint in every state, so the
+ * panel does not resize under the operator's hand when a sticker arrives or a
+ * retry succeeds. Buttons that move as you reach for them is how a print
+ * becomes a correction.
  */
-function RecentRegistrations({
-  records,
-  activeRecordId,
-  onReprint,
-}: RecentRegistrationsProps) {
-  if (records.length === 0) {
-    return null
+function StickerArea({
+  sticker,
+  publicCode,
+}: {
+  readonly sticker: StickerState
+  readonly publicCode: RegistrationRecord['publicCode']
+}) {
+  if (sticker.status === 'ready') {
+    return (
+      <div className="inline-flex flex-col items-center gap-2 rounded-card border border-line bg-surface p-3">
+        {/* On-screen proof, at true physical size. Unchanged from V1. */}
+        <Sticker qrSvg={sticker.qrSvg} publicCode={publicCode} />
+        {/* The copy the printer receives, portalled outside #root so print can
+            switch the application off entirely. Unchanged from V1. */}
+        <PrintableSticker qrSvg={sticker.qrSvg} publicCode={publicCode} />
+        <p className="font-ui text-caption uppercase tracking-[0.16em] text-faint">
+          50 x 40 mm
+        </p>
+      </div>
+    )
+  }
+
+  const failed = sticker.status === 'failed'
+
+  return (
+    <div
+      className={cn(
+        'flex h-[calc(40mm+3.25rem)] w-[calc(50mm+1.5rem)] flex-col items-center justify-center gap-2',
+        'rounded-card border border-dashed p-3',
+        failed ? 'border-warn-line bg-warn-soft' : 'border-line',
+      )}
+    >
+      {/*
+        Amber, not red, and for the same reason the band beside it is amber: the
+        label is missing, not lost. A red pill inside an amber region would be
+        the screen contradicting itself about how bad this is.
+      */}
+      <StatusPill
+        status={failed ? 'pending' : 'offline-preparing'}
+        label={failed ? 'No sticker' : 'Preparing'}
+      />
+      <p className="text-center font-body text-small text-muted">
+        {failed ? 'The label could not be drawn.' : 'Drawing the label…'}
+      </p>
+    </div>
+  )
+}
+
+/*
+ * Exactly one primary in every branch, and it is always the operator's next
+ * physical act:
+ *
+ *   sticker failed   -> get a label       Retry sticker
+ *   not yet printed  -> print the label   Print sticker
+ *   printed          -> take the queue    Next rider
+ *
+ * Everything else steps down to secondary and then to ghost. "Correct details"
+ * is never above tertiary once a label exists, because at that point it is the
+ * rarest thing an operator does and the most expensive to hit by accident.
+ *
+ * `Print sticker` is rendered in every branch, disabled until a sticker exists,
+ * rather than appearing when one does. A control that materialises under a
+ * finger already moving toward it is how a print becomes a correction, and a
+ * disabled button says "there is nothing to print yet" where an absent one says
+ * nothing at all.
+ */
+function ActionRow({
+  sticker,
+  printAttempted,
+  printButtonRef,
+  onPrint,
+  onRetrySticker,
+  onCorrect,
+  onNextRider,
+}: {
+  readonly sticker: StickerState
+  readonly printAttempted: boolean
+  readonly printButtonRef: React.RefObject<HTMLButtonElement | null>
+  readonly onPrint: () => void
+  readonly onRetrySticker: () => void
+  readonly onCorrect: () => void
+  readonly onNextRider: () => void
+}) {
+  const ready = sticker.status === 'ready'
+
+  const printButton = (
+    <AppButton
+      ref={printButtonRef}
+      size={!printAttempted && ready ? 'lg' : 'default'}
+      variant={!printAttempted && ready ? 'default' : 'secondary'}
+      disabled={!ready}
+      onClick={onPrint}
+    >
+      <PrinterIcon />
+      Print sticker
+    </AppButton>
+  )
+
+  const reprintButton = (
+    <AppButton variant="secondary" disabled={!ready} onClick={onPrint}>
+      <PrinterIcon />
+      Reprint sticker
+    </AppButton>
+  )
+
+  const nextButton = (emphasis: 'primary' | 'quiet'): ReactNode => (
+    <AppButton
+      size={emphasis === 'primary' ? 'lg' : 'default'}
+      variant={emphasis === 'primary' ? 'default' : 'ghost'}
+      onClick={onNextRider}
+    >
+      <UserPlusIcon />
+      Next rider
+    </AppButton>
+  )
+
+  const correctButton = (emphasis: 'secondary' | 'quiet'): ReactNode => (
+    <AppButton
+      variant={emphasis === 'secondary' ? 'secondary' : 'ghost'}
+      onClick={onCorrect}
+    >
+      Correct details
+    </AppButton>
+  )
+
+  if (sticker.status === 'failed') {
+    return (
+      <ButtonRow>
+        <AppButton size="lg" onClick={onRetrySticker}>
+          <PrinterIcon />
+          Retry sticker
+        </AppButton>
+        {printButton}
+        {nextButton('quiet')}
+        {correctButton('quiet')}
+      </ButtonRow>
+    )
+  }
+
+  if (!printAttempted) {
+    return (
+      <ButtonRow>
+        {printButton}
+        {correctButton('secondary')}
+        {nextButton('quiet')}
+      </ButtonRow>
+    )
   }
 
   return (
-    <section className="recent" aria-labelledby="recent-heading">
-      <h2 id="recent-heading" className="section-title">
-        Recent registrations on this device
-      </h2>
-      <ul className="recent__list">
-        {records.map((record) => (
-          <li key={record.recordId} className="recent__item">
-            <span className="recent__code">{record.publicCode}</span>
-            <span className="recent__time">
-              {new Date(record.createdAt).toLocaleTimeString()}
-            </span>
-            <button
-              type="button"
-              className="button button--small"
-              onClick={() => onReprint(record)}
-              disabled={record.recordId === activeRecordId}
-            >
-              {record.recordId === activeRecordId ? 'Showing' : 'Reprint'}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <ButtonRow>
+      {nextButton('primary')}
+      {reprintButton}
+      {correctButton('quiet')}
+    </ButtonRow>
   )
+}
+
+function ButtonRow({ children }: { readonly children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-2.5">{children}</div>
 }

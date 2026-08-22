@@ -3,6 +3,7 @@ import { AdminScreen } from '../features/admin/AdminScreen'
 import { FeedbackScreen } from '../features/feedback/FeedbackScreen'
 import { HomeScreen } from '../features/home/HomeScreen'
 import { RegistrationScreen } from '../features/registration/RegistrationScreen'
+import type { ShellChrome } from '../components/design-system/AppShellV2'
 import type { RoutePath } from '../lib/routing/hashRoute'
 
 /*
@@ -35,6 +36,18 @@ const FoundationScreen = lazy(async () => ({
   default: (await import('../features/foundation/FoundationScreen')).FoundationScreen,
 }))
 
+/*
+ * The Point A V2 concept, loaded on demand.
+ *
+ * A design-review surface. It never runs on a station device, so it stays out
+ * of the eager bundle for the same reason Reporting and the foundation gallery
+ * do: a tablet should not parse a prototype it will never open.
+ */
+const PointAConcept = lazy(async () => ({
+  default: (await import('../features/concept/point-a/PointAConcept'))
+    .PointAConcept,
+}))
+
 export interface RouteDefinition {
   readonly path: RoutePath
   /** Document title, so a device left on a station is identifiable. */
@@ -43,6 +56,16 @@ export interface RouteDefinition {
   readonly navLabel: string
   /** Whether the route appears in the shell's navigation. */
   readonly showInNav: boolean
+  /**
+   * How much shell chrome this surface wants.
+   *
+   * Capture surfaces ask for `minimal`: a row of links to other stations above
+   * a half-filled registration form is a mis-tap that loses somebody's data.
+   * Omitted means the shell's default, which is the full station navigation.
+   */
+  readonly chrome?: ShellChrome
+  /** Which station the operator is at, for the shell's context line. */
+  readonly context?: string
   readonly render: () => ReactElement
 }
 
@@ -55,10 +78,21 @@ export const ROUTES: readonly RouteDefinition[] = [
     render: () => <HomeScreen />,
   },
   {
+    /*
+     * Minimal chrome, from Phase 3.
+     *
+     * Point A is a high-throughput capture surface where the operator is
+     * mid-participant several hundred times a day, and a row of links to other
+     * stations above a half-filled registration form is a mis-tap that loses
+     * somebody's data. The stations are still reachable through the shell's
+     * menu; they are just no longer sitting over the form.
+     */
     path: '/a',
     title: 'Point A: Registration',
     navLabel: 'Point A',
     showInNav: true,
+    chrome: 'minimal',
+    context: 'Point A · Registration',
     render: () => <RegistrationScreen />,
   },
   {
@@ -94,6 +128,34 @@ export const ROUTES: readonly RouteDefinition[] = [
         }
       >
         <FoundationScreen />
+      </Suspense>
+    ),
+  },
+  {
+    /*
+     * The Point A V2 concept. Unlisted, and deliberately not `/a`.
+     *
+     * `/a` still renders `RegistrationScreen` exactly as it did. This route is
+     * a visual prototype on static fixtures: it writes nothing, calls no
+     * registration function, renders no real record and prints nothing. It is
+     * the only surface using `chrome="minimal"` so far, which is the point of
+     * having it before the production screen moves.
+     */
+    path: '/concept/point-a',
+    title: 'Point A concept',
+    navLabel: 'Point A concept',
+    showInNav: false,
+    chrome: 'minimal',
+    context: 'Point A · Registration',
+    render: () => (
+      <Suspense
+        fallback={
+          <article className="screen">
+            <p className="screen__note">Loading the Point A concept…</p>
+          </article>
+        }
+      >
+        <PointAConcept />
       </Suspense>
     ),
   },

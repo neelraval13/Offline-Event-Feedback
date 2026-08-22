@@ -12,9 +12,14 @@ function renderAt(hash: string) {
 
 describe('App routing', () => {
   it('renders the registration surface at #/a', () => {
+    /*
+     * The V2 terminal names the job in hand rather than restating the campaign:
+     * the photographic hero that carried "Test Ride Registration" was 300px at
+     * the top of a form the operator returns to several hundred times a shift.
+     */
     renderAt('#/a')
     expect(
-      screen.getByRole('heading', { level: 1, name: /Test Ride Registration/ }),
+      screen.getByRole('heading', { level: 1, name: /New rider/ }),
     ).toBeDefined()
   })
 

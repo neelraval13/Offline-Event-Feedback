@@ -243,6 +243,16 @@
 
   /* A form is not more usable stretched across a 27-inch monitor. */
   --container-measure: var(--ff-content-max);
+  /*
+   * A capture terminal: Point A and Point B.
+   *
+   * Between the two, because an operator station is neither. At the reading
+   * measure an iPad Pro wastes 230px of its width and the operator scrolls more
+   * per rider; at the data measure a registration form stretches to 1408px and
+   * the eye has to travel from a label on the left to a field on the right
+   * several hundred times a shift. 960px fills a tablet and stops there.
+   */
+  --container-station: 60rem;
   /* Data surfaces get the room they need: tables, reporting, admin. */
   --container-wide: 88rem;
 

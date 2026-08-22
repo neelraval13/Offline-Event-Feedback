@@ -48,17 +48,30 @@ describe('Point A renders one of everything', () => {
     }
   })
 
-  it('keeps the four personal details in one grid', () => {
+  it('keeps all six rider details in one grid', () => {
     /*
-     * The two-into-one-column behaviour is `auto-fit`, which needs all the
-     * fields to be siblings in the same grid. Splitting them across two
-     * containers to force a layout would freeze the column count.
+     * The two-into-one-column behaviour needs every field to be a sibling in
+     * the same grid. Splitting them across containers to force a layout would
+     * freeze the column count, and V1 did exactly that: four fields in a grid
+     * and the two numbers in a separate block below, because the dial pods
+     * needed their own row. With the pods gone all six sit together, which is
+     * what lets the required ones lead the reading order.
      */
     renderRegistration()
 
-    const grids = document.querySelectorAll('.ff-grid2')
-    expect(grids).toHaveLength(1)
-    expect(grids[0]?.querySelectorAll('.ff-field')).toHaveLength(4)
+    const controls = [
+      ...document.querySelectorAll<HTMLElement>('form input, form select'),
+    ]
+    expect(controls).toHaveLength(6)
+
+    /*
+     * Every one of them under the same grid: asserted as "they share a grid
+     * ancestor", rather than by naming a container class, so this keeps meaning
+     * the same thing after the next restyle.
+     */
+    const grids = controls.map((control) => control.closest('.grid'))
+    expect(new Set(grids).size).toBe(1)
+    expect(grids[0]).not.toBeNull()
   })
 
   it('offers every vehicle and every colour once', () => {
@@ -111,41 +124,49 @@ describe('what Point A no longer asks', () => {
   })
 })
 
-describe('the numeric clusters', () => {
+describe('the two numbers', () => {
   it('are a phone of ten digits and a pincode of six', () => {
-    // The slot count is the campaign's rule, never a function of the viewport.
+    // The length is the campaign's rule, never a function of the viewport.
     renderRegistration()
 
-    const dials = document.querySelectorAll('.ff-dial')
-    expect(dials).toHaveLength(2)
-    expect(dials[0]?.querySelectorAll('.ff-dial__digits span')).toHaveLength(10)
-    expect(dials[1]?.querySelectorAll('.ff-dial__digits span')).toHaveLength(6)
+    const counts = [...document.querySelectorAll('[data-testid="numeric-count"]')]
+    expect(counts.map((count) => count.textContent)).toEqual(['0 / 10', '0 / 6'])
   })
 
-  it('keep one real, focusable input per cluster', () => {
+  it('keep one real, focusable input each', () => {
     /*
-     * The keypad is a convenience. The input underneath it is what opens the
-     * device keyboard and what accepts a paste, so it must survive any layout
-     * change, and there must not be a second one.
+     * The input is what opens the device keyboard and what accepts a paste, so
+     * it must survive any layout change, and there must not be a second one.
+     * V2 removed the rendered keypad that used to sit over it; the assertion
+     * that matters is unchanged, and there are now fewer things that could
+     * break it.
      */
     renderRegistration()
 
-    const inputs = document.querySelectorAll('input.ff-dial__input')
+    const inputs = document.querySelectorAll('input[inputmode="numeric"]')
     expect(inputs).toHaveLength(2)
 
     for (const input of inputs) {
-      expect(input.getAttribute('inputmode')).toBe('numeric')
+      expect(input.getAttribute('type')).toBe('text')
       expect(input.hasAttribute('disabled')).toBe(false)
       expect(input.getAttribute('tabindex')).toBeNull()
     }
   })
 
-  it('sit in one container, so the pair wraps rather than being duplicated', () => {
+  it('renders no on-screen keypad', () => {
+    /*
+     * The dial's keypad was ten taps where the tablet's own keyboard does one
+     * paste, and it cost two fields a third of the form's height. Every button
+     * left on this form belongs to a vehicle plate or a colour, plus submit.
+     */
     renderRegistration()
 
-    const clusters = document.querySelectorAll('.ff-clusters')
-    expect(clusters).toHaveLength(1)
-    expect(clusters[0]?.querySelectorAll('.ff-dial')).toHaveLength(2)
+    const buttons = [...document.querySelectorAll('button')]
+    for (const key of ['0', '1', '5', '9', '⌫']) {
+      expect(buttons.some((button) => button.textContent?.trim() === key)).toBe(
+        false,
+      )
+    }
   })
 })
 

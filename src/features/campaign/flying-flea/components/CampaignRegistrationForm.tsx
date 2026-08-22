@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { BrandButton } from '../../../../components/brand/BrandButton'
-import { BrandCard } from '../../../../components/brand/BrandCard'
-import { BrandField } from '../../../../components/brand/BrandField'
-import { BrandSectionHeading } from '../../../../components/brand/BrandSectionHeading'
+import { AppButton, FormField } from '../../../../components/design-system'
+import { Input } from '../../../../components/ui/input'
+import { StationStep } from '../../../registration/StationStep'
+import { cn } from '../../../../lib/ui/cn'
 import type {
   CampaignFieldCorrections,
   FlyingFleaColour,
@@ -17,33 +17,59 @@ import {
   type CampaignFieldErrors,
   type CampaignRegistrationDraft,
 } from '../registrationForm'
-import { ClusteredNumericInput } from './ClusteredNumericInput'
 import { MotorcycleColourExperience } from './MotorcycleColourExperience'
+import { NumericField } from './NumericField'
 import { VehicleSelector } from './VehicleSelector'
 
 /*
- * Point A, in the campaign's design.
+ * Point A's form, in the V2 design.
  *
- * Staff operate this several hundred times a day with a rider standing in front
- * of them, so the supplied design is followed except where it would cost time:
+ * ## What this migration did and did not touch
  *
- *   - The vehicle plates and colour swatches are kept. They are the fastest way
- *     to answer those two questions and they read at arm's length.
- *   - The circular dial keypads for phone and pincode are NOT kept. They are the
- *     most striking part of the reference and the slowest thing in it: ten taps
- *     on a rendered keypad instead of a number typed on the tablet's own
- *     keyboard, with no paste and no autofill. The fields are `inputMode`
- *     numeric inputs, which raise the same keypad the dial imitates.
- *   - Location and Test Ride Date & Time are NOT asked. There is one venue and
- *     one day, and the ride is happening now; both are attached at submit from
- *     configuration and the venue clock (see `eventStamp.ts`), and shown as
- *     event metadata above the form instead. A read-only input holding an
- *     answer the operator cannot change is still a control they have to look at
- *     and tab past, several hundred times a day.
+ * Presentation only. The draft shape, the validation call, the paste
+ * normaliser, the reset-on-`resetKey` behaviour, the focus-Name-on-arrival
+ * behaviour, submit-time validation and the exact values handed to `onSubmit`
+ * are the code that was here before, unchanged. There is deliberately no second
+ * set of rules: `validateCampaignRegistration` is still the only thing that
+ * decides whether a registration is acceptable, and it still runs on submit
+ * rather than per keystroke, because errors appearing while somebody is still
+ * typing an email address are noise at a desk.
  *
- * Name is focused on arrival, tab order runs down the fields to the button, and
- * validation runs on submit, errors that appear while someone is still typing
- * an email address are noise at a desk.
+ * ## What changed
+ *
+ * The three `BrandCard`s became three open bands (see `StationStep`). Wrapping
+ * every group in a bordered, filled, 22px-cornered surface made one form read
+ * as three separate things to deal with, and the borders were doing no work:
+ * nothing sits beside a step that it needs to be told apart from.
+ *
+ * The field order changed, and this is the one substantive layout decision.
+ * V1 ran Name, Email, Gender, Licence in a grid and then dropped Phone and
+ * Pincode into a separate block underneath, because the dial pods needed their
+ * own row. That put the two most important fields on the form, one of them
+ * required, below two of the least important. They are now ordered by whether
+ * the form will refuse without them:
+ *
+ *     Name *            Email ID *
+ *     Phone Number *    Pincode
+ *     Gender            Driving Licence No
+ *
+ * so an operator scanning for what is still empty meets the ones that will stop
+ * them first, in reading order.
+ *
+ * Venue and Test Ride Date & Time are still not asked. There is one venue and
+ * one day, and the ride is happening now; both are attached at submit from
+ * configuration and the venue clock (see `eventStamp.ts`). A read-only input
+ * holding an answer the operator cannot change is still a control they look at
+ * and tab past, several hundred times a day. The quiet note beside the submit
+ * button is what states them instead.
+ *
+ * ## Gender is a native select on purpose
+ *
+ * The V2 primitive layer has a Radix `Select`, and this does not use it. A
+ * native `<select>` raises the operating system's own picker on a tablet, which
+ * is faster to hit than a rendered listbox, needs no JavaScript to open, and
+ * cannot be left half-open by a stray tap. It is styled to match the V2 field so
+ * nothing about the form looks inconsistent.
  */
 
 interface CampaignRegistrationFormProps {
@@ -55,6 +81,13 @@ interface CampaignRegistrationFormProps {
   readonly resetKey: number
   readonly submitLabel?: string
   readonly initialDraft?: CampaignRegistrationDraft
+  /**
+   * Hides the note about stamping.
+   *
+   * A correction does not re-stamp the venue or the ride time, so promising
+   * that it will would be false. See `eventStamp.ts`.
+   */
+  readonly stamps?: boolean
 }
 
 export function CampaignRegistrationForm({
@@ -63,6 +96,7 @@ export function CampaignRegistrationForm({
   resetKey,
   submitLabel = 'Register & Print',
   initialDraft,
+  stamps = true,
 }: CampaignRegistrationFormProps) {
   const [draft, setDraft] = useState<CampaignRegistrationDraft>(
     initialDraft ?? emptyCampaignDraft(),
@@ -100,32 +134,25 @@ export function CampaignRegistrationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
-      <BrandCard labelledBy="ff-step-vehicle">
-        <BrandSectionHeading
-          id="ff-step-vehicle"
-          step="Step 01"
-          title="Select Vehicle No"
-          subtitle="Choose your test-ride vehicle"
-        />
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-8">
+      <StationStep step="01" title="Vehicle" note="Read the plate on the bike">
         <VehicleSelector
           value={draft.vehicle}
           onChange={(vehicle) => patch({ vehicle })}
           error={errors.vehicle}
           disabled={busy}
         />
-      </BrandCard>
+      </StationStep>
 
-      <BrandCard labelledBy="ff-step-interest">
-        <BrandSectionHeading
-          id="ff-step-interest"
-          step="Step 02"
-          title="Interest"
-          subtitle="Interested in Color?"
-        />
+      <StationStep step="02" title="Preferred colour">
         {/*
           The picture and the choice are one component: the image is a function
           of the value that will be persisted, not a second piece of state.
+
+          The heading says "Preferred colour" and the field it writes is still
+          `interestedColour`. Copy and storage are different contracts, and
+          renaming a persisted field to improve a heading would ripple through
+          the wire schema, the exports and every backup already taken.
         */}
         <MotorcycleColourExperience
           value={draft.interestedColour}
@@ -134,19 +161,13 @@ export function CampaignRegistrationForm({
           }
           disabled={busy}
         />
-      </BrandCard>
+      </StationStep>
 
-      <BrandCard labelledBy="ff-step-details">
-        <BrandSectionHeading
-          id="ff-step-details"
-          step="Step 03"
-          title="Personal Details"
-        />
-
-        <div className="ff-grid2">
-          <BrandField label="Name" required error={errors.name}>
+      <StationStep step="03" title="Rider details">
+        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+          <FormField label="Name" required error={errors.name}>
             {(field) => (
-              <input
+              <Input
                 {...field}
                 ref={nameRef}
                 type="text"
@@ -156,11 +177,11 @@ export function CampaignRegistrationForm({
                 onChange={(event) => patch({ name: event.target.value })}
               />
             )}
-          </BrandField>
+          </FormField>
 
-          <BrandField label="Email ID" required error={errors.email}>
+          <FormField label="Email ID" required error={errors.email}>
             {(field) => (
-              <input
+              <Input
                 {...field}
                 type="email"
                 autoComplete="off"
@@ -170,53 +191,9 @@ export function CampaignRegistrationForm({
                 onChange={(event) => patch({ email: event.target.value })}
               />
             )}
-          </BrandField>
+          </FormField>
 
-          <BrandField label="Gender">
-            {(field) => (
-              <select
-                {...field}
-                value={draft.gender}
-                disabled={busy}
-                onChange={(event) =>
-                  patch({ gender: event.target.value as '' | FlyingFleaGender })
-                }
-              >
-                <option value="">Select gender</option>
-                {FLYING_FLEA_CAMPAIGN.genders.map((gender) => (
-                  <option key={gender} value={gender}>
-                    {gender}
-                  </option>
-                ))}
-              </select>
-            )}
-          </BrandField>
-
-          <BrandField label="Driving Licence No" error={errors.drivingLicence}>
-            {(field) => (
-              <input
-                {...field}
-                type="text"
-                autoComplete="off"
-                autoCapitalize="characters"
-                value={draft.drivingLicence}
-                disabled={busy}
-                onChange={(event) =>
-                  patch({ drivingLicence: event.target.value })
-                }
-              />
-            )}
-          </BrandField>
-
-        </div>
-
-        {/*
-          The campaign's instrument-cluster treatment for the two numbers. They
-          still accept typing and paste (see ClusteredNumericInput), so the
-          look costs staff nothing at a busy desk.
-        */}
-        <div className="ff-clusters">
-          <ClusteredNumericInput
+          <NumericField
             label="Phone Number"
             required
             length={10}
@@ -228,7 +205,7 @@ export function CampaignRegistrationForm({
             onChange={(phone) => patch({ phone })}
           />
 
-          <ClusteredNumericInput
+          <NumericField
             label="Pincode"
             length={6}
             value={draft.pincode}
@@ -237,12 +214,79 @@ export function CampaignRegistrationForm({
             autoComplete="postal-code"
             onChange={(pincode) => patch({ pincode })}
           />
-        </div>
-      </BrandCard>
 
-      <BrandButton type="submit" block disabled={busy}>
-        {busy ? 'Saving…' : submitLabel}
-      </BrandButton>
+          <FormField label="Gender">
+            {(field) => (
+              <select
+                {...field}
+                value={draft.gender}
+                disabled={busy}
+                onChange={(event) =>
+                  patch({ gender: event.target.value as '' | FlyingFleaGender })
+                }
+                className={cn(
+                  'flex min-h-touch w-full appearance-none rounded-control',
+                  'border border-line bg-field px-3.5 py-2',
+                  'font-ui text-base text-ink',
+                  'transition-[border-color] duration-150 hover:border-line-strong',
+                  'focus-visible:border-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive/40',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                <option value="">Select gender</option>
+                {FLYING_FLEA_CAMPAIGN.genders.map((gender) => (
+                  <option key={gender} value={gender}>
+                    {gender}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+
+          <FormField label="Driving Licence No" error={errors.drivingLicence}>
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                value={draft.drivingLicence}
+                disabled={busy}
+                onChange={(event) =>
+                  patch({ drivingLicence: event.target.value })
+                }
+              />
+            )}
+          </FormField>
+        </div>
+      </StationStep>
+
+      {/*
+        One action, on its own rule, at the end of the reading order.
+
+        Not a sticky bar: on a tablet the software keyboard is open for most of
+        this form, and a bar pinned to the bottom of the viewport sits either
+        under the keyboard or on top of the field being typed into. A button at
+        the end of the form is where the operator's eye already is when they
+        finish the last field, and Enter from any field submits anyway.
+      */}
+      <div className="flex flex-col-reverse items-stretch gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+        {stamps && (
+          <p className="font-body text-small text-faint">
+            Venue and test-ride time are stamped automatically when this is
+            saved.
+          </p>
+        )}
+        <AppButton
+          type="submit"
+          size="lg"
+          busy={busy}
+          busyLabel="Saving…"
+          className="sm:ml-auto sm:min-w-56"
+        >
+          {submitLabel}
+        </AppButton>
+      </div>
     </form>
   )
 }

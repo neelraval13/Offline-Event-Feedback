@@ -183,13 +183,23 @@ export function AppShellV2({
             {status}
             <OperationalStatus />
 
-            {chrome === 'full' && nav.length > 0 && (
+            {/*
+              The way to another station, in every chrome.
+
+              `minimal` used to hide this along with the navigation band, which
+              made the shell's own promise of "a single way back" untrue: on a
+              capture surface there was no way back at all. What `minimal`
+              removes is the row of tempting links above a half-filled form, not
+              the ability to leave. So the trigger stays, and it stays at every
+              width, because with no band there is nothing to take over from it.
+            */}
+            {nav.length > 0 && (
               <Sheet open={navOpen} onOpenChange={setNavOpen}>
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="-mr-2 md:hidden"
+                    className={cn('-mr-2', chrome === 'full' && 'md:hidden')}
                     aria-label="Open navigation"
                   >
                     <MenuIcon />

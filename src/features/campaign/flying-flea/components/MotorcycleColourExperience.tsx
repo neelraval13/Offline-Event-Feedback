@@ -14,6 +14,11 @@ import { MotorcyclePreview } from './MotorcyclePreview'
  * There is exactly one source of truth: the `colour` prop, which is the value
  * the registration will persist. The preview is a function of it. Nothing here
  * holds state, and no other registration field is touched by changing it.
+ *
+ * V2 puts the two beside each other above 640px instead of stacking them. The
+ * relationship is the same and reads better for it: the control is next to the
+ * thing it changes rather than below the fold from it, and the whole of step 02
+ * becomes one band instead of most of a tablet screen.
  */
 
 interface MotorcycleColourExperienceProps {
@@ -28,7 +33,7 @@ export function MotorcycleColourExperience({
   disabled = false,
 }: MotorcycleColourExperienceProps) {
   return (
-    <div className="ff-colour-experience">
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center sm:gap-6">
       <MotorcyclePreview colour={value} />
       <ColourSelector value={value} onChange={onChange} disabled={disabled} />
     </div>

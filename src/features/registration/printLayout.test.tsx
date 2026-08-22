@@ -150,9 +150,14 @@ describe('print DOM structure', () => {
     render(<RegistrationScreen />)
     const user = await registerParticipant()
 
-    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
-    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
+    /*
+     * Print, then reprint twice. The button's label changes once a print has
+     * been attempted; the portalled copy it hands the printer must not be
+     * duplicated however many times it is pressed.
+     */
     await user.click(screen.getByRole('button', { name: 'Print sticker' }))
+    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
+    await user.click(screen.getByRole('button', { name: 'Reprint sticker' }))
 
     expect(
       document.getElementById(PRINT_ROOT_ID)?.querySelectorAll('.sticker'),

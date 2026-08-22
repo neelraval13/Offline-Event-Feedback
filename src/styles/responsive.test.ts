@@ -41,7 +41,15 @@ describe('grid tracks', () => {
       ),
     ].map((match) => (match[1] as string).trim())
 
-    expect(tracks.length).toBeGreaterThanOrEqual(5)
+    /*
+     * A non-vacuity guard, not a census. It exists so a regex that stopped
+     * matching would fail rather than pass with nothing to check, and the
+     * number goes down as screens migrate off this stylesheet: Phase 3 removed
+     * Point A's vehicle-plate and rider-details tracks with the rest of its V1
+     * presentation. What matters is the loop below, which still checks every
+     * track the file has.
+     */
+    expect(tracks.length).toBeGreaterThanOrEqual(3)
     for (const floor of tracks) {
       expect(floor.startsWith('min(')).toBe(true)
       expect(floor).toContain('100%')

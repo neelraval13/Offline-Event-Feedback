@@ -127,7 +127,13 @@ describe('VehicleSelector', () => {
     const group = screen.getByRole('group', { name: 'Select vehicle number' })
     const plates = within(group).getAllByRole('button')
 
-    expect(plates.map((plate) => plate.textContent)).toEqual([
+    /*
+     * Read from the accessible name rather than from the text, because V2 sets
+     * the plate as a quiet word above a large numeral and the two are separate
+     * elements. What an operator and a screen reader are both told is still
+     * exactly the campaign's own string.
+     */
+    expect(plates.map((plate) => plate.getAttribute('aria-label'))).toEqual([
       ...FLYING_FLEA_CAMPAIGN.vehicles,
     ])
   })

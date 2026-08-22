@@ -1,33 +1,30 @@
 import { CheckIcon } from 'lucide-react'
-import { cn } from '../../../../lib/ui/cn'
-import { FLYING_FLEA_CAMPAIGN } from '../config'
+import { cn } from '@/lib/ui/cn'
 
 /*
  * Which bike the rider is taking out.
  *
- * The number-plate idea is the supplied design's and it earns its place
- * operationally: four identical bikes stand in a row at the venue and staff read
- * the plate off the one that just came back. A dropdown of the same four strings
- * would be quicker to build and slower to use.
+ * The plate treatment survives from V1 and should: four identical motorcycles
+ * stand in a row at the venue and the operator reads the number off the one
+ * that just came back. A dropdown of the same four strings would be quicker to
+ * build and slower to use, and §9 is right to protect it.
  *
- * ## What V2 changed
+ * What changes is everything about how a plate reads:
  *
- * The plate, not the idea. V1 set the whole label at body size, so "Vehicle 3"
- * was a sentence to read rather than a numeral to recognise, and recognition is
- * what happens at arm's length. Now the word is a quiet caption and the number
- * is 40px, which is what actually differs between the four.
+ *   - The number is the size of the number on the bike. V1 set the whole label
+ *     at body size, so "Vehicle 3" was a sentence to read rather than a numeral
+ *     to recognise, and recognition is what happens at arm's length.
+ *   - Selection carries a tick as well as a colour and a border. V1's selected
+ *     plate was distinguished by fill alone, which is the one thing §24 rules
+ *     out, and these screens are read outdoors where two dark fills converge.
+ *   - The whole plate is the target, 72px tall, not a text-sized button.
  *
- * Selection carries a tick as well as a fill and a border. V1 distinguished the
- * chosen plate by fill alone, which is the one thing an outdoor screen read at
- * an angle cannot be trusted to convey.
- *
- * Still real buttons with `aria-pressed`, in a labelled group, so selection is
- * announced and the control works from a keyboard. `aria-label` carries the
- * campaign's own string, so the accessible name is "Vehicle 3" whatever the
- * plate does visually with it.
+ * Real `<button aria-pressed>` in a labelled group, so this is operable from a
+ * keyboard and announced correctly, exactly as V1 already had it.
  */
 
-interface VehicleSelectorProps {
+interface VehiclePlatesProps {
+  readonly vehicles: readonly string[]
   readonly value: string | null
   readonly onChange: (vehicle: string) => void
   readonly error?: string | undefined
@@ -38,13 +35,10 @@ interface VehicleSelectorProps {
  * Splits "Vehicle 3" into its word and its numeral.
  *
  * Campaign labels are configuration, so this must not assume a shape. Anything
- * without a trailing token renders whole rather than being mangled into a plate
+ * without a trailing token is rendered whole rather than mangled into a plate
  * it does not fit.
  */
-function plateParts(label: string): {
-  readonly prefix: string | null
-  readonly figure: string
-} {
+function plateParts(label: string): { prefix: string | null; figure: string } {
   const match = /^(.*\S)\s+(\S+)$/.exec(label)
 
   return match === null
@@ -52,12 +46,13 @@ function plateParts(label: string): {
     : { prefix: match[1] as string, figure: match[2] as string }
 }
 
-export function VehicleSelector({
+export function VehiclePlates({
+  vehicles,
   value,
   onChange,
   error,
   disabled = false,
-}: VehicleSelectorProps) {
+}: VehiclePlatesProps) {
   return (
     <div className="flex flex-col gap-2">
       <div
@@ -65,7 +60,7 @@ export function VehicleSelector({
         aria-label="Select vehicle number"
         className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3"
       >
-        {FLYING_FLEA_CAMPAIGN.vehicles.map((vehicle) => {
+        {vehicles.map((vehicle) => {
           const selected = value === vehicle
           const { prefix, figure } = plateParts(vehicle)
 
@@ -73,12 +68,11 @@ export function VehicleSelector({
             <button
               key={vehicle}
               type="button"
-              aria-label={vehicle}
               aria-pressed={selected}
               disabled={disabled}
               onClick={() => onChange(vehicle)}
               className={cn(
-                'relative flex min-h-20 flex-col items-center justify-center gap-1',
+                'relative flex min-h-[5rem] flex-col items-center justify-center gap-1',
                 'rounded-control border px-2 py-3 transition-colors duration-150',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
                 'disabled:cursor-not-allowed disabled:opacity-45',
@@ -90,6 +84,12 @@ export function VehicleSelector({
               {prefix !== null && (
                 <span
                   className={cn(
+                    /*
+                     * Quiet, and narrow. The word is the same on all four
+                     * plates, so it carries no information; letting it set the
+                     * width made every plate read as the word rather than as
+                     * the number, which is the one thing that differs.
+                     */
                     'font-ui text-caption font-semibold uppercase tracking-[0.1em]',
                     selected ? 'text-interactive' : 'text-faint',
                   )}

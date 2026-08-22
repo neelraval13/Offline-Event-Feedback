@@ -289,25 +289,7 @@ a {
   color: var(--ff-success);
 }
 
-.public-code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-feature-settings: "zero" 1, "tnum" 1;
-  font-variant-numeric: slashed-zero tabular-nums;
-  /* Scaled rather than wrapped: a public code broken across two lines is a
-     code an operator reads back wrongly, and shrinking it keeps all seventeen
-     characters on one line down to a 320px screen. */
-  font-size: clamp(1.15rem, 5.5vw, 1.5rem);
-  letter-spacing: 0.04em;
-  margin: 0.5rem 0;
-  white-space: nowrap;
-}
 
-.correction {
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-muted);
-}
 
 .recent__list {
   list-style: none;
@@ -883,104 +865,6 @@ textarea.ff-field__control {
   cursor: not-allowed;
 }
 
-/* Vehicle number plates */
-.ff-plates {
-  /* Two up on a tablet, one up on a phone, and never a plate too narrow to
-     read its own number. */
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
-  gap: var(--ff-gap);
-}
-
-.ff-plate {
-  position: relative;
-  background: linear-gradient(180deg, #ffffff, #e7e9eb);
-  color: #0b0d0e;
-  border: 1px solid rgba(0, 0, 0, 0.75);
-  border-radius: 14px;
-  padding: 20px clamp(14px, 4cqw, 26px);
-  min-height: 62px;
-  font-family: var(--ff-font-display);
-  font-size: clamp(19px, 5vw, 22px);
-  /* FlyingFlea is already wide; the reference's 7px tracking on Anton would
-     push a four-word plate off a tablet. */
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
-}
-
-.ff-plate::before,
-.ff-plate::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #9aa0a6;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.ff-plate::before {
-  left: 12px;
-}
-
-.ff-plate::after {
-  right: 12px;
-}
-
-.ff-plate[aria-pressed='true'] {
-  box-shadow:
-    0 0 0 3px var(--ff-interactive),
-    0 0 26px rgba(58, 198, 190, 0.4);
-}
-
-.ff-plate:focus-visible {
-  outline: 3px solid var(--ff-interactive);
-  outline-offset: 3px;
-}
-
-/* Colour choice */
-.ff-colours {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
-  gap: var(--ff-gap);
-}
-
-.ff-colour {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #000;
-  border: 1px solid var(--ff-border);
-  border-radius: 20px;
-  padding: 18px 20px;
-  min-height: 62px;
-  color: var(--ff-text);
-  font-family: var(--ff-font-display);
-  font-size: clamp(17px, 4.6vw, 20px);
-  cursor: pointer;
-}
-
-.ff-colour[aria-pressed='true'] {
-  border-color: var(--ff-interactive);
-  box-shadow: 0 0 0 2px var(--ff-interactive-soft);
-}
-
-.ff-colour:focus-visible {
-  outline: 3px solid var(--ff-interactive);
-  outline-offset: 3px;
-}
-
-.ff-colour__swatch {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  flex: none;
-}
 
 /* Rating */
 .ff-question {
@@ -1438,75 +1322,6 @@ textarea.ff-field__control {
  * Motorcycle preview and hero banner
  * ------------------------------------------------------------------------- */
 
-.ff-colour-experience {
-  display: grid;
-  gap: var(--ff-gap);
-}
-
-.ff-bike {
-  background: #000;
-  border: 1px solid var(--ff-border);
-  border-radius: 20px;
-  padding: clamp(12px, 3vw, 16px);
-  text-align: center;
-}
-
-.ff-bike__stage {
-  position: relative;
-  width: 100%;
-  /*
-   * Matched to the wider of the two supplied photographs (940x593). A 16:9 box
-   * would letterbox both and render the motorcycle smaller than it needs to be;
-   * this leaves the green bike, which is fractionally narrower, with about 2%
-   * of breathing room on either side.
-   *
-   * Fixed regardless of selection, so choosing a colour cannot move the form
-   * under an operator's finger.
-   */
-  aspect-ratio: 940 / 593;
-  /*
-   * Bounded by height rather than width, and then converted back into a width
-   * so the frame keeps its proportions instead of becoming a letterbox with a
-   * small motorcycle in the middle of it. On a phone the colour buttons
-   * underneath have to stay in view with the bike, not a scroll away from it;
-   * on a laptop the stage stops growing well before it dominates the card.
-   */
-  width: min(100%, calc(clamp(180px, 38vh, 340px) * 940 / 593));
-  margin: 0 auto;
-}
-
-.ff-bike__image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  /* Contain, never cover: cropping a motorcycle to fill a box is how a wheel
-     or the tail goes missing on one screen size and not another. */
-  object-fit: contain;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-
-.ff-bike__image--shown {
-  opacity: 1;
-}
-
-/* Both images are mounted; only the selected one is painted. Switching is a
-   composited opacity change with no network and no decode. */
-@media (prefers-reduced-motion: reduce) {
-  .ff-bike__image {
-    transition: none;
-  }
-}
-
-.ff-bike__caption {
-  font-family: var(--ff-font-display);
-  font-size: clamp(19px, 5vw, 24px);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin: 12px 0 0;
-  color: var(--ff-text);
-}
 
 .ff-hero {
   margin-bottom: var(--ff-gap-section);

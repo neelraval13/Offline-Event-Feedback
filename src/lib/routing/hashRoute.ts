@@ -18,6 +18,15 @@ export const ROUTE_PATHS = [
    * in a browser rather than read as source.
    */
   '/foundation',
+  /*
+   * The Point A V2 concept. A design-review surface, not a station.
+   *
+   * Deliberately a separate path from `/a`, which still renders the production
+   * registration terminal untouched. The concept writes nothing, calls no
+   * registration function and holds no real record; it exists so the V2 design
+   * can be agreed by looking at it before any of it is implemented.
+   */
+  '/concept/point-a',
 ] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]

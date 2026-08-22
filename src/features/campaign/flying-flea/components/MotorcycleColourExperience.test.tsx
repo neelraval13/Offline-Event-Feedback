@@ -32,14 +32,14 @@ function Harness({ initial }: { readonly initial?: FlyingFleaColour }) {
 /** The photograph currently painted, read from its alt text. */
 function shownColour(): string | null {
   return (
-    document.querySelector('.ff-bike__image--shown')?.getAttribute('alt') ?? null
+    document.querySelector('[data-shown="true"]')?.getAttribute('alt') ?? null
   )
 }
 
 /** The `src` of the photograph currently painted. */
 function shownSource(): string | null {
   return (
-    document.querySelector('.ff-bike__image--shown')?.getAttribute('src') ?? null
+    document.querySelector('[data-shown="true"]')?.getAttribute('src') ?? null
   )
 }
 
@@ -150,10 +150,10 @@ describe('the images are local', () => {
      */
     render(<Harness />)
 
-    const images = document.querySelectorAll('.ff-bike__image')
+    const images = document.querySelectorAll('[data-motorcycle]')
     expect(images).toHaveLength(2)
     expect(
-      document.querySelectorAll('.ff-bike__image--shown'),
+      document.querySelectorAll('[data-shown="true"]'),
     ).toHaveLength(1)
   })
 })
@@ -165,7 +165,7 @@ describe('the hidden photograph', () => {
     render(<Harness />)
 
     const hidden = document.querySelector(
-      '.ff-bike__image:not(.ff-bike__image--shown)',
+      '[data-shown="false"]',
     )
 
     expect(hidden?.getAttribute('aria-hidden')).toBe('true')

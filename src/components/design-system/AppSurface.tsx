@@ -13,24 +13,27 @@ import { cn } from '@/lib/ui/cn'
  * with a class, because the choice between them is a real design decision that
  * every screen has to make:
  *
- *   measure  a reading and input measure, about 46rem. Point A and Point B.
- *            A registration form stretched across a 27-inch monitor is not
- *            more usable, it is harder to scan, and the operator's eye has
- *            further to travel between the label and the field.
+ *   measure  a reading and input measure, about 46rem. Prose, and any form
+ *            short enough to be one column. A paragraph stretched across a
+ *            27-inch monitor is not more readable.
+ *   station  60rem. A capture terminal: Point A and Point B. Wide enough for
+ *            two columns of fields and a motorcycle beside its colour control,
+ *            narrow enough that a label and its field stay in one glance.
  *   wide     up to 88rem. Device Admin and Central Reporting. These carry
  *            tables of ten thousand participants, and squeezing them into a
  *            reading measure is why the current Admin screen looks like a form
  *            that grew rather than a console.
  *
- * This is how the design system serves two very different kinds of surface
- * without becoming two unrelated visual languages: same tokens, same
- * components, same shell, different measure.
+ * This is how the design system serves very different kinds of surface without
+ * becoming unrelated visual languages: same tokens, same components, same
+ * shell, different measure.
  */
 
-export type SurfaceWidth = 'measure' | 'wide' | 'full'
+export type SurfaceWidth = 'measure' | 'station' | 'wide' | 'full'
 
 const WIDTHS: Readonly<Record<SurfaceWidth, string>> = {
   measure: 'max-w-measure',
+  station: 'max-w-station',
   wide: 'max-w-wide',
   /* No cap. For a scanner viewport or anything that owns the whole screen. */
   full: 'max-w-none',
