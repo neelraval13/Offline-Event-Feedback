@@ -1609,9 +1609,16 @@ to the organiser's admin session.
 
 The secret is compared in constant time, after hashing both sides so the
 comparison runs over fixed-length buffers whatever was submitted, otherwise the
-length of a guess leaks through timing. The server refuses to start if it is
-shorter than 32 characters, so a weak secret is a deployment error rather than a
-discovery made afterwards.
+length of a guess leaks through timing. Because both sides are hashed first, the
+comparison is length-agnostic: a short memorable password is checked exactly as
+safely as a generated one.
+
+There is no minimum length. There used to be, and it was removed: these values
+are set by hand by the people running the event, and a 64-character hex string
+they cannot type gets written down somewhere worse than a chosen password would
+be. The one configuration rule that remains is separation, because that is the
+mistake a strong secret would not have prevented: the server refuses to start if
+the reporting secret equals the enrolment code.
 
 When it is not configured at all, reporting **fails closed**: every
 `/v1/reporting/*` request answers `503 reporting_not_configured`. Ingest is

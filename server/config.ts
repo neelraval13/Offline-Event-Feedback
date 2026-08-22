@@ -69,9 +69,13 @@ export function readServerConfig(env: Environment): ServerConfigResult {
   }
 
   /*
-   * Reporting is optional, and when configured it must be strong and genuinely
-   * separate from the enrolment code. Checked before anything listens, because
-   * the alternative is discovering it from the data.
+   * Reporting is optional, and when configured it must be genuinely separate
+   * from the enrolment code. Checked before anything listens, because the
+   * alternative is discovering it from the data.
+   *
+   * Length is deliberately not checked. These values are set by hand by the
+   * people running the event, and a memorable password they can actually use is
+   * worth more than a generated one that ends up written on the venue desk.
    */
   const reportingSecret = env['REPORTING_ADMIN_SECRET']
   const reportingProblem = describeReportingConfigProblem(

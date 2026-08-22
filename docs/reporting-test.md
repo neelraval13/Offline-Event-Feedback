@@ -48,7 +48,7 @@ Generate a reporting secret. Never commit it, never put it in a URL, never paste
 it into a ticket:
 
 ```bash
-export REPORTING_ADMIN_SECRET=$(openssl rand -hex 32)
+export REPORTING_ADMIN_SECRET=<a password, not the enrolment code, no spaces>
 export SYNC_ENROLLMENT_SECRET=<the Phase 6 enrolment code>
 export SYNC_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173
 pnpm server:start
@@ -126,11 +126,16 @@ never be able to stop a device syncing.
 Also confirm a weak secret is rejected at startup rather than accepted:
 
 ```bash
-REPORTING_ADMIN_SECRET=short pnpm server:start
+REPORTING_ADMIN_SECRET=$SYNC_ENROLLMENT_SECRET pnpm server:start
 ```
 
 **Expect** the process to exit with
-`REPORTING_ADMIN_SECRET must be at least 32 characters` and no server listening.
+`REPORTING_ADMIN_SECRET must not be the same value as SYNC_ENROLLMENT_SECRET`
+and no server listening.
+
+A short secret is *not* an error: length is the operator's judgement, and
+`REPORTING_ADMIN_SECRET=flea26` starts normally. Separation is the rule the
+server still enforces.
 
 Restart with the real secret before continuing.
 
