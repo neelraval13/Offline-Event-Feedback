@@ -66,6 +66,19 @@ async function seed(registrations = 3) {
   return records
 }
 
+/**
+ * Queries scoped to the open sheet.
+ *
+ * V2 runs create, verify and restore in a Sheet, so while one is open the
+ * section's own trigger of the same name sits behind it, `aria-hidden`, and
+ * out of the accessibility tree. Scoping to the dialog names which control is
+ * meant; the old positional `[1]` was doing the same job when both buttons
+ * were inline on the page.
+ */
+function inSheet() {
+  return within(screen.getByRole('dialog'))
+}
+
 /** A backup file as an operator would have on disk. */
 async function backupFile(passphrase = PASSPHRASE): Promise<File> {
   const result = await createEncryptedBackup(db, passphrase, { iterations: 1_000 })
@@ -112,10 +125,10 @@ describe('creating a backup', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
-    await user.type(screen.getByLabelText('Backup passphrase'), 'short')
-    await user.type(screen.getByLabelText('Confirm passphrase'), 'short')
+    await user.type(screen.getByLabelText(/^Backup passphrase/), 'short')
+    await user.type(screen.getByLabelText(/^Confirm passphrase/), 'short')
     await user.click(
-      screen.getAllByRole('button', { name: 'Create encrypted backup' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Create encrypted backup' }),
     )
 
     expect((await screen.findByTestId('backup-message')).textContent).toContain(
@@ -132,10 +145,10 @@ describe('creating a backup', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
-    await user.type(screen.getByLabelText('Confirm passphrase'), 'something else')
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Confirm passphrase/), 'something else')
     await user.click(
-      screen.getAllByRole('button', { name: 'Create encrypted backup' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Create encrypted backup' }),
     )
 
     expect((await screen.findByTestId('backup-message')).textContent).toContain(
@@ -152,10 +165,10 @@ describe('creating a backup', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
-    await user.type(screen.getByLabelText('Confirm passphrase'), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Confirm passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Create encrypted backup' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Create encrypted backup' }),
     )
 
     await waitFor(() =>
@@ -180,10 +193,10 @@ describe('creating a backup', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
-    await user.type(screen.getByLabelText('Confirm passphrase'), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Confirm passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Create encrypted backup' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Create encrypted backup' }),
     )
 
     const message = await screen.findByTestId('backup-message')
@@ -192,6 +205,12 @@ describe('creating a backup', () => {
     expect(message.textContent).not.toContain('backed up safely')
   })
 
+  /*
+   * Split from V1's single assertion because V2 replaces the create form with
+   * the summary once the file exists: the success path can only show that the
+   * passphrase is gone from the document, so the case where the fields are
+   * still on screen is pinned separately below.
+   */
   it('clears the passphrase fields afterwards', async () => {
     await seed(1)
     render(<AdminScreen />)
@@ -200,10 +219,10 @@ describe('creating a backup', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
-    await user.type(screen.getByLabelText('Confirm passphrase'), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
+    await user.type(screen.getByLabelText(/^Confirm passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Create encrypted backup' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Create encrypted backup' }),
     )
 
     await waitFor(() =>
@@ -211,8 +230,28 @@ describe('creating a backup', () => {
         'generated',
       ),
     )
-    expect(screen.getByLabelText('Backup passphrase')).toHaveProperty('value', '')
-    expect(screen.getByLabelText('Confirm passphrase')).toHaveProperty('value', '')
+    expect(screen.queryByDisplayValue(PASSPHRASE)).toBeNull()
+    expect(document.body.textContent).not.toContain(PASSPHRASE)
+  })
+
+  it('clears the passphrase when an attempt fails', async () => {
+    await seed(1)
+    const file = await backupFile()
+
+    render(<AdminScreen />)
+    const user = userEvent.setup()
+
+    // Verify, because a failed attempt leaves its form on screen for another
+    // go: a passphrase kept in state would still be sitting in the field.
+    await user.click(await screen.findByRole('button', { name: 'Verify backup file' }))
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), 'wrong passphrase!!')
+    await user.click(
+      inSheet().getByRole('button', { name: 'Verify backup file' }),
+    )
+
+    await screen.findByTestId('backup-message')
+    expect(screen.getByLabelText(/^Backup passphrase/)).toHaveProperty('value', '')
   })
 
   it('warns that the passphrase cannot be recovered', async () => {
@@ -223,8 +262,13 @@ describe('creating a backup', () => {
       await screen.findByRole('button', { name: 'Create encrypted backup' }),
     )
 
+    // Both halves of the warning: the application does not hold the passphrase,
+    // and there is no recovery path if the operator loses it.
     expect(
-      screen.getByText(/not stored by the application/),
+      screen.getByText(/application does not store this passphrase/),
+    ).toBeDefined()
+    expect(
+      screen.getByText(/cannot be recovered. Store it securely/),
     ).toBeDefined()
   })
 })
@@ -240,10 +284,10 @@ describe('verifying a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Verify backup file' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Verify backup file' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Verify backup file' }),
     )
 
     const summary = await screen.findByTestId('backup-summary')
@@ -261,10 +305,10 @@ describe('verifying a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Verify backup file' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Verify backup file' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Verify backup file' }),
     )
 
     await waitFor(() =>
@@ -282,10 +326,10 @@ describe('verifying a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Verify backup file' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), 'wrong passphrase!!')
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), 'wrong passphrase!!')
     await user.click(
-      screen.getAllByRole('button', { name: 'Verify backup file' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Verify backup file' }),
     )
 
     const message = await screen.findByTestId('backup-message')
@@ -308,10 +352,10 @@ describe('verifying a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Verify backup file' }))
-    await user.upload(screen.getByLabelText('Backup file'), tampered)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), tampered)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(
-      screen.getAllByRole('button', { name: 'Verify backup file' })[1] as HTMLElement,
+      inSheet().getByRole('button', { name: 'Verify backup file' }),
     )
 
     expect((await screen.findByTestId('backup-message')).textContent).toContain(
@@ -331,13 +375,18 @@ describe('restoring a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // Preview: nothing written yet.
     const summary = await screen.findByTestId('backup-summary')
-    expect(within(summary).getByText(/merge/)).toBeDefined()
+    // The review screen has to say what restoring does before it is confirmed,
+    // and say it as a merge rather than a replacement.
+    expect(within(summary).getAllByText(/merge/).length).toBeGreaterThan(0)
+    expect(
+      within(summary).getByText(/not be deleted or replaced by older copies/),
+    ).toBeDefined()
     expect(await db.registrations.count()).toBe(0)
 
     await user.click(
@@ -363,8 +412,8 @@ describe('restoring a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     const summary = await screen.findByTestId('backup-summary')
@@ -388,8 +437,8 @@ describe('restoring a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(
@@ -420,8 +469,8 @@ describe('restoring a backup', () => {
     )
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.click(
       within(await screen.findByTestId('backup-summary')).getByRole('button', {
@@ -449,8 +498,8 @@ describe('restoring a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.click(
       within(await screen.findByTestId('backup-summary')).getByRole('button', {
@@ -478,8 +527,8 @@ describe('restoring a backup', () => {
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Restore backup' }))
-    await user.upload(screen.getByLabelText('Backup file'), file)
-    await user.type(screen.getByLabelText('Backup passphrase'), PASSPHRASE)
+    await user.upload(screen.getByLabelText(/^Backup file/), file)
+    await user.type(screen.getByLabelText(/^Backup passphrase/), PASSPHRASE)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.click(
       within(await screen.findByTestId('backup-summary')).getByRole('button', {

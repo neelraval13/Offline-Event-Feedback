@@ -34,6 +34,13 @@ export const ROUTE_PATHS = [
    * camera, calls no scanner and writes nothing.
    */
   '/concept/point-b',
+  /*
+   * The Device Admin V2 concept. Same rules as the other two: a design-review
+   * surface on static fixtures, deliberately a separate path from `/admin`,
+   * which still renders the production console untouched. It opens no database,
+   * runs no sync, enrols nothing and touches no backup.
+   */
+  '/concept/admin',
 ] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]

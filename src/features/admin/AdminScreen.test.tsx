@@ -1,14 +1,32 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { AdminScreen } from './AdminScreen'
 import { db } from '../../lib/storage/db'
 import { peekDeviceId } from '../../lib/storage/deviceIdentity'
 
 afterEach(cleanup)
 
+/**
+ * Opens the Device details disclosure.
+ *
+ * V2 puts the technical facts last and collapsed: they are for whoever an event
+ * lead phones, not for the event lead, and V1 had the device UUID outranking
+ * the one line that decides whether the device can be used. What they contain
+ * once open is unchanged, which is what these tests assert.
+ */
+async function openDeviceDetails() {
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: /^Device details/ }),
+  )
+  return user
+}
+
 describe('AdminScreen diagnostics', () => {
   it('provisions and displays the device identity', async () => {
     render(<AdminScreen />)
+    await openDeviceDetails()
 
     const value = await screen.findByText(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
@@ -20,6 +38,7 @@ describe('AdminScreen diagnostics', () => {
 
   it('reports the local database as ready', async () => {
     render(<AdminScreen />)
+    await openDeviceDetails()
 
     expect(
       await screen.findByText(/offline-event-feedback v1: ready/),
@@ -28,6 +47,7 @@ describe('AdminScreen diagnostics', () => {
 
   it('shows no participant PII', async () => {
     const { container } = render(<AdminScreen />)
+    await openDeviceDetails()
     await screen.findByText(/ready/)
 
     for (const label of ['Name', 'Phone', 'Email', 'Participant']) {
@@ -44,6 +64,7 @@ describe('AdminScreen diagnostics', () => {
      * exists, and it told them it did not.
      */
     const { container } = render(<AdminScreen />)
+    await openDeviceDetails()
     await screen.findByText(/ready/)
 
     expect(container.textContent).not.toContain('Not implemented yet')

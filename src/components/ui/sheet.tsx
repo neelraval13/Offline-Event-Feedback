@@ -30,14 +30,42 @@ const SIDE_CLASSES: Readonly<Record<SheetSide, string>> = {
 
 export type SheetContentProps = ComponentProps<typeof SheetPrimitive.Content> & {
   readonly side?: SheetSide
+  /**
+   * Set false while an operation the sheet started is still running.
+   *
+   * Radix dismisses on Escape, on a click outside, and on the close control.
+   * For a sheet that is only collecting input that is exactly right. For one
+   * that is midway through encrypting a backup or merging a restore it is a
+   * lie: the work carries on regardless, and a sheet that vanished when the
+   * operator pressed Escape would have told them it stopped.
+   *
+   * So this closes all three routes at once rather than leaving the close
+   * button live while the other two are blocked, which would be the same lie
+   * with an extra step. Normal dismissal returns the moment the work finishes.
+   */
+  readonly dismissible?: boolean
 }
 
 export function SheetContent({
   className,
   children,
   side = 'right',
+  dismissible = true,
   ...props
 }: SheetContentProps) {
+  /*
+   * Spread after `props` at the call site below, not before: this is a safety
+   * guarantee rather than a default, and a caller passing its own dismissal
+   * handler must not be able to reopen a route out of a running operation.
+   */
+  const block = dismissible
+    ? {}
+    : {
+        onEscapeKeyDown: (event: KeyboardEvent) => event.preventDefault(),
+        onPointerDownOutside: (event: Event) => event.preventDefault(),
+        onInteractOutside: (event: Event) => event.preventDefault(),
+      }
+
   return (
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay
@@ -57,14 +85,17 @@ export function SheetContent({
           className,
         )}
         {...props}
+        {...block}
       >
         {children}
         <SheetPrimitive.Close
+          disabled={!dismissible}
           className={cn(
             'absolute top-4 right-4 inline-flex size-touch items-center justify-center',
             'rounded-control text-muted transition-colors',
             'hover:bg-surface hover:text-ink',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive',
+            'disabled:pointer-events-none disabled:opacity-40',
           )}
         >
           <XIcon className="size-5" />

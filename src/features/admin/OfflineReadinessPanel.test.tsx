@@ -172,8 +172,14 @@ describe('applying an update', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Apply update' }))
 
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('already on this device is unaffected')
+    /*
+     * The V2 console can hold more than one alert at a time, because the things
+     * that go wrong on it are independent: a failed update says nothing about
+     * whether sync is reachable. So this asks for the update's own alert rather
+     * than for "the" alert.
+     */
+    const message = await screen.findByText(/already on this device is unaffected/)
+    expect(message.closest('[role="alert"]')).not.toBeNull()
     // Admin is still usable: a lifecycle error does not take the screen down.
     expect(screen.getByTestId('offline-readiness')).toBeDefined()
     expect(screen.getByTestId('app-version')).toBeDefined()

@@ -1,17 +1,21 @@
+import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { AppButton, FormField, StatusPill } from '../../components/design-system'
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert'
+import { Input } from '../../components/ui/input'
 import { EVENT_CONFIG } from '../../config/event'
-import { db, getLocalCounts, peekDeviceId, type LocalCounts } from '../../lib/storage'
+import { db, peekDeviceId, type LocalCounts } from '../../lib/storage'
 import {
   enrollDevice,
   isSecureEndpoint,
   isSyncConfigured,
-  readSyncActivity,
-  readSyncCredential,
   runSync,
   storeSyncCredential,
   type SyncActivity,
   type SyncOutcome,
 } from '../../lib/sync'
+import { syncLabel, syncStatus, type SyncSummary } from './AdminOverview'
+import { FactRow, formatMoment, SectionHead } from './console'
 
 /*
  * Central synchronisation, from the operator's side.
@@ -20,13 +24,18 @@ import {
  * about sync at all: a failed upload is not a reason to interrupt somebody
  * registering a participant, and the records are safe locally either way.
  *
- * The device token is never displayed, and neither is the enrolment code; it
- * is cleared from component state the moment the attempt finishes.
+ * The device token is never displayed, and neither is the enrolment code; it is
+ * cleared from component state the moment the attempt finishes.
+ *
+ * ## What the V2 migration changed, and what it did not
+ *
+ * Presentation, and where the reads come from. `runSync` is called exactly as
+ * before, the opportunistic attempt still runs at most once per mount and again
+ * when the browser says connectivity returned, both silently, and the per-kind
+ * transport wording is unchanged. What moved is that the counts, the credential
+ * and the activity are read once for the whole console and handed in, so the
+ * overview at the top and this section cannot disagree about them.
  */
-
-interface SyncPanelProps {
-  readonly onDataChanged?: () => void
-}
 
 const FAILURE_MESSAGES: Record<string, string> = {
   unreachable:
@@ -42,32 +51,37 @@ const FAILURE_MESSAGES: Record<string, string> = {
   not_configured: 'This build has no central server configured.',
 }
 
-export function SyncPanel({ onDataChanged }: SyncPanelProps) {
-  const [credentialPresent, setCredentialPresent] = useState<boolean | null>(null)
-  const [activity, setActivity] = useState<SyncActivity | null>(null)
-  const [counts, setCounts] = useState<LocalCounts | null>(null)
+interface SyncPanelProps {
+  readonly counts: LocalCounts | null
+  /** True when the counts could not be read, rather than not read yet. */
+  readonly countsUnavailable: boolean
+  readonly credentialPresent: boolean | null
+  /** True when the sync facts could not be read, rather than not read yet. */
+  readonly credentialError: boolean
+  readonly activity: SyncActivity | null
+  /** Re-reads the console's shared facts after a sync or an enrolment. */
+  readonly onRefresh: () => Promise<void>
+  readonly onDataChanged?: () => void
+  /** Lets the overview show what this panel is doing. */
+  readonly onSummaryChange?: (summary: SyncSummary) => void
+}
+
+export function SyncPanel({
+  counts,
+  countsUnavailable,
+  credentialPresent,
+  credentialError,
+  activity,
+  onRefresh,
+  onDataChanged,
+  onSummaryChange,
+}: SyncPanelProps) {
   const [secret, setSecret] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<SyncOutcome | null>(null)
   /* Guards the opportunistic attempt so it runs at most once per mount. */
   const openedRef = useRef(false)
-
-  const refresh = useCallback(async () => {
-    const [credential, syncActivity, localCounts] = await Promise.all([
-      readSyncCredential(db),
-      readSyncActivity(db),
-      getLocalCounts(db),
-    ])
-
-    setCredentialPresent(credential !== null)
-    setActivity(syncActivity)
-    setCounts(localCounts)
-  }, [])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
 
   const sync = useCallback(
     async (announce: boolean) => {
@@ -96,11 +110,11 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
         )
       }
 
-      await refresh()
+      await onRefresh()
       setBusy(false)
       onDataChanged?.()
     },
-    [onDataChanged, refresh],
+    [onDataChanged, onRefresh],
   )
 
   /*
@@ -168,129 +182,279 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
     })
 
     setMessage('This device is enrolled for central sync.')
-    await refresh()
+    await onRefresh()
     setBusy(false)
   }
 
-  const formatDate = (value: string | null) =>
-    value === null ? 'Never' : new Date(value).toLocaleString()
+  const errors =
+    counts === null ? 0 : counts.registrations.error + counts.feedback.error
+  const pending =
+    counts === null ? 0 : counts.registrations.pending + counts.feedback.pending
+
+  const summary = summarise({
+    configured: isSyncConfigured(),
+    credentialPresent,
+    credentialError,
+    busy,
+    outcome,
+    errors,
+  })
+
+  /* Reported upward so the overview can show the same state, never recomputed. */
+  useEffect(() => {
+    onSummaryChange?.(summary)
+  }, [onSummaryChange, summary])
 
   if (!isSyncConfigured()) {
     return (
-      <section aria-labelledby="sync-heading">
-        <h2 id="sync-heading" className="pending__title">
+      <section aria-labelledby="sync-heading" className="flex flex-col">
+        <SectionHead title="Central sync" />
+        <h2 id="sync-heading" className="sr-only">
           Central sync
         </h2>
-        <p className="screen__note" data-testid="sync-status">
-          Not configured in this build. Records stay on this device; keep an
-          encrypted backup.
+        <FactRow label="Status">
+          <StatusPill status="offline-unsupported" label="Not configured" />
+          <span data-testid="sync-status" className="sr-only">
+            Not configured
+          </span>
+        </FactRow>
+        <p className="border-t border-line pt-4 font-body text-small text-muted">
+          Not configured in this build. Records stay on this device, which is
+          safe, and an encrypted backup is the only copy.
         </p>
       </section>
     )
   }
 
   return (
-    <section aria-labelledby="sync-heading">
-      <h2 id="sync-heading" className="pending__title">
+    <section aria-labelledby="sync-heading" className="flex flex-col">
+      <SectionHead title="Central sync" />
+      <h2 id="sync-heading" className="sr-only">
         Central sync
       </h2>
 
-      <dl className="station-badge">
-        <div>
-          <dt>Status</dt>
-          <dd data-testid="sync-status">
-            {credentialPresent === null
+      <FactRow label="Status">
+        <StatusPill status={syncStatus(summary)} {...labelFor(syncLabel(summary))} />
+        <span data-testid="sync-status" className="sr-only">
+          {credentialError
+            ? 'Unavailable'
+            : credentialPresent === null
               ? 'Checking…'
               : credentialPresent
                 ? 'Enrolled'
                 : 'Not enrolled'}
-          </dd>
-        </div>
-        <div>
-          <dt>Sync errors</dt>
-          <dd data-testid="sync-errors">
-            {counts === null
-              ? 'Counting…'
-              : (counts.registrations.error + counts.feedback.error).toLocaleString()}
-          </dd>
-        </div>
-        <div>
-          <dt>Last sync attempt</dt>
-          <dd data-testid="sync-last-attempt">
-            {formatDate(activity?.lastAttemptAt ?? null)}
-          </dd>
-        </div>
-        <div>
-          <dt>Last successful sync</dt>
-          <dd data-testid="sync-last-success">
-            {formatDate(activity?.lastSuccessAt ?? null)}
-          </dd>
-        </div>
-      </dl>
+        </span>
+      </FactRow>
 
-      {!isSecureEndpoint() && (
-        <p className="notice notice--error" role="alert">
-          The configured sync address is not secure. Registrations carry
-          participant contact details and must only be sent over https.
-        </p>
-      )}
+      <FactRow label="Waiting to send">
+        <span className="font-ui tabular-nums">
+          {counts !== null
+            ? `${pending.toLocaleString()} record${pending === 1 ? '' : 's'}`
+            : countsUnavailable
+              ? 'Unavailable'
+              : 'Counting…'}
+        </span>
+      </FactRow>
 
-      {credentialPresent === false && (
-        <form className="registration-form" onSubmit={(e) => void handleEnroll(e)}>
-          <div className="field">
-            <label className="field__label" htmlFor="enrollment-code">
-              Enrollment code
-            </label>
-            <input
-              id="enrollment-code"
-              className="field__input"
-              type="password"
-              value={secret}
-              autoComplete="off"
-              onChange={(event) => setSecret(event.target.value)}
-            />
-          </div>
-          <button type="submit" className="button button--primary" disabled={busy}>
-            {busy ? 'Enrolling…' : 'Enroll device'}
-          </button>
-        </form>
-      )}
-
-      {credentialPresent === true && (
-        <div className="button-row">
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => void sync(true)}
-            disabled={busy}
-          >
-            {busy ? 'Syncing…' : 'Sync now'}
-          </button>
-        </div>
-      )}
-
-      {outcome !== null && outcome.failed > 0 && (
-        <p className="screen__note" data-testid="sync-failed-count">
-          {outcome.failed} record(s) could not be accepted by the central server
-          and are marked with an error. Reconciliation is not available yet.
-        </p>
-      )}
-
-      {message !== null && (
-        <p
-          className={
-            message.startsWith('Sync could not') ||
-            message.startsWith('Device could not') ||
-            message.startsWith('This device is no longer')
-              ? 'notice notice--error'
-              : 'notice'
-          }
-          role="alert"
-          data-testid="sync-message"
+      <FactRow label="Last successful sync">
+        <span
+          data-testid="sync-last-success"
+          className="font-ui text-small tabular-nums text-muted"
         >
-          {message}
-        </p>
-      )}
+          {formatMoment(activity?.lastSuccessAt ?? null)}
+        </span>
+      </FactRow>
+
+      <FactRow label="Last attempt">
+        <span
+          data-testid="sync-last-attempt"
+          className="font-ui text-small tabular-nums text-muted"
+        >
+          {formatMoment(activity?.lastAttemptAt ?? null)}
+        </span>
+      </FactRow>
+
+      <FactRow label="Refused by the server">
+        <span
+          data-testid="sync-errors"
+          className={errors > 0 ? 'font-ui tabular-nums text-danger' : 'font-ui tabular-nums'}
+        >
+          {counts !== null
+            ? errors.toLocaleString()
+            : countsUnavailable
+              ? 'Unavailable'
+              : 'Counting…'}
+        </span>
+      </FactRow>
+
+      <div className="flex flex-col gap-3 border-t border-line pt-4">
+        {!isSecureEndpoint() && (
+          <Alert tone="danger">
+            <TriangleAlertIcon aria-hidden="true" />
+            <AlertTitle>Sync address is not secure</AlertTitle>
+            <AlertDescription>
+              The configured sync address is not secure. Registrations carry
+              participant contact details and must only be sent over https.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {outcome !== null && outcome.failed > 0 && (
+          <Alert tone="danger">
+            <TriangleAlertIcon aria-hidden="true" />
+            <AlertTitle>
+              {outcome.failed === 1
+                ? '1 record was refused'
+                : `${outcome.failed} records were refused`}
+            </AlertTitle>
+            <AlertDescription data-testid="sync-failed-count">
+              {outcome.failed} record(s) could not be accepted by the central
+              server and are marked with an error. Reconciliation is not
+              available yet.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {message !== null && (
+          <Alert tone={toneFor(message)}>
+            <TriangleAlertIcon aria-hidden="true" />
+            {/*
+              Never "sync failed" for a server that could not be answered: the
+              records are exactly where they were. Red is reserved for a device
+              that has actually lost its authorisation.
+            */}
+            <AlertTitle>{titleFor(message)}</AlertTitle>
+            <AlertDescription data-testid="sync-message">{message}</AlertDescription>
+          </Alert>
+        )}
+
+        {credentialPresent === false ? (
+          <form
+            onSubmit={(event) => void handleEnroll(event)}
+            className="flex max-w-md flex-col gap-3"
+          >
+            <p className="font-body text-small text-muted">
+              This device needs a one-time enrolment before it can send records
+              to the central database. It keeps collecting normally until then.
+            </p>
+
+            <FormField label="Enrollment code" required>
+              {(field) => (
+                <Input
+                  {...field}
+                  type="password"
+                  autoComplete="off"
+                  value={secret}
+                  disabled={busy}
+                  onChange={(event) => setSecret(event.target.value)}
+                />
+              )}
+            </FormField>
+
+            <div>
+              <AppButton type="submit" busy={busy} busyLabel="Enrolling…">
+                Enroll device
+              </AppButton>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <AppButton
+              busy={busy}
+              busyLabel="Syncing…"
+              onClick={() => void sync(true)}
+            >
+              <RefreshCwIcon />
+              Sync now
+            </AppButton>
+            {credentialPresent === true && !busy && pending > 0 && (
+              <span className="font-body text-small text-muted">
+                Collecting continues either way. Pending records are safe here.
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   )
+}
+
+/** Which sync state the console is in. Presentation only. */
+function summarise({
+  configured,
+  credentialPresent,
+  credentialError,
+  busy,
+  outcome,
+  errors,
+}: {
+  readonly configured: boolean
+  readonly credentialPresent: boolean | null
+  /** True when the sync facts could not be read, rather than not read yet. */
+  readonly credentialError: boolean
+  readonly busy: boolean
+  readonly outcome: SyncOutcome | null
+  readonly errors: number
+}): SyncSummary {
+  if (!configured) {
+    return 'not-configured'
+  }
+  if (busy) {
+    return 'syncing'
+  }
+  /*
+   * Before "checking": the enrolment credential lives in the local store, so a
+   * store that will not open leaves this permanently unknowable rather than
+   * pending. The storage banner says why; this says it stopped looking.
+   */
+  if (credentialError) {
+    return 'unavailable'
+  }
+  if (credentialPresent === null) {
+    return 'checking'
+  }
+  if (credentialPresent === false) {
+    return 'not-enrolled'
+  }
+  if (outcome?.transportFailure === 'unauthorized') {
+    return 'unauthorized'
+  }
+  if (outcome?.transportFailure !== undefined) {
+    return 'unreachable'
+  }
+  if (errors > 0) {
+    return 'record-errors'
+  }
+  return 'enrolled'
+}
+
+/** Only a lost authorisation is red. Unreachable is amber; success is neutral. */
+function toneFor(message: string): 'danger' | 'warn' | 'neutral' {
+  if (message.startsWith('This device is no longer')) {
+    return 'danger'
+  }
+  if (message.startsWith('Device could not')) {
+    return 'danger'
+  }
+  if (message.startsWith('Sync could not') || message.startsWith('The central')) {
+    return 'warn'
+  }
+  return 'neutral'
+}
+
+function titleFor(message: string): string {
+  if (message.startsWith('Sync could not') || message.startsWith('The central')) {
+    return 'Central server could not be reached'
+  }
+  if (message.startsWith('This device is no longer')) {
+    return 'This device needs enrolling again'
+  }
+  if (message.startsWith('Device could not')) {
+    return 'Device could not be enrolled'
+  }
+  return 'Sync'
+}
+
+function labelFor(label: string | undefined) {
+  return label === undefined ? {} : { label }
 }

@@ -48,6 +48,11 @@ const PointAConcept = lazy(async () => ({
     .PointAConcept,
 }))
 
+/** The Device Admin V2 concept. Same reasoning as the Point A one above. */
+const AdminConcept = lazy(async () => ({
+  default: (await import('../features/concept/admin/AdminConcept')).AdminConcept,
+}))
+
 /** The Point B V2 concept. Same reasoning as the Point A one above. */
 const PointBConcept = lazy(async () => ({
   default: (await import('../features/concept/point-b/PointBConcept'))
@@ -199,6 +204,30 @@ export const ROUTES: readonly RouteDefinition[] = [
         }
       >
         <PointBConcept />
+      </Suspense>
+    ),
+  },
+  {
+    /*
+     * The Device Admin V2 concept. Unlisted, and deliberately not `/admin`.
+     *
+     * Full chrome, unlike the two station concepts: this is an operational and
+     * support surface, not a rider mid-flow, and whoever is on it has reason to
+     * move between stations.
+     */
+    path: '/concept/admin',
+    title: 'Device Admin concept',
+    navLabel: 'Admin concept',
+    showInNav: false,
+    render: () => (
+      <Suspense
+        fallback={
+          <article className="screen">
+            <p className="screen__note">Loading the Device Admin concept…</p>
+          </article>
+        }
+      >
+        <AdminConcept />
       </Suspense>
     ),
   },

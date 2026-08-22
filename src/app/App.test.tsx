@@ -38,7 +38,12 @@ describe('App routing', () => {
   it('renders the admin surface at #/admin', () => {
     renderAt('#/admin')
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Device Admin' }),
+      /*
+       * The V2 console names the subject rather than the screen: everything on
+       * it is about the tablet in the operator's hands. "Device Admin" is the
+       * eyebrow above it and the navigation label.
+       */
+      screen.getByRole('heading', { level: 1, name: 'This device' }),
     ).toBeDefined()
   })
 
