@@ -48,6 +48,12 @@ const PointAConcept = lazy(async () => ({
     .PointAConcept,
 }))
 
+/** The Point B V2 concept. Same reasoning as the Point A one above. */
+const PointBConcept = lazy(async () => ({
+  default: (await import('../features/concept/point-b/PointBConcept'))
+    .PointBConcept,
+}))
+
 export interface RouteDefinition {
   readonly path: RoutePath
   /** Document title, so a device left on a station is identifiable. */
@@ -96,10 +102,18 @@ export const ROUTES: readonly RouteDefinition[] = [
     render: () => <RegistrationScreen />,
   },
   {
+    /*
+     * Minimal chrome, from Phase 5, for the same reason Point A has it: a row
+     * of links to other stations above a rider midway through a questionnaire
+     * is a mis-tap that loses their answers. The stations are still reachable
+     * through the shell's menu.
+     */
     path: '/b',
     title: 'Point B: Feedback',
     navLabel: 'Point B',
     showInNav: true,
+    chrome: 'minimal',
+    context: 'Point B · Feedback',
     render: () => <FeedbackScreen />,
   },
   {
@@ -156,6 +170,35 @@ export const ROUTES: readonly RouteDefinition[] = [
         }
       >
         <PointAConcept />
+      </Suspense>
+    ),
+  },
+  {
+    /*
+     * The Point B V2 concept. Unlisted, and deliberately not `/b`.
+     *
+     * `/b` still renders `FeedbackScreen` exactly as it did. This route is a
+     * visual prototype on static fixtures: it opens no camera, calls no
+     * scanner, writes no feedback record and captures no identity. It uses
+     * `chrome="minimal"` for the same reason Point A does, which is that a row
+     * of links to other stations above a rider midway through a questionnaire
+     * is a mis-tap that loses their answers.
+     */
+    path: '/concept/point-b',
+    title: 'Point B concept',
+    navLabel: 'Point B concept',
+    showInNav: false,
+    chrome: 'minimal',
+    context: 'Point B · Feedback',
+    render: () => (
+      <Suspense
+        fallback={
+          <article className="screen">
+            <p className="screen__note">Loading the Point B concept…</p>
+          </article>
+        }
+      >
+        <PointBConcept />
       </Suspense>
     ),
   },

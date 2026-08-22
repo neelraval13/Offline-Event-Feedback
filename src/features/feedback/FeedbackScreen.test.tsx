@@ -76,8 +76,8 @@ function renderScreen() {
 
 async function startScanner() {
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Start scanner' }))
-  await screen.findByText(/Point the camera/)
+  await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
+  await screen.findByText(/Hold the sticker/)
   return user
 }
 
@@ -106,7 +106,7 @@ async function submitFeedback(user: ReturnType<typeof userEvent.setup>) {
  */
 async function findSaveError(): Promise<HTMLElement> {
   const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toMatch(/was\s*not\s*saved/i)
+  expect(alert.textContent).toMatch(/not\s*saved/i)
   return alert
 }
 
@@ -258,9 +258,16 @@ describe('rejecting a QR that is not a participant sticker', () => {
     emit('{"v":1,')
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toBe(
+    /*
+     * The identity layer's own wording, and nothing from the parser. The
+     * surrounding sentence is the screen's ("the camera is still running"), so
+     * this checks what the alert says about the sticker rather than the whole
+     * of the alert.
+     */
+    expect(alert.textContent).toContain(
       'This QR is not a valid participant sticker for this event.',
     )
+    expect(alert.textContent).not.toMatch(/JSON|SyntaxError|Unexpected/i)
   })
 })
 
@@ -268,7 +275,7 @@ describe('manual code entry', () => {
   it('is offered before the camera is ever started', () => {
     renderScreen()
     expect(
-      screen.getByRole('button', { name: 'Enter code manually' }),
+      screen.getByRole('button', { name: /^Enter code/ }),
     ).toBeDefined()
   })
 
@@ -277,7 +284,7 @@ describe('manual code entry', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(screen.getByLabelText('Participant code'), code)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
@@ -292,7 +299,7 @@ describe('manual code entry', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(
       screen.getByLabelText('Participant code'),
       code.toLowerCase().replace(/-/g, ' '),
@@ -309,7 +316,7 @@ describe('manual code entry', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(screen.getByLabelText('Participant code'), 'A1-B8EFD9-00001-Z')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
@@ -322,7 +329,7 @@ describe('manual code entry', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(
       screen.getByLabelText('Participant code'),
       formatPublicCode(B1, 1),
@@ -343,10 +350,10 @@ describe('manual code entry', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
     await screen.findByText('Camera unavailable')
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(
       screen.getByLabelText('Participant code'),
       formatPublicCode(A1, 3),
@@ -439,7 +446,7 @@ describe('persistence', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
     await user.type(screen.getByLabelText('Participant code'), code)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByTestId('participant-code')
@@ -518,7 +525,7 @@ describe('same-device duplicate', () => {
     emit(sticker.qr)
 
     expect(
-      await screen.findByText('Feedback already recorded on this device'),
+      await screen.findByText('Feedback already recorded'),
     ).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Submit Feedback' })).toBeNull()
     expect(await onlyRecord()).toEqual(first)
@@ -531,7 +538,7 @@ describe('same-device duplicate', () => {
 
     for (const attempt of [1, 2]) {
       await user.click(
-        screen.getByRole('button', { name: 'Enter code manually' }),
+        screen.getByRole('button', { name: /^Enter code/ }),
       )
       await user.type(screen.getByLabelText('Participant code'), code)
       await user.click(screen.getByRole('button', { name: 'Continue' }))
@@ -545,7 +552,7 @@ describe('same-device duplicate', () => {
     }
 
     expect(
-      await screen.findByText('Feedback already recorded on this device'),
+      await screen.findByText('Feedback already recorded'),
     ).toBeDefined()
     expect(await countFeedback(db)).toBe(1)
   })
@@ -561,7 +568,7 @@ describe('same-device duplicate', () => {
     await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     emit(sticker.qr)
-    await screen.findByText('Feedback already recorded on this device')
+    await screen.findByText('Feedback already recorded')
 
     expect(screen.getByTestId('participant-code')).toHaveProperty(
       'textContent',
@@ -644,7 +651,7 @@ describe('next participant', () => {
 
     await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
-    await screen.findByText(/Point the camera/)
+    await screen.findByText(/Hold the sticker/)
     expect(scanner.paused).toBe(false)
     // Reused, not re-authorised: staff is not asked for permission again.
     expect(scanner.startCalls).toBe(1)
@@ -698,7 +705,7 @@ describe('next participant', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/Responses saved on this device: 1/),
+        screen.getByText(/Responses saved on this device . 1/),
       ).toBeDefined(),
     )
   })
@@ -718,12 +725,12 @@ describe('camera lifecycle', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
 
     expect(await screen.findByText('Camera unavailable')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Try camera again' })).toBeDefined()
     expect(
-      screen.getByRole('button', { name: 'Enter code manually' }),
+      screen.getByRole('button', { name: /^Enter code/ }),
     ).toBeDefined()
   })
 
@@ -732,13 +739,13 @@ describe('camera lifecycle', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
     await screen.findByText('Camera unavailable')
 
     scanner.startFailure = null
     await user.click(screen.getByRole('button', { name: 'Try camera again' }))
 
-    await screen.findByText(/Point the camera/)
+    await screen.findByText(/Hold the sticker/)
     expect(scanner.running).toBe(true)
   })
 
@@ -853,7 +860,7 @@ const RIDER = {
   email: 'grace@example.com',
 } as const
 
-const CONTACT_BUTTON = 'Continue without QR or code'
+const CONTACT_BUTTON = /^No QR or code/
 
 async function openContactForm(): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup()
@@ -910,7 +917,7 @@ describe('reaching the no-sticker path', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
     await screen.findByText('Camera unavailable')
 
     expect(screen.getByRole('button', { name: CONTACT_BUTTON })).toBeDefined()
@@ -920,11 +927,11 @@ describe('reaching the no-sticker path', () => {
     renderScreen()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Enter code manually' }))
+    await user.click(screen.getByRole('button', { name: /^Enter code/ }))
 
     // A rider whose code will not type in because there is no code.
     expect(
-      screen.getByRole('button', { name: 'No code either? Take their details' }),
+      screen.getByRole('button', { name: /^No code either/ }),
     ).toBeDefined()
   })
 })
@@ -1183,7 +1190,7 @@ describe('saving a contact-details response', () => {
     await user.click(screen.getByRole('button', { name: 'Next rider' }))
 
     expect(
-      await screen.findByRole('button', { name: 'Start scanner' }),
+      await screen.findByRole('button', { name: /^Scan QR/ }),
     ).toBeDefined()
   })
 })
@@ -1231,7 +1238,7 @@ describe('the sticker paths are unaffected', () => {
     emit(sticker.qr)
 
     expect(
-      await screen.findByText(/already recorded on this device/i),
+      await screen.findByText(/already recorded/i),
     ).toBeDefined()
     expect(await countFeedback(db)).toBe(1)
   })

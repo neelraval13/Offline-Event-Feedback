@@ -110,8 +110,8 @@ function renderScreen() {
 
 async function startScanner() {
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Start scanner' }))
-  await screen.findByText(/Point the camera/)
+  await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
+  await screen.findByText(/Hold the sticker/)
   return user
 }
 
@@ -135,7 +135,7 @@ function expectStillScanning(): void {
   expect(
     screen.queryByText('The scanner could not be started.'),
   ).toBeNull()
-  expect(screen.getByText(/Point the camera/)).toBeDefined()
+  expect(screen.getByText(/Hold the sticker/)).toBeDefined()
 }
 
 describe('ordinary frames with no QR in them', () => {
@@ -256,11 +256,11 @@ describe('genuine startup failure still reaches the camera error state', () => {
 
     renderScreen()
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
 
     expect(await screen.findByText('Camera unavailable')).toBeDefined()
     expect(
-      screen.getByRole('button', { name: 'Enter code manually' }),
+      screen.getByRole('button', { name: /^Enter code/ }),
     ).toBeDefined()
   })
 
@@ -283,7 +283,7 @@ describe('genuine startup failure still reaches the camera error state', () => {
 
     renderScreen()
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Start scanner' }))
+    await user.click(screen.getByRole('button', { name: /^Scan QR/ }))
 
     expect(await screen.findByText('Camera unavailable')).toBeDefined()
   })

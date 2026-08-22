@@ -27,6 +27,13 @@ export const ROUTE_PATHS = [
    * can be agreed by looking at it before any of it is implemented.
    */
   '/concept/point-a',
+  /*
+   * The Point B V2 concept. Same rules as the Point A one: a design-review
+   * surface on static fixtures, deliberately a separate path from `/b`, which
+   * still renders the production feedback terminal untouched. It opens no
+   * camera, calls no scanner and writes nothing.
+   */
+  '/concept/point-b',
 ] as const
 
 export type RoutePath = (typeof ROUTE_PATHS)[number]

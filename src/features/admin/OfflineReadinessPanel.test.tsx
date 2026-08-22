@@ -223,7 +223,7 @@ describe('operational screens stay free of update prompts', () => {
     const { container } = render(
       <FeedbackScreen createScanner={() => scanner} />,
     )
-    await screen.findByRole('button', { name: 'Start scanner' })
+    await screen.findByRole('button', { name: /^Scan QR/ })
 
     expect(screen.queryByRole('button', { name: 'Apply update' })).toBeNull()
     for (const wording of ['update', 'Ready for offline use', 'version']) {

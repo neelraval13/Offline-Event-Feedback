@@ -189,7 +189,12 @@ describe('Point B renders one of everything', () => {
      */
     render(<CampaignFeedbackForm onSubmit={vi.fn()} busy={false} />)
 
-    const scales = document.querySelectorAll('.ff-rating')
+    /*
+     * Found by data attribute rather than by a V1 class name: which scale is
+     * on screen is a behavioural fact and should survive a restyle. The
+     * assertion below is unchanged.
+     */
+    const scales = document.querySelectorAll('[data-slot="rating-scale"]')
     expect(scales).toHaveLength(FLYING_FLEA_CAMPAIGN.ratingQuestions.length)
 
     for (const scale of scales) {

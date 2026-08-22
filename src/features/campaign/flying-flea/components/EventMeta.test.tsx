@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { EVENT_CONFIG } from '../../../../config/event'
 import { FLYING_FLEA_CAMPAIGN } from '../config'
-import { CampaignHeroHeader } from './CampaignHeroHeader'
 import { EventMeta } from './EventMeta'
 
 /*
@@ -53,37 +52,16 @@ describe('the event metadata', () => {
   })
 })
 
-describe('the hero both stations share', () => {
-  /*
-   * One component, so Point A and Point B cannot disagree about where they are.
-   * Point B's operator scans stickers all day and never sees the registration
-   * form; they need the same confirmation.
-   */
-
-  it('carries the venue and the day at Point A', () => {
-    render(
-      <CampaignHeroHeader lead="Test Ride" accent="Registration" subtitle="Point A · A1" />,
-    )
-
-    expect(screen.getByText('Richardson & Cruddas')).toBeDefined()
-    expect(screen.getByText('23 August 2026')).toBeDefined()
-  })
-
-  it('carries the venue and the day at Point B', () => {
-    render(
-      <CampaignHeroHeader lead="Test Ride" accent="Feedback" subtitle="Point B · B1" />,
-    )
-
-    expect(screen.getByText('Richardson & Cruddas')).toBeDefined()
-    expect(screen.getByText('23 August 2026')).toBeDefined()
-  })
-
-  it('states the venue once, not once in the topbar and once below it', () => {
-    render(
-      <CampaignHeroHeader lead="Test Ride" accent="Registration" subtitle="Point A · A1" />,
-    )
-
-    // `getByText` throws on a second match, so this is the assertion.
-    expect(screen.getAllByText('Richardson & Cruddas')).toHaveLength(1)
-  })
-})
+/*
+ * The hero both stations used to share is gone.
+ *
+ * `CampaignHeroHeader` carried the venue and the day above a 300px photograph
+ * at the top of both capture screens, and V2 replaced it on each with a two-line
+ * station header. The guarantee it existed for, that Point A and Point B cannot
+ * disagree about where they are, did not go with it: it is now asserted against
+ * the real screens rather than against a shared component, by
+ * `RegistrationScreen.test.tsx` ("states both above the form instead of asking
+ * for them") and `FeedbackScreen.test.tsx` ("names the venue and the day, as
+ * Point A does"). Testing the screens is the stronger version of the same
+ * check, because a screen can drop a header and a component cannot.
+ */

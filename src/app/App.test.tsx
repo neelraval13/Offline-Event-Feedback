@@ -24,9 +24,14 @@ describe('App routing', () => {
   })
 
   it('renders the feedback surface at #/b', () => {
+    /*
+     * The V2 terminal names the job in hand rather than restating the campaign,
+     * for the same reason Point A does: the photographic hero that carried
+     * "Test Ride Feedback" was 300px above a task repeated all day.
+     */
     renderAt('#/b')
     expect(
-      screen.getByRole('heading', { level: 1, name: /Test Ride Feedback/ }),
+      screen.getByRole('heading', { level: 1, name: /Test ride feedback/ }),
     ).toBeDefined()
   })
 
@@ -51,7 +56,7 @@ describe('App routing', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(
-      screen.getByRole('heading', { level: 1, name: /Test Ride Feedback/ }),
+      screen.getByRole('heading', { level: 1, name: /Test ride feedback/ }),
     ).toBeDefined()
   })
 })
