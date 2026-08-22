@@ -5,6 +5,7 @@ import {
   readServerConfig,
   resolveMigrationDatabaseUrl,
 } from './config.js'
+import { REPORTING_SECRET_MIN_LENGTH } from './reporting/auth.js'
 
 /*
  * Configuration, which both runtimes read through this one module.
@@ -84,6 +85,37 @@ describe('readServerConfig', () => {
     expect(!missingEnrolment.ok && missingEnrolment.problem).toContain(
       'SYNC_ENROLLMENT_SECRET',
     )
+  })
+
+  it('refuses a reporting secret that is too short to be one', () => {
+    /*
+     * Asserted here and not only against `describeSecretWeakness`, because the
+     * rule only protects anything if `readServerConfig` refuses to start on it.
+     * A weak reporting secret is the whole event's contact details behind a
+     * guessable string, so this fails startup rather than warning.
+     */
+    const result = readServerConfig({
+      DATABASE_URL,
+      SYNC_ENROLLMENT_SECRET: ENROLMENT,
+      REPORTING_ADMIN_SECRET: 'a'.repeat(REPORTING_SECRET_MIN_LENGTH - 1),
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.problem).toContain('REPORTING_ADMIN_SECRET')
+      expect(result.problem).toContain(String(REPORTING_SECRET_MIN_LENGTH))
+    }
+  })
+
+  it('accepts a reporting secret of exactly the minimum length', () => {
+    // The boundary belongs to the valid side; `<` is the rule, not `<=`.
+    const result = readServerConfig({
+      DATABASE_URL,
+      SYNC_ENROLLMENT_SECRET: ENROLMENT,
+      REPORTING_ADMIN_SECRET: 'b'.repeat(REPORTING_SECRET_MIN_LENGTH),
+    })
+
+    expect(result.ok).toBe(true)
   })
 
   it('never puts a value in a problem message', () => {

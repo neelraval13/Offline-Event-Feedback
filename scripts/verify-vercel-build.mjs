@@ -39,13 +39,45 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUTPUT = join(ROOT, '.vercel', 'output')
 const CONFIG = join(OUTPUT, 'config.json')
 
-/** The public contract. Each of these must reach the central Hono router. */
+/*
+ * The public contract. Each of these must reach the central Hono router, and
+ * answer the way a correctly configured server answers it.
+ *
+ * `status` is asserted rather than merely "not 404" because a function that is
+ * running but misconfigured answers everything with the same plausible-looking
+ * error, and "not 404" accepts all of it. The expected statuses below are the
+ * ones that prove the handler ran: a validation refusal means the sync schema
+ * was applied to the empty body, and an authentication refusal means reporting
+ * auth was configured and executed rather than skipped.
+ *
+ * None of these reach the database. The requests are refused before any query.
+ */
 const CONTRACT = [
-  { method: 'GET', path: '/api/health' },
-  { method: 'POST', path: '/api/v1/sync/enroll' },
-  { method: 'POST', path: '/api/v1/sync/batch' },
-  { method: 'GET', path: '/api/v1/reporting/overview' },
-  { method: 'GET', path: '/api/v1/reporting/export/registrations' },
+  { method: 'GET', path: '/api/health', status: 200, proves: 'the app is up' },
+  {
+    method: 'POST',
+    path: '/api/v1/sync/enroll',
+    status: 400,
+    proves: 'enrolment validates its body',
+  },
+  {
+    method: 'POST',
+    path: '/api/v1/sync/batch',
+    status: 400,
+    proves: 'the sync protocol schema is applied',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/reporting/overview',
+    status: 401,
+    proves: 'reporting auth is configured and runs',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/reporting/export/registrations',
+    status: 401,
+    proves: 'the export is behind the same auth',
+  },
 ]
 
 /* A database that cannot be reached, so nothing here can touch a real one. The
@@ -53,7 +85,21 @@ const CONTRACT = [
 const SAFE_ENV = {
   DATABASE_URL: 'postgres://verify:verify@127.0.0.1:1/unreachable',
   SYNC_ENROLLMENT_SECRET: 'verify-vercel-build-enrolment-secret',
+  /*
+   * Synthetic, and deliberately not the enrolment value: the server refuses to
+   * start when the two match, and refuses a reporting secret under 32
+   * characters. Without one configured here every reporting route answered
+   * `server_misconfigured`, and this script accepted it because the status was
+   * not 404. Reporting was then unverified by the check that exists to verify
+   * it.
+   */
+  REPORTING_ADMIN_SECRET: 'verify-vercel-build-reporting-secret-not-a-real-one',
   SYNC_ALLOWED_ORIGINS: '',
+}
+
+if (SAFE_ENV.REPORTING_ADMIN_SECRET === SAFE_ENV.SYNC_ENROLLMENT_SECRET) {
+  console.error('The two synthetic secrets above must differ; the server rejects equal ones.')
+  process.exit(2)
 }
 
 const problems = []
@@ -278,7 +324,7 @@ if (problems.length === 0) {
   if (app === undefined || typeof app.fetch !== 'function') {
     fail('the function default export has no `fetch`, so Vercel cannot invoke it')
   } else {
-    for (const { method, path } of CONTRACT) {
+    for (const { method, path, status: expected, proves } of CONTRACT) {
       let response
       try {
         response = await app.fetch(
@@ -294,14 +340,45 @@ if (problems.length === 0) {
         continue
       }
 
-      // 404 is the failure being guarded against: it means the request reached
-      // the function and the router did not recognise the path. Every other
-      // status means the central app answered, which is all this proves.
+      const body = await response.text()
+      let payload
+      try {
+        payload = JSON.parse(body)
+      } catch {
+        payload = undefined
+      }
+
+      // 404 means the request reached the function and the router did not
+      // recognise the path.
       if (response.status === 404) {
         fail(`${method} ${path} returned 404 from the central router`)
-      } else {
-        note(`invoke  ${method} ${path} -> ${response.status}`)
+        continue
       }
+
+      /*
+       * A function that boots without its configuration answers every route
+       * with this, at a status that is not 404. It looks like a working API to
+       * anything that only checks for 404, and it is one of the states this
+       * whole script exists to catch.
+       */
+      if (payload?.error === 'server_misconfigured') {
+        fail(
+          `${method} ${path} answered server_misconfigured (${response.status}). ` +
+            'The function loads but has no usable configuration, so every route ' +
+            'would answer this in production.',
+        )
+        continue
+      }
+
+      if (response.status !== expected) {
+        fail(
+          `${method} ${path} answered ${response.status}, expected ${expected} ` +
+            `(${proves}).`,
+        )
+        continue
+      }
+
+      note(`invoke  ${method} ${path} -> ${response.status}  ${proves}`)
     }
   }
 }
