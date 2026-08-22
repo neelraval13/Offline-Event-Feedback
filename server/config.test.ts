@@ -5,7 +5,7 @@ import {
   readServerConfig,
   resolveMigrationDatabaseUrl,
 } from './config.js'
-import { REPORTING_SECRET_MIN_LENGTH } from './reporting/auth.js'
+import { authorizeReporting } from './reporting/auth.js'
 
 /*
  * Configuration, which both runtimes read through this one module.
@@ -87,35 +87,37 @@ describe('readServerConfig', () => {
     )
   })
 
-  it('refuses a reporting secret that is too short to be one', () => {
+  it('accepts a short reporting secret, so long as it differs', () => {
     /*
-     * Asserted here and not only against `describeSecretWeakness`, because the
-     * rule only protects anything if `readServerConfig` refuses to start on it.
-     * A weak reporting secret is the whole event's contact details behind a
-     * guessable string, so this fails startup rather than warning.
+     * These two assertions replace a rule that failed startup below 32
+     * characters. The values here are the point: an operator setting this by
+     * hand at a venue gets to choose something they can actually type.
      */
-    const result = readServerConfig({
-      DATABASE_URL,
-      SYNC_ENROLLMENT_SECRET: ENROLMENT,
-      REPORTING_ADMIN_SECRET: 'a'.repeat(REPORTING_SECRET_MIN_LENGTH - 1),
-    })
+    for (const secret of ['x', 'flea26', 'correct-horse-battery']) {
+      const result = readServerConfig({
+        DATABASE_URL,
+        SYNC_ENROLLMENT_SECRET: ENROLMENT,
+        REPORTING_ADMIN_SECRET: secret,
+      })
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.problem).toContain('REPORTING_ADMIN_SECRET')
-      expect(result.problem).toContain(String(REPORTING_SECRET_MIN_LENGTH))
+      expect(result.ok, `rejected ${secret.length}-character secret`).toBe(true)
+      if (result.ok) {
+        expect(result.config.reportingSecret).toBe(secret)
+      }
     }
   })
 
-  it('accepts a reporting secret of exactly the minimum length', () => {
-    // The boundary belongs to the valid side; `<` is the rule, not `<=`.
+  it('accepts a short enrolment code, whose contract is only non-empty', () => {
     const result = readServerConfig({
       DATABASE_URL,
-      SYNC_ENROLLMENT_SECRET: ENROLMENT,
-      REPORTING_ADMIN_SECRET: 'b'.repeat(REPORTING_SECRET_MIN_LENGTH),
+      SYNC_ENROLLMENT_SECRET: 'abc',
+      REPORTING_ADMIN_SECRET: 'xyz',
     })
 
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.config.enrollmentSecret).toBe('abc')
+    }
   })
 
   it('never puts a value in a problem message', () => {
@@ -124,14 +126,13 @@ describe('readServerConfig', () => {
     const result = readServerConfig({
       DATABASE_URL,
       SYNC_ENROLLMENT_SECRET: ENROLMENT,
-      REPORTING_ADMIN_SECRET: 'short',
+      REPORTING_ADMIN_SECRET: ENROLMENT, // the one remaining configuration error
     })
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.problem).not.toContain(DATABASE_URL)
       expect(result.problem).not.toContain(ENROLMENT)
-      expect(result.problem).not.toContain('short')
     }
   })
 
@@ -158,6 +159,80 @@ describe('readServerConfig', () => {
     })
 
     expect(result.ok).toBe(false)
+  })
+})
+
+/*
+ * The secret contract, stated as the four cases an operator can actually
+ * produce. Deliberately spelled out with tiny values: the whole point of this
+ * change is that short, memorable, hand-typed values are legitimate.
+ *
+ * These literals are examples in a test file. They are not, and must never
+ * become, real deployment values.
+ */
+describe('the secret contract', () => {
+  it('accepts two different short secrets', () => {
+    const result = readServerConfig({
+      DATABASE_URL,
+      SYNC_ENROLLMENT_SECRET: 'abc',
+      REPORTING_ADMIN_SECRET: 'xyz',
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.config.enrollmentSecret).toBe('abc')
+      expect(result.config.reportingSecret).toBe('xyz')
+    }
+  })
+
+  it('rejects the two secrets being the same value', () => {
+    // The security boundary this whole design rests on. Length never protected
+    // against this, and removing the length rule does not weaken it.
+    const result = readServerConfig({
+      DATABASE_URL,
+      SYNC_ENROLLMENT_SECRET: 'abc',
+      REPORTING_ADMIN_SECRET: 'abc',
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.problem).toContain('REPORTING_ADMIN_SECRET')
+      expect(result.problem).toContain('SYNC_ENROLLMENT_SECRET')
+      expect(result.problem).not.toContain('abc')
+    }
+  })
+
+  it('rejects a missing enrolment code even when reporting is set', () => {
+    for (const enrolment of ['', undefined]) {
+      const result = readServerConfig({
+        DATABASE_URL,
+        ...(enrolment === undefined ? {} : { SYNC_ENROLLMENT_SECRET: enrolment }),
+        REPORTING_ADMIN_SECRET: 'xyz',
+      })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.problem).toContain('SYNC_ENROLLMENT_SECRET')
+      }
+    }
+  })
+
+  it('starts with reporting switched off when its secret is empty', () => {
+    const result = readServerConfig({
+      DATABASE_URL,
+      SYNC_ENROLLMENT_SECRET: 'abc',
+      REPORTING_ADMIN_SECRET: '',
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.config.reportingSecret).toBeUndefined()
+    }
+    // And "off" means no reporting request succeeds, not that it is public.
+    expect(authorizeReporting('Bearer anything', undefined)).toEqual({
+      ok: false,
+      reason: 'not_configured',
+    })
   })
 })
 

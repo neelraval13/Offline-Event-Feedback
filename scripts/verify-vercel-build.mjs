@@ -87,11 +87,14 @@ const SAFE_ENV = {
   SYNC_ENROLLMENT_SECRET: 'verify-vercel-build-enrolment-secret',
   /*
    * Synthetic, and deliberately not the enrolment value: the server refuses to
-   * start when the two match, and refuses a reporting secret under 32
-   * characters. Without one configured here every reporting route answered
-   * `server_misconfigured`, and this script accepted it because the status was
-   * not 404. Reporting was then unverified by the check that exists to verify
-   * it.
+   * start when the two match. Without one configured here every reporting route
+   * answered `server_misconfigured`, and this script accepted it because the
+   * status was not 404. Reporting was then unverified by the check that exists
+   * to verify it.
+   *
+   * Production now accepts a short memorable secret. This one stays long
+   * anyway: nothing here is typed by a human, and a value that is obviously
+   * synthetic is worth more in a build script than a realistic-looking one.
    */
   REPORTING_ADMIN_SECRET: 'verify-vercel-build-reporting-secret-not-a-real-one',
   SYNC_ALLOWED_ORIGINS: '',

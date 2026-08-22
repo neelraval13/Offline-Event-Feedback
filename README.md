@@ -387,12 +387,11 @@ pnpm server:typecheck
 pnpm server:test
 ```
 
-Reporting is switched on by setting `REPORTING_ADMIN_SECRET` (at least 32
-characters; the server refuses to start with a shorter one):
-
-```bash
-openssl rand -hex 32   # generate one; never commit it, never put it in a URL
-```
+Reporting is switched on by setting `REPORTING_ADMIN_SECRET`. Any non-empty
+value is accepted, including a memorable password; it must simply not be the
+same value as `SYNC_ENROLLMENT_SECRET`, and it should not contain a space,
+because it travels as an HTTP Bearer credential. Never commit it, and never put
+it in a URL.
 
 Without it the server still ingests and still reconciles, only
 `/v1/reporting/*` answers `503 reporting_not_configured`.

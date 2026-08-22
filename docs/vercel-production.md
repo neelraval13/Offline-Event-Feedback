@@ -47,9 +47,9 @@ SELECT name FROM schema_migrations ORDER BY name;  -- 001 … 007
 # The code typed into each tablet once, to enrol it
 node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
 
-# The reporting login. Must be at least 32 characters, and must NOT equal the
-# enrolment code: the server refuses to start if it does.
-openssl rand -hex 32
+# The reporting login. Any non-empty value, including a memorable password.
+# It must NOT equal the enrolment code: the server refuses to start if it does.
+# Avoid spaces: it is sent as an HTTP Bearer credential.
 ```
 
 Keep both out of chat, tickets and screenshots.
@@ -83,7 +83,7 @@ to Preview if you are using a separate preview database; see section I).
 | --- | --- | --- |
 | `DATABASE_URL` | Neon **pooled** connection string | The one with `-pooler` in the host. The functions use this. |
 | `SYNC_ENROLLMENT_SECRET` | the enrolment code you generated | Typed into each device once. |
-| `REPORTING_ADMIN_SECRET` | the reporting secret you generated | At least 32 characters, different from the enrolment code. |
+| `REPORTING_ADMIN_SECRET` | the reporting password you chose | Any non-empty value, no spaces, different from the enrolment code. |
 | `VITE_SYNC_API_BASE_URL` | `/api` | Build-time and public. It is a location, not a credential. |
 
 Leave these **unset** in Vercel:
