@@ -4,6 +4,7 @@ import {
   requestReconciliation,
 } from '../../lib/reporting/reportingClient'
 import type { OverviewResponse } from '../../lib/reporting/types'
+import { LOCATION_NOT_CAPTURED } from '../../../shared/reporting/location'
 import { useReportingSession } from './session'
 
 /*
@@ -128,6 +129,65 @@ export function ReportingOverview({
               <dd>{overview.run.counts.feedbackCount.toLocaleString()}</dd>
             </div>
           </dl>
+
+          {/*
+            The event by city, above coverage because it is the first question a
+            two-city event raises and because coverage is a fraction that needs
+            the totals already read.
+
+            Rendered from whatever the run holds rather than from the configured
+            city list, so a single-city event shows one row and a season that
+            adds a third city needs no change here.
+          */}
+          <h3 className="section-title">By location</h3>
+          <table className="report-table" data-testid="location-breakdown">
+            <thead>
+              <tr>
+                <th scope="col">Location</th>
+                <th scope="col">Registrations</th>
+                <th scope="col">Responses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {overview.locations.byLocation.map((entry) => (
+                <tr key={entry.location ?? 'not-captured'}>
+                  <th scope="row">
+                    {entry.location ?? (
+                      /*
+                        Named rather than left blank. A blank row label in a
+                        table of cities reads as a rendering fault; this says
+                        what it is, and it is a real category: records captured
+                        before this event recorded a location.
+                      */
+                      <span className="report-muted">
+                        {LOCATION_NOT_CAPTURED}
+                      </span>
+                    )}
+                  </th>
+                  <td>{entry.registrations.toLocaleString()}</td>
+                  <td>{entry.feedback.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {overview.locations.mismatchedLocations > 0 && (
+            /*
+              Stated only when there is something to state, and phrased as a
+              discrepancy to look at rather than as an error. Neither location is
+              corrected: see shared/reporting/location.ts.
+            */
+            <p
+              className="notice notice--warning"
+              data-testid="location-mismatch-count"
+            >
+              {overview.locations.mismatchedLocations.toLocaleString()}{' '}
+              matched response(s) were captured in a different city from the
+              registration they matched. Both values are kept and shown side by
+              side in the response browser and in the Participant Feedback sheet.
+              Neither is corrected against the other.
+            </p>
+          )}
 
           <h3 className="section-title">Response coverage</h3>
           <dl className="station-badge">

@@ -115,6 +115,15 @@ type FeedbackOverrides = Partial<
     respondentName: string
     respondentPhone: string
     respondentEmail: string
+    /*
+     * The capture location, absent unless a caller asks for one.
+     *
+     * Absent is the right default here: these fixtures stand in for records a
+     * device already held, and the ones that matter most for compatibility are
+     * the ones captured before this field existed. A fixture that always
+     * supplied a city would make the pre-September archive untestable.
+     */
+    location: string
   }
 > &
   Partial<FeedbackQuestionnairePayload>

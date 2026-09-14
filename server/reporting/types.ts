@@ -169,6 +169,44 @@ export interface CampaignAnalytics {
   }
 }
 
+/**
+ * One city's share of an event, counted from the run.
+ *
+ * `location` is null for records that carry no city. Those are August rows and
+ * anything else captured before the field existed, and they are reported as
+ * their own line rather than folded into a city or dropped: a total that
+ * silently excluded them would not add up to the run's own counts, and a reader
+ * checking the arithmetic would have no way to find the difference.
+ */
+export interface LocationCount {
+  /** Null means the record carries no location. Never a guessed city. */
+  readonly location: string | null
+  readonly registrations: number
+  readonly feedback: number
+}
+
+/**
+ * Registrations and responses by city, for an event that ran in more than one.
+ *
+ * Counted over the rows THIS RUN classified, not over the tables as they stand
+ * now, so the lines add up to `RunDescriptor.counts` exactly. A breakdown that
+ * disagreed with the totals printed beside it would be worse than no breakdown.
+ *
+ * Both halves are in one list rather than two, because the question an
+ * organiser asks is "how did Bengaluru do", and the answer is a row.
+ */
+export interface LocationBreakdown {
+  readonly byLocation: readonly LocationCount[]
+  /**
+   * Matched responses whose registration names a different city.
+   *
+   * A data-quality diagnostic, deliberately not a reconciliation status: the
+   * match itself is sound, and the identity rules that produced it are
+   * untouched. See `shared/reporting/location.ts` for why neither side wins.
+   */
+  readonly mismatchedLocations: number
+}
+
 export interface OverviewResponse {
   readonly eventId: string
   readonly run: RunDescriptor
@@ -192,6 +230,11 @@ export interface OverviewResponse {
   /** Matched responses whose questionnaire this build has no figures for. */
   readonly unreadableResponses: number
   readonly coverage: ResponseCoverage
+  /**
+   * The event by city. Present for every event, including single-city ones,
+   * where it is simply a one-line breakdown.
+   */
+  readonly locations: LocationBreakdown
 }
 
 export interface FeedbackSummary {
@@ -269,6 +312,15 @@ export interface RespondentContact {
 
 export interface FeedbackRow extends RespondentContact {
   readonly recordId: string
+  /**
+   * The city this response was captured in, or null when it was not captured.
+   *
+   * Null is an August response, and it is shown as blank or "Not captured"
+   * rather than being filled in from the registration this row happens to be
+   * matched to. Inferring it would produce a column that mixes recorded facts
+   * with deductions and marks neither.
+   */
+  readonly location: string | null
   /** Null for a contact capture: that response never had a sticker. */
   readonly publicCode: string | null
   readonly participantId: string | null
@@ -289,6 +341,13 @@ export interface FeedbackRow extends RespondentContact {
     readonly recordId: string
     readonly publicCode: string
     readonly name: string
+    /**
+     * The city Point A recorded, which may differ from this response's own.
+     *
+     * Carried so a reader can see both statements side by side. Neither is
+     * corrected against the other; see `shared/reporting/location.ts`.
+     */
+    readonly location: string | null
   } | null
 }
 

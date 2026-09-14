@@ -19,6 +19,8 @@ afterEach(cleanup)
 function row(overrides: Partial<FeedbackRow> = {}): FeedbackRow {
   return {
     recordId: '22222222-2222-4222-8222-222222222222',
+    // Present on every September response; this module does not read it.
+    location: 'Bengaluru',
     publicCode: 'A1-B8EFD9-00001-X',
     participantId: null,
     captureMethod: 'qr',

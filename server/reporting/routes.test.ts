@@ -1803,11 +1803,20 @@ describeDb('reporting API', () => {
       ).text()
       const [header, row] = csv.trimEnd().split('\r\n')
 
-      expect((header ?? '').split(',').slice(-3)).toEqual([
+      /*
+       * The respondent trio, still in the same three positions, now followed by
+       * the appended `feedback_location`. Addressed from the end with that
+       * column accounted for rather than assumed absent: appending is what keeps
+       * every earlier column's index stable, which is the contract this asserts.
+       */
+      const columns = (header ?? '').split(',')
+      expect(columns.slice(-4, -1)).toEqual([
         'respondent_name',
         'respondent_phone',
         'respondent_email',
       ])
+      expect(columns.at(-1)).toBe('feedback_location')
+
       expect(row).toContain('Grace Hopper')
       expect(row).toContain('grace@example.com')
       expect(row).toContain('standalone')

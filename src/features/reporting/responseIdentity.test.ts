@@ -17,6 +17,8 @@ import { captureLabel, codeLabel, participantLabel } from './responseIdentity'
 function row(overrides: Partial<FeedbackRow> = {}): FeedbackRow {
   return {
     recordId: '019ffc65-4559-7125-9453-de82fb849ed8',
+    // Present on every September response; this module does not read it.
+    location: 'Bengaluru',
     publicCode: 'A1-B8EFD9-00001-X',
     participantId: null,
     captureMethod: 'qr',
@@ -91,6 +93,7 @@ describe('the Participant column', () => {
             recordId: 'reg-1',
             publicCode: 'A1-B8EFD9-00001-X',
             name: 'Ada Lovelace',
+            location: 'Bengaluru',
           },
         }),
       ),
@@ -114,6 +117,7 @@ describe('the Participant column', () => {
             recordId: 'reg-1',
             publicCode: 'A1-B8EFD9-00001-X',
             name: 'Ada Lovelace',
+            location: 'Bengaluru',
           },
         }),
       ),

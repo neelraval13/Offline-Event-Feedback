@@ -128,11 +128,27 @@ describe('allocatePublicCode', () => {
   })
 
   it('rolls back when the surrounding unit of work fails', async () => {
+    /*
+     * The surrounding transaction covers `registrations` as well as
+     * `sequences`, because allocation now reads the registrations table to
+     * avoid handing back a code this device has already issued. Dexie nests a
+     * transaction into its parent only when the scope is a subset, so a caller
+     * that opens a narrower one gets "Table registrations not included in
+     * parent transaction" rather than a nested transaction.
+     *
+     * `createRegistration`, the only production caller, has always opened
+     * exactly these two tables.
+     */
     await expect(
-      database.transaction('rw', database.sequences, async () => {
-        await allocatePublicCode(database, A1)
-        throw new Error('caller failed after allocating')
-      }),
+      database.transaction(
+        'rw',
+        database.sequences,
+        database.registrations,
+        async () => {
+          await allocatePublicCode(database, A1)
+          throw new Error('caller failed after allocating')
+        },
+      ),
     ).rejects.toThrow('caller failed after allocating')
 
     expect(await readSequence(database, A1)).toBe(0)

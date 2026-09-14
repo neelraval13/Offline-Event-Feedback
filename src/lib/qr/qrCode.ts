@@ -30,7 +30,7 @@ import QRCode from 'qrcode'
  * still sizes the finished symbol to 26 mm.
  *
  * Error correction level **M** (~15%). Measured against the real payload, which
- * with the configured event ID (`ff-rc-2026-08-23`) is **114 bytes**. Module
+ * with the configured event ID (`ff-2026-09-20`) is **111 bytes**. Module
  * size is the 26 mm printed width divided by the matrix plus its four-module
  * quiet zone on each side:
  *
@@ -52,14 +52,23 @@ import QRCode from 'qrcode'
  * was measured, not guessed:
  *
  *   evt-dev-001 (the old placeholder, 11 chars)   109 bytes   41 or 45 modules
- *   ff-rc-2026-08-23 (configured, 16 chars)       114 bytes   45 modules
+ *   ff-2026-09-20 (configured, 13 chars)          111 bytes   41 or 45 modules
+ *   ff-rc-2026-08-23 (the August event, 16 chars) 114 bytes   45 modules
  *   the venue spelled out (41 chars)              139 bytes   49 modules
  *
- * 45 modules is a size production already printed and Point B was physically
- * tested against; 49 is not, and at 0.46 mm it approaches the density this
- * module rejected when it chose M over Q. The venue's full name buys nothing
- * inside a symbol no human reads, so it lives in `EVENT_CONFIG.eventName` and
- * `FLYING_FLEA_CAMPAIGN.lockedLocation` instead.
+ * 41 and 45 modules are both sizes production has already printed and Point B
+ * was physically tested against; 49 is not, and at 0.46 mm it approaches the
+ * density this module rejected when it chose M over Q. The venue's full name
+ * buys nothing inside a symbol no human reads, so it lives in
+ * `EVENT_CONFIG.eventName`, which is not printed.
+ *
+ * The September event ID names no venue at all, because the event runs in two
+ * cities and the city is per-record data rather than part of the event's
+ * identity. That makes the payload three bytes shorter than August's, so this
+ * change only moved away from the boundary below. The city is NOT in the QR:
+ * a sticker is printed at Point A and read at Point B, both of which already
+ * know which city they are in, so encoding it would cost bytes on every label
+ * to tell a scanner something it can already see.
  *
  * The boundary is 124 bytes: past it the symbol grows to 49 modules. That is
  * about ten characters of headroom on the current event ID, and it is the reason

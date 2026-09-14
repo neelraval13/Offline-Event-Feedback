@@ -299,8 +299,21 @@ describe('verifying a backup', () => {
     await seed(1)
     const original = await backupFile()
     const text = await original.text()
+    /*
+     * Flip the first ciphertext character to something it is not.
+     *
+     * Replacing it unconditionally with `A` is a no-op roughly one run in
+     * sixty-four, because base64 output begins with `A` that often. The file
+     * would then be untampered, verification would succeed, and the test would
+     * fail for a reason that has nothing to do with the code under test. The
+     * same latent bug was fixed in `src/lib/backup/endToEnd.test.ts`.
+     */
     const tampered = new File(
-      [text.replace(/"ciphertext":"./, '"ciphertext":"A')],
+      [
+        text.replace(/"ciphertext":"(.)/, (_match, first: string) =>
+          `"ciphertext":"${first === 'A' ? 'B' : 'A'}`,
+        ),
+      ],
       'tampered.oefbackup',
     )
 

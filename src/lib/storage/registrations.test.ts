@@ -317,7 +317,7 @@ describe('sync status after a correction', () => {
 
 describe('listRecentRegistrations', () => {
   it('returns nothing when there are no registrations', async () => {
-    expect(await listRecentRegistrations(database, 5)).toEqual([])
+    expect(await listRecentRegistrations(database, 5, CONTEXT.eventId)).toEqual([])
   })
 
   it('returns the newest first', async () => {
@@ -325,7 +325,7 @@ describe('listRecentRegistrations', () => {
     const second = await createRegistration(database, input({ name: 'Second' }))
     const third = await createRegistration(database, input({ name: 'Third' }))
 
-    const recent = await listRecentRegistrations(database, 10)
+    const recent = await listRecentRegistrations(database, 10, CONTEXT.eventId)
 
     expect(recent.map((r) => r.recordId)).toEqual([
       third.recordId,
@@ -339,13 +339,13 @@ describe('listRecentRegistrations', () => {
       await createRegistration(database, input({ name: `Participant ${i}` }))
     }
 
-    expect(await listRecentRegistrations(database, 3)).toHaveLength(3)
+    expect(await listRecentRegistrations(database, 3, CONTEXT.eventId)).toHaveLength(3)
   })
 
   it('returns nothing for a non-positive limit', async () => {
     await createRegistration(database, input())
-    expect(await listRecentRegistrations(database, 0)).toEqual([])
-    expect(await listRecentRegistrations(database, -1)).toEqual([])
+    expect(await listRecentRegistrations(database, 0, CONTEXT.eventId)).toEqual([])
+    expect(await listRecentRegistrations(database, -1, CONTEXT.eventId)).toEqual([])
   })
 
   it('survives a restart, which is what makes reprint recoverable', async () => {
@@ -354,7 +354,7 @@ describe('listRecentRegistrations', () => {
 
     database.close()
     const reopened = new OfflineEventDb(name)
-    expect(await listRecentRegistrations(reopened, 5)).toEqual([created])
+    expect(await listRecentRegistrations(reopened, 5, CONTEXT.eventId)).toEqual([created])
     reopened.close()
   })
 })

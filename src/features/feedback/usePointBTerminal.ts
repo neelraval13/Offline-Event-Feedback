@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { recordContextFor } from '../../config/recordContext'
+import { useEventLocation } from '../../lib/location/useEventLocation'
+import { EVENT_CONFIG } from '../../config/event'
+import type { EventLocation } from '../../config/eventLocations'
 import {
-  countFeedback,
+  countFeedbackForEvent,
   createFeedback,
   db,
   getOrCreateDeviceId,
@@ -54,6 +57,34 @@ import {
  * status would unmount and remount the form around the save, and a failed write
  * would greet the rider with an empty form. One state, one mounted component,
  * everything still there.
+ *
+ * ## The location gate sits in front of the whole machine
+ *
+ * Every entry point below returns early when this device has no city chosen,
+ * and so does every save. That is stricter than Point A, which lets the form be
+ * filled in and refuses at submit, and the asymmetry is deliberate: a response
+ * is captured in seconds with a rider waiting, and discovering at the end of it
+ * that the device was never configured would mean asking them to answer six
+ * questions again. Refusing to start costs nobody anything.
+ *
+ * The gate is here rather than only in the screen because the screen is one
+ * caller. A guard on the state machine is a guard on every path into it.
+ *
+ * ## The city is frozen for the duration of a response
+ *
+ * The selector stays visible so an operator can always see which city the
+ * device is recording, but the value a response is saved with is the one that
+ * was selected when THAT response started, carried on the state itself.
+ *
+ * The alternative, reading the current selection at submit, has a failure mode
+ * nobody would catch: a rider answers six questions, the operator changes the
+ * city for some unrelated reason, and the answers are filed under a city the
+ * rider was never in. Nothing on screen would show it and nothing downstream
+ * could detect it.
+ *
+ * So changing the selector mid-response affects the NEXT response, never the
+ * one in progress, and the screen disables the control while a response is open
+ * so that the rule is visible rather than merely true.
  */
 export type PointBState =
   /** Camera not started yet. Manual and contact entry are available here. */
@@ -69,16 +100,21 @@ export type PointBState =
       readonly busy: boolean
       /** Set when a save was attempted and failed. Everything typed is kept. */
       readonly saveError: string | null
+      /** Frozen when this flow started. See the note on freezing below. */
+      readonly location: EventLocation
     }
   | {
       readonly status: 'feedback'
       readonly identity: StickerIdentity
       /** Set when a save was attempted and failed. Answers are kept. */
       readonly saveError: string | null
+      /** Frozen when this flow started. See the note on freezing below. */
+      readonly location: EventLocation
     }
   | {
       readonly status: 'saving'
       readonly identity: StickerIdentity
+      readonly location: EventLocation
     }
   | {
       readonly status: 'already-recorded'
@@ -101,6 +137,26 @@ export interface UsePointBTerminalOptions {
 export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
   const createScanner = options.createScanner ?? createZxingScanner
 
+  /*
+   * The city, read once and remembered between riders.
+   *
+   * Owned here rather than in the screen so that the guards below and the
+   * selector the operator sees can never disagree about which city is set.
+   */
+  const { location, setLocation, ready } = useEventLocation()
+
+  /*
+   * The current selection, readable from a closure that may be stale.
+   *
+   * `scanner.start` captures `onDecode` once, so a scan that happens after the
+   * operator changes the city would otherwise freeze whatever the city was when
+   * the camera started. A ref is always current, so the flow freezes what is
+   * selected at the moment the participant is accepted, which is what "frozen
+   * when the flow started" has to mean.
+   */
+  const locationRef = useRef<EventLocation | null>(location)
+  locationRef.current = location
+
   const [state, setState] = useState<PointBState>({ status: 'idle' })
   const [savedCount, setSavedCount] = useState(0)
 
@@ -122,7 +178,14 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
   const submittingRef = useRef(false)
 
   const refreshCount = useCallback(async () => {
-    const total = await countFeedback(db)
+    /*
+     * This event's responses, not the table's lifetime total.
+     *
+     * The number is rider-facing: it answers "how is this event going". A
+     * device re-used from a previous event without being wiped would otherwise
+     * open the shift already reading forty, which is both wrong and alarming.
+     */
+    const total = await countFeedbackForEvent(db, EVENT_CONFIG.eventId)
     if (mountedRef.current) {
       setSavedCount(total)
     }
@@ -161,9 +224,26 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
    */
   const acceptIdentity = useCallback(
     async (identity: StickerIdentity) => {
+      /*
+       * The city is read here, at the moment this participant is accepted, and
+       * carried on the state from now until the response is saved or abandoned.
+       * Read from the ref rather than the closure so a scan that arrives after
+       * the operator changed the selector uses the city that is selected now.
+       */
+      const capturedIn = locationRef.current
+      if (capturedIn === null) {
+        return
+      }
+
+      /*
+       * Scoped to this event. A code from a previous event that happens to
+       * match must not turn a real rider away; see the note on the store's
+       * function.
+       */
       const alreadyRecorded = await hasFeedbackForPublicCode(
         db,
         identity.publicCode,
+        EVENT_CONFIG.eventId,
       )
       if (!mountedRef.current) {
         return
@@ -177,7 +257,12 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
         return
       }
 
-      setState({ status: 'feedback', identity, saveError: null })
+      setState({
+        status: 'feedback',
+        identity,
+        saveError: null,
+        location: capturedIn,
+      })
     },
     [],
   )
@@ -212,7 +297,7 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
 
   const startScanner = useCallback(async () => {
     const video = videoRef.current
-    if (video === null) {
+    if (video === null || location === null) {
       return
     }
 
@@ -256,20 +341,31 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     acceptingRef.current = true
     lastRejectedRef.current = null
     setState({ status: 'scanning', notice: null })
-  }, [createScanner, handleDecode])
+  }, [createScanner, handleDecode, location])
 
   const openManualEntry = useCallback(() => {
+    if (location === null) {
+      return
+    }
     acceptingRef.current = false
     scannerRef.current?.pause()
     setState({ status: 'manual-entry', error: null })
-  }, [])
+  }, [location])
 
   /** The no-sticker path. Reachable from every screen that offers a way out. */
   const openContactEntry = useCallback(() => {
+    if (location === null) {
+      return
+    }
     acceptingRef.current = false
     scannerRef.current?.pause()
-    setState({ status: 'contact-entry', busy: false, saveError: null })
-  }, [])
+    setState({
+      status: 'contact-entry',
+      busy: false,
+      saveError: null,
+      location,
+    })
+  }, [location])
 
   const submitManualCode = useCallback(
     async (typed: string) => {
@@ -315,25 +411,39 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
         return
       }
 
+      /*
+       * The city this response was started in, not the one currently selected.
+       * Changing the selector while a rider is answering must not re-file their
+       * answers under a city they were never in.
+       */
+      const capturedIn = state.location
+
     // Synchronous guard: a double tap lands both events before React re-renders,
     // and the database deliberately permits repeated public codes.
     submittingRef.current = true
 
     const { identity } = state
-    setState({ status: 'saving', identity })
+    setState({ status: 'saving', identity, location: capturedIn })
 
     try {
       const deviceId = await getOrCreateDeviceId(db)
       await createFeedback(db, {
         ...recordContextFor('feedback', deviceId),
         identity,
+        location: capturedIn,
         formVersion: FLYING_FLEA_FORM_VERSION,
         answers,
       })
     } catch (error) {
-      // Nothing committed. Stay on the form with every answer intact.
+      // Nothing committed. Stay on the form with every answer intact, still
+      // filed under the city this response started in.
       if (mountedRef.current) {
-        setState({ status: 'feedback', identity, saveError: describe(error) })
+        setState({
+          status: 'feedback',
+          identity,
+          saveError: describe(error),
+          location: capturedIn,
+        })
       }
       submittingRef.current = false
       return
@@ -375,14 +485,25 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
         return
       }
 
+      // The city this response started in, for the same reason as the sticker
+      // path, and it matters more here: a direct response has no registration
+      // anywhere that could be used to recover its city afterwards.
+      const capturedIn = state.location
+
       submittingRef.current = true
-      setState({ status: 'contact-entry', busy: true, saveError: null })
+      setState({
+        status: 'contact-entry',
+        busy: true,
+        saveError: null,
+        location: capturedIn,
+      })
 
       try {
         const deviceId = await getOrCreateDeviceId(db)
         await createFeedback(db, {
           ...recordContextFor('feedback', deviceId),
           identity,
+          location: capturedIn,
           formVersion: FLYING_FLEA_FORM_VERSION,
           answers,
         })
@@ -397,6 +518,7 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
             status: 'contact-entry',
             busy: false,
             saveError: describe(error),
+            location: capturedIn,
           })
         }
         submittingRef.current = false
@@ -413,9 +535,28 @@ export function usePointBTerminal(options: UsePointBTerminalOptions = {}) {
     [refreshCount, state],
   )
 
+  /**
+   * Whether a response is open and therefore has a city already frozen to it.
+   *
+   * The screen disables the selector while this is true. Changing it would not
+   * corrupt the open response, which carries its own city, but a control that
+   * silently applies to the next rider rather than the one in front of the
+   * operator is a control that will be misread. Disabling makes the rule
+   * visible instead of merely correct.
+   */
+  const responseInProgress =
+    state.status === 'feedback' ||
+    state.status === 'saving' ||
+    state.status === 'contact-entry'
+
   return {
     state,
     savedCount,
+    location,
+    setLocation,
+    responseInProgress,
+    /** False until a city is chosen. The screen shows the selector alone. */
+    locationReady: ready,
     videoRef,
     startScanner,
     openManualEntry,

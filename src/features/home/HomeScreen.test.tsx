@@ -45,18 +45,23 @@ describe('the identity block', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: /Test Ride Stations/ }),
     ).toBeDefined()
-    expect(screen.getByText('23 August 2026')).toBeDefined()
+    expect(screen.getByText('20 September 2026')).toBeDefined()
     expect(screen.getByText('Choose a station to begin.')).toBeDefined()
   })
 
-  it('states the venue in the badge and nowhere else', () => {
+  it('states both cities in the badge and nowhere else', () => {
     /*
      * The venue used to appear in the badge and again in a paragraph below the
      * title. `getAllByText` is the assertion: one occurrence, not two.
+     *
+     * Both cities, because the home screen is not a station. It records
+     * nothing, so it has no device city to report, and naming one of the two
+     * here would be a claim about a tablet nobody has set up yet.
      */
     render(<HomeScreen />)
 
-    expect(screen.getAllByText('Richardson & Cruddas')).toHaveLength(1)
+    expect(screen.getAllByText('Bengaluru / Hyderabad')).toHaveLength(1)
+    expect(screen.queryByText('Richardson & Cruddas')).toBeNull()
   })
 
   it('shows the day as a date, not as a sentence about the event', () => {

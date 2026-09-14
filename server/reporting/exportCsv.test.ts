@@ -75,6 +75,12 @@ function feedbackRow(overrides: Partial<FeedbackExportRow> = {}): FeedbackExport
     respondentName: null,
     respondentPhone: null,
     respondentEmail: null,
+    // Where Point B recorded the response, and where Point A recorded the
+    // registration it matched. Both default to Bengaluru so the fixtures agree
+    // and no row is accidentally flagged as a location mismatch; the tests that
+    // are about a mismatch set them apart explicitly.
+    location: 'Bengaluru',
+    registrationLocation: 'Bengaluru',
     formVersion: 'feedback-v1',
     createdAt: '2026-01-01T10:00:00.000Z',
     revision: 1,
@@ -251,22 +257,43 @@ describe('contact identity in the raw feedback export', () => {
      */
     const header = [...FEEDBACK_CSV_HEADER]
 
-    expect(header.slice(-3)).toEqual([
+    /*
+     * The respondent trio is no longer last: `feedback_location` was appended
+     * after it for the September event, by the same rule. The trio is still in
+     * the same three positions it has always occupied, which is what "moving
+     * nothing" means, so it is addressed from the end with the newer column
+     * accounted for rather than assumed absent.
+     */
+    expect(header.slice(-4, -1)).toEqual([
       'respondent_name',
       'respondent_phone',
       'respondent_email',
     ])
+    expect(header.at(-1)).toBe('feedback_location')
+
     // The columns that existed before are exactly where they were.
     expect(header.indexOf('public_code')).toBe(2)
     expect(header.indexOf('capture_method')).toBe(4)
-    expect(header.indexOf('overall_experience_comments')).toBe(header.length - 4)
+    expect(header.indexOf('overall_experience_comments')).toBe(header.length - 5)
+  })
+
+  it('appends the location column after them, moving nothing again', () => {
+    /*
+     * The same contract, one release later. Every column that existed before
+     * this change keeps its index, which is the only property a script indexing
+     * by column number depends on.
+     */
+    const header = [...FEEDBACK_CSV_HEADER]
+
+    expect(header.indexOf('respondent_name')).toBe(header.length - 4)
+    expect(header.indexOf('feedback_location')).toBe(header.length - 1)
   })
 
   it('carries the rider’s details on a direct response', () => {
     const csv = feedbackCsv(RUN, [feedbackRow(DIRECT)])
     const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
 
-    expect(cells.slice(-3)).toEqual([
+    expect(cells.slice(-4, -1)).toEqual([
       'Grace Hopper',
       // Neutralised: a leading digit is safe, but the value is quoted whenever
       // the formula guard touched it. Here it did not.
@@ -279,7 +306,31 @@ describe('contact identity in the raw feedback export', () => {
     const csv = feedbackCsv(RUN, [feedbackRow()])
     const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
 
-    expect(cells.slice(-3)).toEqual(['', '', ''])
+    expect(cells.slice(-4, -1)).toEqual(['', '', ''])
+  })
+
+  it('carries the capture location on every response, including a direct one', () => {
+    /*
+     * The direct case is the one that matters. A scanned response could in
+     * principle have its city recovered from the registration its code points
+     * at; a direct response points at nothing, so the column is the only record
+     * of where it was given.
+     */
+    for (const row of [feedbackRow(), feedbackRow(DIRECT)]) {
+      const csv = feedbackCsv(RUN, [row])
+      const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
+
+      expect(cells.at(-1)).toBe('Bengaluru')
+    }
+  })
+
+  it('leaves the location blank on a response captured before the field existed', () => {
+    // An August row. Blank is the truth about it, and it is never backfilled
+    // from the registration it matched.
+    const csv = feedbackCsv(RUN, [feedbackRow({ location: null })])
+    const cells = (csv.trimEnd().split('\r\n')[1] ?? '').split(',')
+
+    expect(cells.at(-1)).toBe('')
   })
 
   it('leaves the public code blank rather than inventing one', () => {

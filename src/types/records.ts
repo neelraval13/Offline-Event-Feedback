@@ -167,6 +167,35 @@ export type FeedbackRecord = OfflineRecordMetadata &
   FeedbackQuestionnairePayload &
   CapturedParticipantIdentity & {
     readonly kind: 'feedback'
+    /**
+     * The city this response was captured in.
+     *
+     * Deliberately OUTSIDE {@link CapturedParticipantIdentity}. A location is
+     * not part of who a respondent is: two riders in Bengaluru are not the same
+     * person, and the same rider in Hyderabad is not a different one. Putting it
+     * in the identity union would have made it a fourth thing reconciliation
+     * matches on, which is exactly wrong. It is event metadata that happens to
+     * be captured at the same moment.
+     *
+     * Optional in the type, and required by the application.
+     *
+     * Those are not in conflict. The type has to describe every record this
+     * build can legitimately read, and that includes every August response,
+     * which was captured when the venue was a property of the deployment and
+     * was never written onto a response at all. Absent therefore means "not
+     * captured", permanently and truthfully, and nothing backfills it.
+     *
+     * What makes it required in practice is `createFeedback`, which refuses to
+     * write a new response without one, and the Point B screen, which refuses
+     * to start one. See `src/lib/storage/feedback.ts`.
+     *
+     * Typed as `string` rather than as the two-city union on purpose: this
+     * module describes what may be stored, and what may be stored includes
+     * `Richardson & Cruddas` on an August record restored from a backup. The
+     * narrow union belongs at the point of capture, in
+     * `src/config/eventLocations.ts`.
+     */
+    readonly location?: string
   }
 
 /** The public code a response carries, or null for a contact capture. */

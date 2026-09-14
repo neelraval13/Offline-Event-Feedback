@@ -1,3 +1,4 @@
+import { locationsDisagree } from '../../shared/reporting/location.js'
 import { FLYING_FLEA_FORM_VERSION } from './analytics.js'
 import type { FeedbackExportRow, RegistrationExportRow } from './postgres.js'
 
@@ -118,8 +119,24 @@ export const PARTICIPANT_FEEDBACK_HEADER = [
 
   'Vehicle',
   'Interested Colour',
-  'Location',
+  'Registration Location',
   'Test Ride Date & Time',
+
+  /*
+   * Two locations, side by side, and a flag when they differ.
+   *
+   * The event runs in two cities on one day, so "where did this happen" has two
+   * independent answers: the city Point A stamped on the registration and the
+   * city Point B stamped on the response. They are usually the same. When they
+   * are not, that is worth a human's attention, and the sheet says so rather
+   * than picking one and hiding the other. See shared/reporting/location.ts.
+   *
+   * The previously unqualified `Location` column is now `Registration Location`.
+   * With two of them on one sheet an unqualified heading would be read as
+   * whichever one the reader had in mind.
+   */
+  'Feedback Location',
+  'Location Mismatch',
 
   'Feedback Capture Method',
   'Feedback Form Version',
@@ -162,8 +179,8 @@ export const PARTICIPANT_FEEDBACK_HEADER = [
 
 /** Widths, by eye: identifiers narrow, free text wide enough to read. */
 export const PARTICIPANT_FEEDBACK_WIDTHS: readonly number[] = [
-  38, 20, 30, 22, 26, 18, 30, 22, 12, 12, 14, 18, 24, 22, 14, 26, 12, 12, 12,
-  12, 60, 60, 38, 38, 26, 26, 26, 18, 30,
+  38, 20, 30, 22, 26, 18, 30, 22, 12, 12, 14, 18, 24, 22, 20, 18, 14, 26, 12,
+  12, 12, 12, 60, 60, 38, 38, 26, 26, 26, 18, 30,
 ]
 
 export interface ParticipantFeedbackRow {
@@ -179,8 +196,13 @@ export interface ParticipantFeedbackRow {
   readonly pincode: string | null
   readonly vehicle: string | null
   readonly interestedColour: string | null
-  readonly location: string | null
+  /** Where Point A recorded the registration. Null when it has none. */
+  readonly registrationLocation: string | null
   readonly testRideAt: string | null
+  /** Where Point B recorded the response. Null when it has none. */
+  readonly feedbackLocation: string | null
+  /** `Yes` when the two above positively disagree, blank otherwise. */
+  readonly locationMismatch: string | null
   readonly captureMethod: string | null
   readonly formVersion: string | null
   readonly testRideExperience: string | null
@@ -201,6 +223,8 @@ export interface ParticipantFeedbackRow {
 /** The answer columns, blank. Used by a registration with no response. */
 const NO_RESPONSE = {
   identitySource: null,
+  feedbackLocation: null,
+  locationMismatch: null,
   captureMethod: null,
   formVersion: null,
   testRideExperience: null,
@@ -233,7 +257,7 @@ const NO_REGISTRATION = {
   pincode: null,
   vehicle: null,
   interestedColour: null,
-  location: null,
+  registrationLocation: null,
   testRideAt: null,
   registrationRecordId: null,
   registrationCreatedAt: null,
@@ -281,7 +305,7 @@ function registrationColumns(registration: RegistrationExportRow) {
     pincode: registration.pincode,
     vehicle: registration.vehicle,
     interestedColour: registration.interestedColour,
-    location: registration.location,
+    registrationLocation: registration.location,
     testRideAt: registration.testRideAt,
     registrationRecordId: registration.recordId,
     registrationCreatedAt: registration.createdAt,
@@ -291,6 +315,24 @@ function registrationColumns(registration: RegistrationExportRow) {
 function responseColumns(response: FeedbackExportRow) {
   return {
     identitySource: identitySource(response),
+    feedbackLocation: response.location,
+    /*
+     * Compared against the location on the registration the RUN attached this
+     * response to, which is the same registration whose columns sit to the left
+     * of it on a matched row. Taking it from the response rather than from the
+     * loop's registration keeps one source for the comparison, so an orphan row
+     * and a matched row are flagged by identical logic.
+     *
+     * Blank rather than `No` when they agree: a column of `No` down a sheet
+     * that is almost always consistent is noise a reader has to filter out,
+     * where a sparse `Yes` is a thing they can sort on.
+     */
+    locationMismatch: locationsDisagree(
+      response.registrationLocation,
+      response.location,
+    )
+      ? 'Yes'
+      : null,
     captureMethod: response.captureMethod,
     formVersion: response.formVersion,
     ...campaignAnswers(response),
@@ -451,8 +493,10 @@ export function participantFeedbackCells(
     row.pincode,
     row.vehicle,
     row.interestedColour,
-    row.location,
+    row.registrationLocation,
     row.testRideAt,
+    row.feedbackLocation,
+    row.locationMismatch,
     row.captureMethod,
     row.formVersion,
     row.testRideExperience,

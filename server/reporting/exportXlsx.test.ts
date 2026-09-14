@@ -160,6 +160,18 @@ function overview(
       percentage: 85.7,
       directResponses: 0,
     },
+    /*
+     * A two-city event, because that is what the September event is and what
+     * the Summary sheet has to describe. The counts add up to the run's own
+     * totals above, which is the property the breakdown promises.
+     */
+    locations: {
+      byLocation: [
+        { location: 'Bengaluru', registrations: 9, feedback: 8 },
+        { location: 'Hyderabad', registrations: 5, feedback: 4 },
+      ],
+      mismatchedLocations: 0,
+    },
   }
 }
 
@@ -463,7 +475,7 @@ function registration(
     email: 'ada@example.com',
     vehicle: 'Vehicle 2',
     interestedColour: 'Storm Black',
-    location: 'Richardson & Cruddas',
+    location: 'Bengaluru',
     gender: 'Female',
     testRideAt: '2026-08-23T15:42',
     drivingLicence: 'KA0120200001234',
@@ -493,6 +505,12 @@ function response(
     respondentName: null,
     respondentPhone: null,
     respondentEmail: null,
+    // Where Point B recorded the response, and where Point A recorded the
+    // registration it matched. Both default to Bengaluru so the fixtures agree
+    // and no row is accidentally flagged as a location mismatch; the tests that
+    // are about a mismatch set them apart explicitly.
+    location: 'Bengaluru',
+    registrationLocation: 'Bengaluru',
     formVersion: 'flying-flea-feedback-v1',
     createdAt: '2026-08-23T16:00:00.000Z',
     revision: 1,
@@ -564,7 +582,16 @@ describe('Participant Feedback: a matched rider', () => {
     expect(row.get('Pincode')).toBe('560048')
     expect(row.get('Vehicle')).toBe('Vehicle 2')
     expect(row.get('Interested Colour')).toBe('Storm Black')
-    expect(row.get('Location')).toBe('Richardson & Cruddas')
+    /*
+     * `Location` became `Registration Location` when a second location column
+     * arrived beside it. With two of them on one sheet an unqualified heading
+     * would be read as whichever one the reader had in mind.
+     */
+    expect(row.get('Registration Location')).toBe('Bengaluru')
+    expect(row.get('Feedback Location')).toBe('Bengaluru')
+    // Blank, not "No": the two agree, and a column of "No" down a sheet that is
+    // almost always consistent is noise a reader has to filter out.
+    expect(row.get('Location Mismatch')).toBe('')
     expect(row.get('Test Ride Date & Time')).toBe('2026-08-23T15:42')
   })
 

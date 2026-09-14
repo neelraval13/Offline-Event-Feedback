@@ -369,6 +369,55 @@ describe('registration ingest', () => {
       code: 'WRONG_EVENT',
     })
   })
+
+  it('still rejects the foreign half of a mixed batch, and keeps the rest', async () => {
+    /*
+     * The server's own defence, kept deliberately after the client gained one.
+     *
+     * The September client now filters another event's records out before it
+     * sends anything, so a mixed batch should never leave a current build. That
+     * is exactly why this has to keep working: the client-side filter protects
+     * the devices this deployment controls, and the server protects the table
+     * from every build that ever existed, from a replayed request, and from a
+     * client with a bug.
+     *
+     * Per record, not per batch. One foreign record must not strand the
+     * legitimate ones beside it: those are real captures sitting on somebody's
+     * tablet, and the whole point of syncing is to get them somewhere safe.
+     */
+    const token = await enrolledToken()
+    const mine = registration({ publicCode: publicCodeFor(41) })
+    const foreign = registration({
+      eventId: 'ff-rc-2026-08-23',
+      publicCode: publicCodeFor(42),
+    })
+    const myFeedback = feedback({ publicCode: mine.publicCode })
+    const foreignFeedback = feedback({
+      eventId: 'ff-rc-2026-08-23',
+      publicCode: publicCodeFor(43),
+    })
+
+    const { body } = await postBatch(
+      token,
+      batch([mine, foreign, myFeedback, foreignFeedback]),
+    )
+
+    expect(statusOf(body, mine.recordId)).toMatchObject({ status: 'accepted' })
+    expect(statusOf(body, myFeedback.recordId)).toMatchObject({
+      status: 'accepted',
+    })
+
+    for (const rejected of [foreign, foreignFeedback]) {
+      expect(statusOf(body, rejected.recordId)).toMatchObject({
+        status: 'invalid',
+        code: 'WRONG_EVENT',
+      })
+    }
+
+    // And nothing from the other event reached the store.
+    expect(await store.getRegistration(foreign.recordId)).toBeNull()
+    expect(await store.getFeedback(foreignFeedback.recordId)).toBeNull()
+  })
 })
 
 describe('feedback ingest', () => {

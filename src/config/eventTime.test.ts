@@ -71,25 +71,30 @@ describe('reading the wall clock at the venue', () => {
 
 describe('the value stored as testRideAt', () => {
   it('takes its date from the event and its time from the clock', () => {
-    expect(eventTestRideAt(new Date('2026-08-23T10:12:00.000Z'))).toBe(
-      '2026-08-23T15:42',
+    expect(eventTestRideAt(new Date('2026-09-20T10:12:00.000Z'))).toBe(
+      '2026-09-20T15:42',
     )
   })
 
   it('uses the configured event day even when the device is on another date', () => {
     /*
-     * The failure this prevents: testing on 15 August and writing
-     * `2026-08-15T15:42` onto a record for an event that ran on 23 August. The
-     * date half is configuration, never the device calendar.
+     * The failure this prevents: testing on 15 September and writing
+     * `2026-09-15T15:42` onto a record for an event that ran on 20 September.
+     * The date half is configuration, never the device calendar.
+     *
+     * The date chosen here is deliberately the PREVIOUS event's day. A tablet
+     * whose clock is wrong, or one being rehearsed on before the event, must
+     * not be able to stamp a September record with an August date, which would
+     * put it on a day this event did not run.
      */
-    const wrongDay = new Date('2026-08-15T10:12:00.000Z')
+    const wrongDay = new Date('2026-08-23T10:12:00.000Z')
 
-    expect(eventTestRideAt(wrongDay)).toBe('2026-08-23T15:42')
+    expect(eventTestRideAt(wrongDay)).toBe('2026-09-20T15:42')
     expect(eventTestRideAt(wrongDay).startsWith(EVENT_CONFIG.eventDay)).toBe(true)
   })
 
   it('keeps the naive wall-clock shape the store has always held', () => {
-    const stamped = eventTestRideAt(new Date('2026-08-23T10:12:00.000Z'))
+    const stamped = eventTestRideAt(new Date('2026-09-20T10:12:00.000Z'))
 
     // `YYYY-MM-DDTHH:mm`, and nothing else: no seconds, no `Z`, no `+05:30`.
     expect(stamped).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
@@ -101,7 +106,7 @@ describe('the value stored as testRideAt', () => {
 describe('showing the event day to a person', () => {
   it('writes the configured day the way it is read aloud', () => {
     expect(formatEventDay('2026-08-23')).toBe('23 August 2026')
-    expect(formatEventDay(EVENT_CONFIG.eventDay)).toBe('23 August 2026')
+    expect(formatEventDay(EVENT_CONFIG.eventDay)).toBe('20 September 2026')
   })
 
   it('drops a leading zero from the day but never from the month name', () => {

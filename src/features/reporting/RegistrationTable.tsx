@@ -8,6 +8,7 @@ import type {
   RegistrationReconciliationStatus,
 } from '../../lib/reporting/types'
 import { RegistrationDetail } from './RegistrationDetail'
+import { LocationFilter, type LocationFilterValue } from './LocationFilter'
 import { useReportingSession } from './session'
 
 /*
@@ -49,6 +50,7 @@ export function RegistrationTable({
 }: RegistrationTableProps) {
   const session = useReportingSession()
   const [status, setStatus] = useState<StatusFilter>(initialStatus)
+  const [location, setLocation] = useState<LocationFilterValue>('all')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<readonly RegistrationRow[]>([])
@@ -65,6 +67,7 @@ export function RegistrationTable({
           eventId,
           ...(runId === undefined ? {} : { runId }),
           ...(status === 'all' ? {} : { status }),
+          ...(location === 'all' ? {} : { location }),
           ...(search.length === 0 ? {} : { search }),
           ...(duplicatesOnly ? { duplicateCandidateOnly: true } : {}),
           ...(nextCursor === null ? {} : { cursor: nextCursor }),
@@ -84,7 +87,7 @@ export function RegistrationTable({
         nextCursor === null ? result.value.rows : [...previous, ...result.value.rows],
       )
     },
-    [session, eventId, runId, status, search, duplicatesOnly],
+    [session, eventId, runId, status, location, search, duplicatesOnly],
   )
 
   useEffect(() => {
@@ -132,6 +135,20 @@ export function RegistrationTable({
         )}
       </form>
 
+      {/*
+        Outside the duplicates guard, unlike the status filter.
+
+        The status filter is meaningless in the duplicates view, which is
+        already a fixed slice. A city is not: "which of these possible duplicate
+        pairs are in Hyderabad" is a question an organiser reconciling two desks
+        genuinely asks.
+      */}
+      <LocationFilter
+        value={location}
+        onChange={setLocation}
+        label="Filter registrations by location"
+      />
+
       {!duplicatesOnly && (
         <div className="button-row" role="group" aria-label="Filter by status">
           {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((option) => (
@@ -165,6 +182,7 @@ export function RegistrationTable({
           <tr>
             <th scope="col">Code</th>
             <th scope="col">Name</th>
+            <th scope="col">Location</th>
             <th scope="col">Phone</th>
             <th scope="col">Status</th>
             <th scope="col">Responses</th>
@@ -184,6 +202,8 @@ export function RegistrationTable({
                 )}
               </td>
               <td>{row.name}</td>
+              {/* Blank rather than a guessed city when none was captured. */}
+              <td>{row.location ?? ''}</td>
               <td>{row.phone}</td>
               {/* Always a status: a run contains exactly what it classified. */}
               <td>{STATUS_LABELS[row.reconciliationStatus]}</td>

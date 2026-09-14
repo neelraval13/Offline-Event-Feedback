@@ -93,21 +93,84 @@ export interface AllocatedPublicCode {
 }
 
 /**
- * Allocates the next public code for a scope.
+ * How many taken codes an allocation will step over before giving up.
+ *
+ * Only ever consumed on a device that already holds registrations whose codes
+ * this scope would re-issue, which in practice means one previous event's worth.
+ * The bound exists so a corrupted sequence row produces a legible error at the
+ * desk rather than a loop that never returns.
+ */
+const MAX_SKIPPED_CODES = 50_000
+
+/**
+ * Allocates the next public code for a scope, skipping any already in use.
  *
  * Joins the caller's transaction when there is one: Dexie nests a transaction
  * into its parent when the scope is a subset, so allocation and the write that
  * consumes it commit or roll back together.
+ *
+ * **A surrounding transaction must therefore cover `registrations` as well as
+ * `sequences`**, because the check below reads it. `createRegistration`, the
+ * only production caller, has always opened exactly those two.
+ *
+ * ## Why it has to check, and not merely count
+ *
+ * The sequence is keyed by event, so a new event restarts at 1. The public code
+ * is NOT: it is station, issuer, sequence and a check character, and the issuer
+ * is derived from the device. A device that still holds a previous event's
+ * registrations therefore regenerates that event's first code for this event's
+ * first rider, and `registrations.publicCode` is a unique index.
+ *
+ * What that produced was not a near miss. The insert failed with a
+ * `ConstraintError`, and because the sequence bump and the insert share one
+ * transaction, the bump rolled back with it: the counter never advanced, so
+ * every subsequent rider failed in exactly the same way. A tablet rolled over
+ * without being wiped could not register anybody at all, and the operator saw
+ * only "Could not save this registration".
+ *
+ * Stepping over a taken code fixes that without touching the parts that are
+ * contracts: the code's structure is unchanged, the check character is still
+ * computed the same way, and the sequence stays event-scoped. All that changes
+ * is that an allocation will not hand back a code this database has already
+ * issued. Skipping numbers is already normal here; `nextIssuableSequence` skips
+ * every sequence whose check character cannot be formed.
+ *
+ * The scan is bounded by what is on the device and happens once per rollover:
+ * after the first September rider takes 201 on a device holding 200 August
+ * records, the counter holds 201 and the next allocation skips nothing.
  */
 export async function allocatePublicCode(
   database: OfflineEventDb,
   scope: SequenceScope,
 ): Promise<AllocatedPublicCode> {
-  return database.transaction('rw', database.sequences, async () => {
-    const sequence = await reserveNextSequence(database, scope)
-    return {
-      sequence,
-      publicCode: formatPublicCode(issuerFor(scope), sequence),
-    }
-  })
+  return database.transaction(
+    'rw',
+    database.sequences,
+    database.registrations,
+    async () => {
+      let skipped = 0
+
+      for (;;) {
+        const sequence = await reserveNextSequence(database, scope)
+        const publicCode = formatPublicCode(issuerFor(scope), sequence)
+
+        const taken = await database.registrations
+          .where('publicCode')
+          .equals(publicCode)
+          .count()
+
+        if (taken === 0) {
+          return { sequence, publicCode }
+        }
+
+        skipped += 1
+        if (skipped > MAX_SKIPPED_CODES) {
+          throw new Error(
+            `Could not allocate a public code: ${MAX_SKIPPED_CODES} consecutive codes for ` +
+              `${scope.stationId}-${scope.issuerCode} are already in use on this device.`,
+          )
+        }
+      }
+    },
+  )
 }

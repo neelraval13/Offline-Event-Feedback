@@ -40,7 +40,12 @@ const RIDER = {
   email: 'ada@example.com',
   vehicle: 'Vehicle 2',
   interestedColour: 'Storm Black' as const,
-  location: 'Prestige Tech Park',
+  /*
+   * One of the event's own cities. A free-text venue used to be acceptable here
+   * and is not any more: the September build accepts only Bengaluru or
+   * Hyderabad, so that a location column can actually be grouped on.
+   */
+  location: 'Bengaluru' as const,
   gender: 'Female' as const,
   testRideAt: '2026-01-01T10:30',
   drivingLicence: 'KA0120200001234',
@@ -69,19 +74,22 @@ describe('campaign registration validation', () => {
     }
   })
 
-  it('asks the operator for only the four fields left to answer', () => {
+  it('asks the operator for the five fields left to answer', () => {
     const result = validateCampaignRegistration(emptyCampaignDraft())
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
       /*
-       * Vehicle, name, email and phone. Gender, licence and pincode are not
-       * invented as requirements. Location is absent from this list not because
-       * it stopped being required but because it is no longer asked: the empty
-       * draft already carries the locked venue.
+       * Location, vehicle, name, email and phone. Gender, licence and pincode
+       * are not invented as requirements.
+       *
+       * Location is back on this list. It left it when the venue became a
+       * property of the build, and it returns because the September event runs
+       * in two cities on one day, so no build-time constant can answer it.
        */
       expect(Object.keys(result.errors).sort()).toEqual([
         'email',
+        'location',
         'name',
         'phone',
         'vehicle',
@@ -89,21 +97,70 @@ describe('campaign registration validation', () => {
     }
   })
 
-  it('starts every draft on the venue this build is locked to', () => {
-    expect(emptyCampaignDraft().location).toBe('Richardson & Cruddas')
+  it('starts a fresh draft with no city chosen at all', () => {
+    /*
+     * The absence of a default is the design, not an oversight.
+     *
+     * Defaulting to the first city would put Bengaluru on a record that nobody
+     * confirmed, on a device that might be in Hyderabad, and nothing in the
+     * data afterwards could distinguish that from a real choice. An unchosen
+     * selector that refuses to submit is recoverable; a plausible wrong value
+     * is not.
+     */
+    expect(emptyCampaignDraft().location).toBe('')
     // And the time is still empty here: it is read at submit, not now.
     expect(emptyCampaignDraft().testRideAt).toBe('')
   })
 
+  it('carries a remembered city into a fresh draft, so Next rider keeps it', () => {
+    // What stops an operator answering the same question two hundred times.
+    expect(emptyCampaignDraft('Hyderabad').location).toBe('Hyderabad')
+  })
+
   it('still refuses a registration that would carry no venue', () => {
-    // Only reachable on a misconfigured build, and it must not write a record.
     const result = validateCampaignRegistration({
       ...emptyCampaignDraft(),
       ...RIDER,
-      location: '   ',
+      location: '',
     })
 
     expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors.location).toBe('Select the event location.')
+    }
+  })
+
+  it('refuses a venue that is not one of this event’s cities', () => {
+    /*
+     * Only reachable from a stale preference or a tampered draft, and it must
+     * not write a record. A registration stamped with a venue this event never
+     * ran in is invisible in every location breakdown afterwards, and there is
+     * nothing in the row to reveal that it was never a real choice.
+     */
+    for (const venue of ['Prestige Tech Park', 'Richardson & Cruddas', 'bengaluru']) {
+      const result = validateCampaignRegistration({
+        ...emptyCampaignDraft(),
+        ...RIDER,
+        location: venue as never,
+      })
+
+      expect(result.ok, `accepted ${venue}`).toBe(false)
+    }
+  })
+
+  it('accepts either of the event’s cities', () => {
+    for (const city of ['Bengaluru', 'Hyderabad'] as const) {
+      const result = validateCampaignRegistration({
+        ...emptyCampaignDraft(),
+        ...RIDER,
+        location: city,
+      })
+
+      expect(result.ok, `rejected ${city}`).toBe(true)
+      if (result.ok) {
+        expect(result.values.location).toBe(city)
+      }
+    }
   })
 
   it('reports a blank optional answer as null, and stores it as absent', async () => {
@@ -221,10 +278,11 @@ describe('campaign registrations in the database', () => {
 
   it('stores and uploads a stamped registration under the same keys', async () => {
     /*
-     * The contract check for the change that stopped asking for a venue and a
-     * time. Both are now supplied by `stampEventFields` instead of by the
-     * operator, and the point of this test is that nothing downstream can tell:
-     * same field names, same shapes, same wire schema, no migration.
+     * The contract check for the change that stopped asking for a time and the
+     * one that started asking for a city again. The time is supplied by
+     * `stampEventFields`; the city comes from the form. The point of this test
+     * is that nothing downstream can tell where either came from: same field
+     * names, same shapes, same wire schema, no migration.
      */
     const stamped = stampEventFields(
       {
@@ -233,20 +291,21 @@ describe('campaign registrations in the database', () => {
         email: 'ada@example.com',
         vehicle: 'Vehicle 2',
         interestedColour: 'Storm Black',
+        location: 'Hyderabad',
       },
-      new Date('2026-08-23T10:12:00.000Z'),
+      new Date('2026-09-20T10:12:00.000Z'),
     )
 
     const record = await createRegistration(db, { ...CONTEXT, ...stamped })
 
-    expect(record.location).toBe('Richardson & Cruddas')
-    expect(record.testRideAt).toBe('2026-08-23T15:42')
+    expect(record.location).toBe('Hyderabad')
+    expect(record.testRideAt).toBe('2026-09-20T15:42')
 
     const wire = toRegistrationWire(record)
 
     expect(registrationWireSchema.safeParse(wire).success).toBe(true)
-    expect(wire.location).toBe('Richardson & Cruddas')
-    expect(wire.testRideAt).toBe('2026-08-23T15:42')
+    expect(wire.location).toBe('Hyderabad')
+    expect(wire.testRideAt).toBe('2026-09-20T15:42')
   })
 
   it('puts every campaign field on the wire, and validates there', async () => {

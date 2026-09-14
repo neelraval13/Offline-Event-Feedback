@@ -1,3 +1,4 @@
+import { EVENT_CONFIG } from '../../config/event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -71,7 +72,7 @@ async function registerParticipant(values = PARTICIPANT) {
 
 /** The single record the tests just created. */
 async function onlyRecord(): Promise<RegistrationRecord> {
-  const records = await listRecentRegistrations(db, 10)
+  const records = await listRecentRegistrations(db, 10, EVENT_CONFIG.eventId)
   expect(records).toHaveLength(1)
   return records[0] as RegistrationRecord
 }
@@ -90,9 +91,22 @@ describe('form behaviour', () => {
 
     await user.click(screen.getByRole('button', { name: 'Register & Print' }))
 
-    // The four fields the operator still answers: vehicle, name, email and
-    // phone. Nothing is saved and no identity is issued.
-    expect(await screen.findAllByRole('alert')).toHaveLength(4)
+    /*
+     * The five fields the operator answers: location, vehicle, name, email and
+     * phone. Nothing is saved and no identity is issued.
+     *
+     * Location joined this list for the September event. On a device that has
+     * never been told which city it is in, the selector opens unchosen and the
+     * form refuses, which is the deliberate absence of a default: Bengaluru and
+     * Hyderabad are indistinguishable in the data after the fact, so a silently
+     * defaulted venue would be undetectable and uncorrectable.
+     */
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(5)
+    expect(
+      alerts.some((alert) => alert.textContent === 'Select the event location.'),
+    ).toBe(true)
+
     expect(screen.queryByTestId('sticker')).toBeNull()
     expect(await countRegistrations(db)).toBe(0)
   })
@@ -293,7 +307,7 @@ describe('identity comes from the saved record', () => {
     await user.click(screen.getByRole('button', { name: 'Next rider' }))
     await registerParticipant({ ...PARTICIPANT, name: 'Grace Hopper' })
 
-    const records = await listRecentRegistrations(db, 10)
+    const records = await listRecentRegistrations(db, 10, EVENT_CONFIG.eventId)
     expect(records).toHaveLength(2)
     const codes = records.map((r) => r.publicCode)
     expect(new Set(codes).size).toBe(2)
@@ -497,20 +511,26 @@ describe('correcting contact details', () => {
 
 describe('the venue and the time the operator no longer types', () => {
   /*
-   * Two fields became two facts. Neither is a control any more, both are still
-   * on every record, and the whole risk of the change lives in *when* the time
-   * is read and *whether* a later correction overwrites it.
+   * The test-ride time became a fact rather than a field. It is still on every
+   * record, and the whole risk of the change lives in *when* it is read and
+   * *whether* a later correction overwrites it.
+   *
+   * The venue went the other way for the September event. It was a field, then
+   * a compiled constant, and now it is a field again, because the event runs in
+   * two cities on one day and no constant can be right on both. The assertions
+   * below therefore pin two different things about the two values: the time is
+   * never asked for, and the venue always is.
    *
    * The instants below are written as UTC so they mean the same moment wherever
-   * this suite runs; the venue is UTC+05:30.
+   * this suite runs; both venues are UTC+05:30.
    */
 
   /** 14:10 at the venue: the form is opened. */
-  const OPENED = new Date('2026-08-23T08:40:00.000Z')
+  const OPENED = new Date('2026-09-20T08:40:00.000Z')
   /** 14:13 at the venue: the operator presses Register & Print. */
-  const SUBMITTED = new Date('2026-08-23T08:43:00.000Z')
+  const SUBMITTED = new Date('2026-09-20T08:43:00.000Z')
   /** 15:49 at the venue: the next rider. */
-  const NEXT_RIDER = new Date('2026-08-23T10:19:00.000Z')
+  const NEXT_RIDER = new Date('2026-09-20T10:19:00.000Z')
 
   /*
    * Only `Date` is faked, deliberately: `setTimeout` and friends stay real, so
@@ -524,24 +544,35 @@ describe('the venue and the time the operator no longer types', () => {
     return userEvent.setup()
   }
 
-  it('states both above the form instead of asking for them', async () => {
+  it('states the day above the form and never asks for a ride time', async () => {
     render(<RegistrationScreen />)
 
-    expect(await screen.findByText('Richardson & Cruddas')).toBeDefined()
-    expect(screen.getByText('23 August 2026')).toBeDefined()
+    expect(await screen.findByText('20 September 2026')).toBeDefined()
 
-    expect(screen.queryByLabelText(/^Location/)).toBeNull()
     expect(screen.queryByLabelText(/^Test Ride Date/)).toBeNull()
     expect(
       document.querySelectorAll('input[type="datetime-local"]'),
     ).toHaveLength(0)
   })
 
-  it('stores the locked venue on a registration nobody chose one for', async () => {
+  it('asks for the venue, because one build now serves two cities', async () => {
+    /*
+     * The inverse of the assertion this test used to make. A compiled venue is
+     * not merely stale on a two-city event, it is wrong on half the devices,
+     * so the control is back and the caption reports what was chosen.
+     */
+    render(<RegistrationScreen />)
+
+    const selector = await screen.findByLabelText(/^Location/)
+    expect(selector).toBeDefined()
+    expect(screen.queryByText('Richardson & Cruddas')).toBeNull()
+  })
+
+  it('stores the city the operator chose, on every registration', async () => {
     render(<RegistrationScreen />)
     await registerParticipant()
 
-    expect((await onlyRecord()).location).toBe('Richardson & Cruddas')
+    expect((await onlyRecord()).location).toBe('Bengaluru')
   })
 
   it('stores the event day with the time the operator pressed the button', async () => {
@@ -556,7 +587,7 @@ describe('the venue and the time the operator no longer types', () => {
       await screen.findByTestId('sticker')
 
       // 14:13, not the 14:10 the form was opened at.
-      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T14:13')
+      expect((await onlyRecord()).testRideAt).toBe('2026-09-20T14:13')
     } finally {
       vi.useRealTimers()
     }
@@ -586,10 +617,10 @@ describe('the venue and the time the operator no longer types', () => {
       await user.click(screen.getByRole('button', { name: 'Register & Print' }))
       await screen.findByTestId('sticker')
 
-      const stored = await listRecentRegistrations(db, 10)
+      const stored = await listRecentRegistrations(db, 10, EVENT_CONFIG.eventId)
       expect(stored.map((record) => record.testRideAt).sort()).toEqual([
-        '2026-08-23T14:13',
-        '2026-08-23T15:49',
+        '2026-09-20T14:13',
+        '2026-09-20T15:49',
       ])
     } finally {
       vi.useRealTimers()
@@ -606,7 +637,7 @@ describe('the venue and the time the operator no longer types', () => {
       await screen.findByTestId('sticker')
 
       // The date is the event's, the time is the venue clock's.
-      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T14:13')
+      expect((await onlyRecord()).testRideAt).toBe('2026-09-20T14:13')
     } finally {
       vi.useRealTimers()
     }
@@ -618,17 +649,17 @@ describe('the venue and the time the operator no longer types', () => {
      * 16:10 must not move the rider's 15:42 test ride, because afterwards
      * nothing in the record says it was ever anything else.
      */
-    const user = atVenueTime(new Date('2026-08-23T10:12:00.000Z'))
+    const user = atVenueTime(new Date('2026-09-20T10:12:00.000Z'))
     try {
       render(<RegistrationScreen />)
       await fillCampaignRegistration(user)
       await user.click(screen.getByRole('button', { name: 'Register & Print' }))
       await screen.findByTestId('sticker')
 
-      expect((await onlyRecord()).testRideAt).toBe('2026-08-23T15:42')
+      expect((await onlyRecord()).testRideAt).toBe('2026-09-20T15:42')
 
       // Half an hour later, at 16:10.
-      vi.setSystemTime(new Date('2026-08-23T10:40:00.000Z'))
+      vi.setSystemTime(new Date('2026-09-20T10:40:00.000Z'))
       await user.click(screen.getByRole('button', { name: 'Correct details' }))
 
       const correction = screen.getByRole('region', {
@@ -646,10 +677,10 @@ describe('the venue and the time the operator no longer types', () => {
       })
 
       const after = await onlyRecord()
-      expect(after.testRideAt).toBe('2026-08-23T15:42')
-      expect(after.testRideAt).not.toBe('2026-08-23T16:10')
+      expect(after.testRideAt).toBe('2026-09-20T15:42')
+      expect(after.testRideAt).not.toBe('2026-09-20T16:10')
       // And the venue is still the canonical one.
-      expect(after.location).toBe('Richardson & Cruddas')
+      expect(after.location).toBe('Bengaluru')
     } finally {
       vi.useRealTimers()
     }
@@ -737,7 +768,7 @@ describe('recovery after a page refresh', () => {
       .getAllByText(/^A1-[0-9A-F]{6}-\d{5}-[0-9A-Z]$/)
       .map((node) => node.textContent)
 
-    const stored = await listRecentRegistrations(db, 10)
+    const stored = await listRecentRegistrations(db, 10, EVENT_CONFIG.eventId)
     expect(codes).toEqual(stored.map((record) => record.publicCode))
     expect(recent.textContent).not.toContain('Grace')
     expect(recent.textContent).not.toContain('Ada')

@@ -2,6 +2,7 @@ import { FlyingFleaBrandHeader } from '../../components/brand/FlyingFleaBrandHea
 import { EVENT_CONFIG } from '../../config/event'
 import { formatEventDay } from '../../config/eventTime'
 import { hrefFor, type RoutePath } from '../../lib/routing/hashRoute'
+import { ALL_EVENT_LOCATIONS_LABEL } from '../campaign/flying-flea/components/EventMeta'
 import { FLYING_FLEA_CAMPAIGN } from '../campaign/flying-flea/config'
 
 interface SurfaceLink {
@@ -53,14 +54,19 @@ const SURFACES: readonly SurfaceLink[] = [
  * staff to navigate during the event.
  *
  * It is a menu, and it is composed as one: a short identity block, then four
- * equal targets. The venue is stated once, in the badge; the event date once,
- * under the title. Repeating either in a paragraph underneath was the reason
- * the screen scrolled on a phone before anything clickable appeared.
+ * equal targets. The event's cities are stated once, in the badge; the event
+ * date once, under the title. Repeating either in a paragraph underneath was
+ * the reason the screen scrolled on a phone before anything clickable appeared.
  */
 export function HomeScreen() {
   return (
     <article className="screen">
-      <FlyingFleaBrandHeader venue={FLYING_FLEA_CAMPAIGN.lockedLocation} />
+      {/*
+        Both cities, because this screen is not a station and is not recording
+        anything. Naming one of them here would be the home screen making a
+        claim about a device that has not yet been pointed at a desk.
+      */}
+      <FlyingFleaBrandHeader venue={ALL_EVENT_LOCATIONS_LABEL} />
 
       <header className="ff-home__intro">
         <div className="ff-eyebrow">{FLYING_FLEA_CAMPAIGN.hero.eyebrow}</div>

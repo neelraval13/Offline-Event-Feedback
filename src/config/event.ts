@@ -51,21 +51,36 @@ export interface EventConfig {
  * an operator reading an export filename or a reconciliation run has to
  * recognise it.
  *
- * It is deliberately ABBREVIATED, though. `ff` is the campaign and `rc` is the
- * venue, and the reason for the shorthand is physical: this string is encoded
- * verbatim into every QR sticker, and every character of it costs a byte of
- * payload on a symbol printed at 26 mm. Spelling the venue out in full took the
- * payload from 114 bytes to 139 and pushed every sticker from 45 modules to 49,
- * which is a denser code on every label for information no scanner reads. The
- * human-readable form of the same three facts is `eventName` above and
- * `lockedLocation` in the campaign config, neither of which is printed.
+ * It is deliberately ABBREVIATED, though. `ff` is the campaign, and the reason
+ * for the shorthand is physical: this string is encoded verbatim into every QR
+ * sticker, and every character of it costs a byte of payload on a symbol printed
+ * at 26 mm. Spelling a venue out in full previously took the payload from 114
+ * bytes to 139 and pushed every sticker from 45 modules to 49, which is a denser
+ * code on every label for information no scanner reads.
+ *
+ * ## Why this event ID names no venue
+ *
+ * The August event ran at one address and its ID said so: `ff-rc-2026-08-23`.
+ * This one runs at two, Bengaluru and Hyderabad, on the same day, and it is
+ * still ONE event: one questionnaire, one participant population, one
+ * reconciliation run, one workbook. Splitting it into two event IDs would split
+ * the reconciliation and force every combined figure to be re-assembled by hand
+ * in a spreadsheet, which is exactly the work this system exists to remove.
+ *
+ * So the venue is no longer part of the event's identity. It is per-record data
+ * instead: each registration and each response carries the city it was captured
+ * in, chosen by the operator on the device. See `src/config/eventLocations.ts`.
+ *
+ * The ID is three characters shorter than August's as a side effect: the QR
+ * payload measures 111 bytes rather than 114, so this change moved away from
+ * the size boundary rather than towards it.
  *
  * See the measurement note in `src/lib/qr/qrCode.ts` before lengthening it.
  */
 export const EVENT_CONFIG: EventConfig = {
-  eventId: eventId('ff-rc-2026-08-23'),
-  eventName: 'Flying Flea Test Ride - Richardson & Cruddas',
-  eventDay: eventDay('2026-08-23'),
+  eventId: eventId('ff-2026-09-20'),
+  eventName: 'Flying Flea Test Ride - Bengaluru & Hyderabad',
+  eventDay: eventDay('2026-09-20'),
   registrationStation: {
     role: 'registration',
     stationId: stationId('A1'),

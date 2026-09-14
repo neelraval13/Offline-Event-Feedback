@@ -117,6 +117,25 @@ export interface CampaignAnalytics {
   }
 }
 
+/** One city's share of an event. Null location means it was not captured. */
+export interface LocationCount {
+  readonly location: string | null
+  readonly registrations: number
+  readonly feedback: number
+}
+
+/**
+ * The event by city, counted over the rows the run classified.
+ *
+ * Mirrors `server/reporting/types.ts`. The two move together: reporting is a
+ * browser talking to the server it was served from.
+ */
+export interface LocationBreakdown {
+  readonly byLocation: readonly LocationCount[]
+  /** Matched responses whose registration names a different city. */
+  readonly mismatchedLocations: number
+}
+
 export interface OverviewResponse {
   readonly eventId: string
   readonly run: RunDescriptor
@@ -127,6 +146,7 @@ export interface OverviewResponse {
   readonly responsesByFormVersion: Readonly<Record<string, number>>
   readonly unreadableResponses: number
   readonly coverage: ResponseCoverage
+  readonly locations: LocationBreakdown
 }
 
 export interface FeedbackSummary {
@@ -194,6 +214,11 @@ export interface RespondentContact {
 
 export interface FeedbackRow extends RespondentContact {
   readonly recordId: string
+  /**
+   * Where Point B recorded this response, or null when it was not captured.
+   * Never inferred from the matched registration below.
+   */
+  readonly location: string | null
   /** Null for a contact capture: that response never had a sticker. */
   readonly publicCode: string | null
   readonly participantId: string | null
@@ -214,6 +239,8 @@ export interface FeedbackRow extends RespondentContact {
     readonly recordId: string
     readonly publicCode: string
     readonly name: string
+    /** Where Point A recorded it, for comparison against the response's own. */
+    readonly location: string | null
   } | null
 }
 
@@ -269,6 +296,8 @@ export interface RegistrationQueryBody {
   readonly status?: RegistrationReconciliationStatus | 'all'
   readonly search?: string
   readonly duplicateCandidateOnly?: boolean
+  /** One of the event's cities, or absent for all of them. */
+  readonly location?: string
   readonly limit?: number
   readonly cursor?: string
 }
@@ -279,6 +308,13 @@ export interface FeedbackQueryBody {
   readonly status?: FeedbackReconciliationStatus | 'all'
   /** A code, or a respondent's name, phone or email. POSTed, never in a URL. */
   readonly search?: string
+  /**
+   * One of the event's cities, or absent for all of them.
+   *
+   * Matched against the response's own location, never the registration's, so
+   * a per-city view keeps the direct responses that have no registration.
+   */
+  readonly location?: string
   readonly limit?: number
   readonly cursor?: string
 }

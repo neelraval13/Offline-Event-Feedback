@@ -4,7 +4,9 @@ import type {
   FeedbackReconciliationStatus,
   FeedbackRow,
 } from '../../lib/reporting/types'
+import { locationsDisagree, LOCATION_NOT_CAPTURED } from '../../../shared/reporting/location'
 import { FeedbackDetail } from './FeedbackDetail'
+import { LocationFilter, type LocationFilterValue } from './LocationFilter'
 import { ratingCell } from './ratingCell'
 import { captureLabel, codeLabel, participantLabel } from './responseIdentity'
 import { useReportingSession } from './session'
@@ -55,6 +57,7 @@ export function FeedbackTable({
 }: FeedbackTableProps) {
   const session = useReportingSession()
   const [status, setStatus] = useState<StatusFilter>(initialStatus)
+  const [location, setLocation] = useState<LocationFilterValue>('all')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<readonly FeedbackRow[]>([])
@@ -71,6 +74,7 @@ export function FeedbackTable({
           eventId,
           ...(runId === undefined ? {} : { runId }),
           ...(status === 'all' ? {} : { status }),
+          ...(location === 'all' ? {} : { location }),
           ...(search.length === 0 ? {} : { search }),
           ...(nextCursor === null ? {} : { cursor: nextCursor }),
         }),
@@ -136,6 +140,12 @@ export function FeedbackTable({
         )}
       </form>
 
+      <LocationFilter
+        value={location}
+        onChange={setLocation}
+        label="Filter responses by location"
+      />
+
       <div className="button-row" role="group" aria-label="Filter by status">
         {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((option) => (
           <button
@@ -167,6 +177,7 @@ export function FeedbackTable({
           <tr>
             <th scope="col">Code</th>
             <th scope="col">Captured</th>
+            <th scope="col">Location</th>
             <th scope="col">Participant</th>
             <th scope="col">Status</th>
             <th scope="col">Rating</th>
@@ -186,6 +197,31 @@ export function FeedbackTable({
                 )}
               </td>
               <td>{captureLabel(row)}</td>
+              {/*
+                The response's own city, and a marker when the registration it
+                matched names a different one. Never the registration's value:
+                this column reports what Point B recorded.
+              */}
+              <td>
+                {row.location ?? (
+                  <span className="report-muted">{LOCATION_NOT_CAPTURED}</span>
+                )}
+                {locationsDisagree(
+                  row.linkedRegistration?.location,
+                  row.location,
+                ) && (
+                  <>
+                    {' '}
+                    <span
+                      className="report-flag"
+                      data-testid="location-mismatch"
+                      title={`Point A recorded ${row.linkedRegistration?.location ?? ''}`}
+                    >
+                      differs from Point A
+                    </span>
+                  </>
+                )}
+              </td>
               <td>{participantLabel(row)}</td>
               {/* Always a status: a run contains exactly what it classified. */}
               <td>{STATUS_LABELS[row.reconciliationStatus]}</td>

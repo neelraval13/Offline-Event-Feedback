@@ -81,6 +81,10 @@ const OVERVIEW = {
     percentage: 100,
     directResponses: 0,
   },
+  locations: {
+    byLocation: [{ location: 'Bengaluru', registrations: 1, feedback: 1 }],
+    mismatchedLocations: 0,
+  },
 }
 
 /** A distinctive value: if it reaches storage, a search will find it. */

@@ -20,6 +20,20 @@ import {
 } from '../../types'
 
 const CONTEXT: RecordContext = testContext({ stationId: stationId('B1') })
+
+/*
+ * The city every response below is captured in.
+ *
+ * Spread in with the record context rather than stated per test, because these
+ * suites are about identity shapes and the store's write path, not about
+ * location. What location is doing here is being required: `createFeedback`
+ * refuses a response without one, so a helper that omitted it would make every
+ * test in this file fail for a reason none of them are about.
+ *
+ * The tests that ARE about location assert on it explicitly, further down.
+ */
+const CAPTURED_IN = 'Bengaluru' as const
+const BASE = { ...CONTEXT, location: CAPTURED_IN }
 const CODE = formatPublicCode(
   {
     stationId: stationId('A1'),
@@ -49,7 +63,7 @@ describe('feedback captured from a QR scan (invariant C)', () => {
     const participantId = newParticipantId()
 
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'qr', publicCode: CODE, participantId },
       answers: ANSWERS,
@@ -73,7 +87,7 @@ describe('feedback captured from a QR scan (invariant C)', () => {
   it('is retrievable by participant ID through the index', async () => {
     const participantId = newParticipantId()
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'qr', publicCode: CODE, participantId },
       answers: ANSWERS,
@@ -91,7 +105,7 @@ describe('feedback captured from a QR scan (invariant C)', () => {
 describe('feedback captured by manual entry (invariant D)', () => {
   it('records the public code alone', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -103,7 +117,7 @@ describe('feedback captured by manual entry (invariant D)', () => {
 
   it('omits the participant ID rather than storing an empty one', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -116,7 +130,7 @@ describe('feedback captured by manual entry (invariant D)', () => {
 
   it('stays out of the participant ID index', async () => {
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -135,7 +149,7 @@ describe('feedback captured by manual entry (invariant D)', () => {
 describe('feedback records generally', () => {
   it('is stamped with provenance and starts pending', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -151,7 +165,7 @@ describe('feedback records generally', () => {
 
   it('preserves the answer payload verbatim', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -163,7 +177,7 @@ describe('feedback records generally', () => {
 
   it('survives a restart', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -180,24 +194,24 @@ describe('feedback records generally', () => {
     // Point B cannot rule this out offline, and discarding the second would
     // destroy evidence the server needs.
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'qr', publicCode: CODE, participantId: newParticipantId() },
       answers: ANSWERS,
     })
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: { overall_rating: 3, experience: 'okay', recommend: false },
     })
 
-    expect(await listFeedbackByPublicCode(database, CODE)).toHaveLength(2)
+    expect(await listFeedbackByPublicCode(database, CODE, CONTEXT.eventId)).toHaveLength(2)
   })
 
   it('lists records awaiting synchronisation', async () => {
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
@@ -209,18 +223,25 @@ describe('feedback records generally', () => {
 
   it('holds no participant PII on a sticker capture', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'manual', publicCode: CODE },
       answers: ANSWERS,
     })
 
     /*
-     * A sticker capture has identity and answers and no field for anything
-     * else. This is stricter than "does not contain a name": it asserts the
-     * exact key set, so a future change that started attaching contact details
-     * to a scanned response has to come and edit this list, in a test whose
-     * name says why the list is short.
+     * A sticker capture has identity, answers, event metadata, and no field for
+     * anything else. This is stricter than "does not contain a name": it asserts
+     * the exact key set, so a future change that started attaching contact
+     * details to a scanned response has to come and edit this list, in a test
+     * whose name says why the list is short.
+     *
+     * `location` is on the list and is not a privacy regression. It is a
+     * property of the desk, not of the rider: it says the response was taken in
+     * Bengaluru, which is equally true of every response taken at that desk and
+     * identifies nobody. It sits beside `stationId` and `eventDay`, which are
+     * the same kind of fact, and outside `CapturedParticipantIdentity`, which
+     * is where the fields that DO identify a person live.
      */
     expect(Object.keys(record).sort()).toEqual([
       'answers',
@@ -231,6 +252,7 @@ describe('feedback records generally', () => {
       'eventId',
       'formVersion',
       'kind',
+      'location',
       'publicCode',
       'recordId',
       'revision',
@@ -251,7 +273,7 @@ describe('feedback captured from contact details', () => {
 
   it('records the rider’s own details as the identity', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
@@ -268,7 +290,7 @@ describe('feedback captured from contact details', () => {
      * wrote a query that trusted the column.
      */
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
@@ -282,7 +304,7 @@ describe('feedback captured from contact details', () => {
 
   it('stays out of both sparse indexes', async () => {
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
@@ -299,7 +321,7 @@ describe('feedback captured from contact details', () => {
 
   it('starts pending, like every other record', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
@@ -311,7 +333,7 @@ describe('feedback captured from contact details', () => {
 
   it('survives a restart with every field intact', async () => {
     const record = await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
@@ -334,7 +356,7 @@ describe('feedback captured from contact details', () => {
      */
     for (const answers of [ANSWERS, { ...ANSWERS, overall_rating: 3 as const }]) {
       await createFeedback(database, {
-        ...CONTEXT,
+        ...BASE,
         formVersion: FEEDBACK_FORM_VERSION,
         identity: CONTACT,
         answers,
@@ -346,20 +368,20 @@ describe('feedback captured from contact details', () => {
 
   it('leaves sticker responses untouched in the same database', async () => {
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: { captureMethod: 'qr', publicCode: CODE, participantId: newParticipantId() },
       answers: ANSWERS,
     })
     await createFeedback(database, {
-      ...CONTEXT,
+      ...BASE,
       formVersion: FEEDBACK_FORM_VERSION,
       identity: CONTACT,
       answers: ANSWERS,
     })
 
     // The code lookup finds the scanned one and only the scanned one.
-    expect(await listFeedbackByPublicCode(database, CODE)).toHaveLength(1)
+    expect(await listFeedbackByPublicCode(database, CODE, CONTEXT.eventId)).toHaveLength(1)
     expect(await countFeedback(database)).toBe(2)
   })
 })

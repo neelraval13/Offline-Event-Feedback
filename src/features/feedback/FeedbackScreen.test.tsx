@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FeedbackScreen } from './FeedbackScreen'
+import { givenDeviceLocation } from '../../test/eventLocation'
 import { FakeScanner } from './testScanner'
 import { EVENT_CONFIG } from '../../config/event'
 import {
@@ -60,6 +61,13 @@ function makeSticker(sequence = 1): Sticker {
 let scanner: FakeScanner
 
 beforeEach(async () => {
+  /*
+   * Point B refuses to start anything until the device knows which city it is
+   * in, so every suite here begins with a device that has been set up, which is
+   * the state a tablet is in by the time a rider reaches it. The gate itself is
+   * tested separately, where the absence of a location is the subject.
+   */
+  givenDeviceLocation('Bengaluru')
   await db.open()
   await Promise.all([db.feedback.clear(), db.registrations.clear()])
   scanner = new FakeScanner()
@@ -117,16 +125,31 @@ async function onlyRecord(): Promise<FeedbackRecord> {
 }
 
 describe('the event this station belongs to', () => {
-  it('names the venue and the day, as Point A does', () => {
+  it('names the city this device is set to, and the day, as Point A does', () => {
     /*
      * Point B's operator scans stickers all day and never opens the
      * registration form. They get the same confirmation of where and when they
      * are, from the same component, so the two stations cannot disagree.
+     *
+     * "Where" is now per device rather than per build. The caption reports the
+     * city this tablet is recording, which is the fact that actually goes onto
+     * the responses it writes.
      */
     renderScreen()
 
-    expect(screen.getByText('Richardson & Cruddas')).toBeDefined()
-    expect(screen.getByText('23 August 2026')).toBeDefined()
+    /*
+     * Two appearances, and they say different things. The caption states what
+     * this device is recording; the selector shows which option is currently
+     * chosen. Asserted separately rather than counted, because collapsing them
+     * into one occurrence would mean losing either the statement or the control.
+     */
+    expect(screen.getByTestId('event-meta-venue').textContent).toBe('Bengaluru')
+    expect(
+      (screen.getByTestId('point-b-location') as HTMLSelectElement).value,
+    ).toBe('Bengaluru')
+
+    expect(screen.getByText('20 September 2026')).toBeDefined()
+    expect(screen.queryByText('Richardson & Cruddas')).toBeNull()
   })
 })
 
@@ -698,7 +721,7 @@ describe('next participant', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/Responses saved on this device: 1/),
+        screen.getByText(/Responses saved on this device for this event: 1/),
       ).toBeDefined(),
     )
   })
@@ -808,6 +831,16 @@ describe('privacy at Point B', () => {
     await answerAll(user)
     await submitFeedback(user)
 
+    /*
+     * The exact key set, so a change that started attaching a rider's details
+     * to a scanned response has to come and edit this list.
+     *
+     * `location` is on it and is not PII. It records that the response was
+     * taken in Bengaluru, which is equally true of every response at that desk
+     * and identifies nobody; it sits with `stationId` and `eventDay`, which are
+     * facts about the desk, and outside the identity union, which is where the
+     * fields that do identify a person live.
+     */
     const record = await onlyRecord()
     expect(Object.keys(record).sort()).toEqual([
       'answers',
@@ -818,6 +851,7 @@ describe('privacy at Point B', () => {
       'eventId',
       'formVersion',
       'kind',
+      'location',
       'participantId',
       'publicCode',
       'recordId',
@@ -826,6 +860,9 @@ describe('privacy at Point B', () => {
       'syncStatus',
       'updatedAt',
     ])
+
+    // And it is a city, never a name, a phone number or an email address.
+    expect(record.location).toBe('Bengaluru')
   })
 
   it('works with no registrations on this device at all', async () => {

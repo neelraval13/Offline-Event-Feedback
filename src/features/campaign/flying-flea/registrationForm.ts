@@ -1,3 +1,4 @@
+import { isEventLocation, type EventLocation } from '../../../config/eventLocations'
 import type {
   CampaignFieldCorrections,
   FlyingFleaColour,
@@ -37,7 +38,15 @@ import { FLYING_FLEA_CAMPAIGN } from './config'
 export interface CampaignRegistrationDraft extends RegistrationFormValues {
   readonly vehicle: string | null
   readonly interestedColour: FlyingFleaColour
-  readonly location: string
+  /**
+   * The city, or the empty string for "not chosen yet".
+   *
+   * Typed as the union rather than as `string` so a component cannot put an
+   * arbitrary venue into a draft. The empty case is a real state and has to be
+   * representable: a fresh device has made no choice, and validation refuses to
+   * submit until it has.
+   */
+  readonly location: '' | EventLocation
   readonly gender: '' | FlyingFleaGender
   readonly testRideAt: string
   readonly drivingLicence: string
@@ -103,22 +112,35 @@ const PINCODE = /^\d{6}$/
 export const MAX_LICENCE_LENGTH = 32
 
 /**
+ * A blank form, optionally carrying the venue this device is already set to.
+ *
  * The colour control always holds a value, so the draft starts on the first
  * campaign colour rather than on nothing.
  *
- * `location` starts on the locked venue and `testRideAt` starts empty. Neither
- * is a control any more: the venue is configuration, and the time is read from
- * the venue clock at submit rather than here, so that a form opened at 14:10
- * and submitted at 14:13 records 14:13. See `eventStamp.ts`.
+ * `location` is the argument, and it defaults to "not chosen". That default is
+ * the important part: there is deliberately no fallback to the first city in
+ * the list. A device that has never been told where it is must show an unchosen
+ * selector and refuse to submit, because a silent default would put a plausible
+ * city on a record that nobody actually confirmed, and Bengaluru and Hyderabad
+ * are indistinguishable after the fact in the data.
+ *
+ * Callers that HAVE a remembered venue pass it here, which is what makes "Next
+ * rider" keep the city while clearing everything about the person.
+ *
+ * `testRideAt` starts empty and is not a control: the time is read from the
+ * venue clock at submit rather than here, so that a form opened at 14:10 and
+ * submitted at 14:13 records 14:13. See `eventStamp.ts`.
  */
-export function emptyCampaignDraft(): CampaignRegistrationDraft {
+export function emptyCampaignDraft(
+  location: '' | EventLocation = '',
+): CampaignRegistrationDraft {
   return {
     name: '',
     phone: '',
     email: '',
     vehicle: null,
     interestedColour: FLYING_FLEA_CAMPAIGN.colours[0] as FlyingFleaColour,
-    location: FLYING_FLEA_CAMPAIGN.lockedLocation,
+    location,
     gender: '',
     testRideAt: '',
     drivingLicence: '',
@@ -210,13 +232,19 @@ export function validateCampaignRegistration(
     errors.vehicle = 'Select the test-ride vehicle.'
   }
   /*
-   * A registration without a venue is still refused, even though nobody types
-   * one any more. The value comes from `lockedLocation`, so this can only fire
-   * on a misconfigured build, and refusing to write a venue-less record is the
-   * right thing to do when it does.
+   * The venue, refused when unchosen and refused when unrecognised.
+   *
+   * Two separate failures on purpose. An empty value is the ordinary case of an
+   * operator who has not picked a city yet and reads as an instruction. A value
+   * that is not one of this event's cities can only come from a stale
+   * preference or a tampered draft, and it must not reach a record: a
+   * registration stamped with a venue this event never ran in is invisible in
+   * every location breakdown afterwards.
    */
-  if (draft.location.trim().length === 0) {
-    errors.location = 'This build has no venue configured.'
+  if (draft.location.length === 0) {
+    errors.location = 'Select the event location.'
+  } else if (!isEventLocation(draft.location)) {
+    errors.location = 'Select a location from the list.'
   }
   if (draft.drivingLicence.trim().length > MAX_LICENCE_LENGTH) {
     errors.drivingLicence = `Driving licence must be ${MAX_LICENCE_LENGTH} characters or fewer.`
@@ -241,7 +269,8 @@ export function validateCampaignRegistration(
       // `vehicle` is non-null here: the check above returned otherwise.
       vehicle: draft.vehicle as string,
       interestedColour: draft.interestedColour,
-      location: draft.location.trim(),
+      // Narrowed by the check above: this is one of the event's own cities.
+      location: draft.location,
       gender: optional<FlyingFleaGender>(draft.gender),
       testRideAt: optional(draft.testRideAt),
       drivingLicence: optional(draft.drivingLicence),

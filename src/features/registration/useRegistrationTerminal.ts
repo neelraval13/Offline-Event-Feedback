@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { EVENT_CONFIG } from '../../config/event'
 import { recordContextFor } from '../../config/recordContext'
 import {
   qrPayloadForRegistration,
@@ -86,7 +87,23 @@ export function useRegistrationTerminal() {
   }, [])
 
   const refreshRecent = useCallback(async () => {
-    const records = await listRecentRegistrations(db, RECENT_REGISTRATION_LIMIT)
+    /*
+     * Scoped to this event, which is what makes the correction flow safe.
+     *
+     * This list is where an operator reprints from, and reprinting is the route
+     * to the correction form. A device re-used from a previous event would
+     * otherwise offer that event's riders for correction on a September screen,
+     * where the campaign form asks for a September city and saving would rewrite
+     * a fact about an event that is over.
+     *
+     * The previous event's records stay in the database untouched. They are not
+     * this station's work, and Admin reports that they are there.
+     */
+    const records = await listRecentRegistrations(
+      db,
+      RECENT_REGISTRATION_LIMIT,
+      EVENT_CONFIG.eventId,
+    )
     if (mountedRef.current) {
       setRecent(records)
     }

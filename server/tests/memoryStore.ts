@@ -168,8 +168,22 @@ export function createMemoryStore(): MemoryStore {
         return false
       }
 
+      /*
+       * The mutable set, and it must be the same one `FEEDBACK_MUTABLE` names
+       * and the same one the Postgres store writes. A field that ingest treats
+       * as mutable but a store fails to persist looks like a successful
+       * correction that silently did nothing, and it would show up only as a
+       * value that refuses to change.
+       *
+       * `location` is spread explicitly rather than left to `...existing` for
+       * that reason: a revision that clears it must clear it, not inherit the
+       * previous city.
+       */
+      const { location: _previous, ...withoutLocation } = existing
+
       feedback.set(record.recordId, {
-        ...existing,
+        ...withoutLocation,
+        ...(record.location === undefined ? {} : { location: record.location }),
         formVersion: record.formVersion,
         answers: record.answers,
         updatedAt: record.updatedAt,

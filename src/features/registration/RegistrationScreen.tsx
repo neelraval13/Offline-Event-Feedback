@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { BrandButton } from '../../components/brand/BrandButton'
 import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignHeroHeader'
 import { stationFor } from '../../config/event'
+import { isEventLocation } from '../../config/eventLocations'
+import { useEventLocation } from '../../lib/location/useEventLocation'
 import { CampaignRegistrationForm } from '../campaign/flying-flea/components/CampaignRegistrationForm'
 import { needsLegacyCorrection } from '../campaign/flying-flea/campaignRecord'
 import { stampEventFields } from '../campaign/flying-flea/eventStamp'
@@ -37,7 +39,17 @@ function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
     interestedColour:
       (record.interestedColour as FlyingFleaColour | undefined) ??
       empty.interestedColour,
-    location: record.location ?? empty.location,
+    /*
+     * The record's own city, when this build still offers it.
+     *
+     * A record from a previous event carries a venue that is not on this
+     * event's list. It comes back as unchosen rather than being shown as one of
+     * today's cities, because the alternative is a correction screen that
+     * quietly proposes rewriting a venue the operator never mentioned. Unchosen
+     * refuses to save until somebody picks deliberately, which is the honest
+     * behaviour for a value this build cannot represent.
+     */
+    location: isEventLocation(record.location) ? record.location : '',
     gender: (record.gender as FlyingFleaGender | undefined) ?? '',
     testRideAt: record.testRideAt ?? '',
     drivingLicence: record.drivingLicence ?? '',
@@ -54,6 +66,7 @@ function draftFrom(record: RegistrationRecord): CampaignRegistrationDraft {
  */
 export function RegistrationScreen() {
   const station = stationFor('registration')
+  const { location, setLocation } = useEventLocation()
   const {
     phase,
     recent,
@@ -99,10 +112,19 @@ export function RegistrationScreen() {
 
   return (
     <article className="screen">
+      {/*
+        The hero states the city this desk is recording, in the same caption
+        that has always carried the venue and the date. Stated as a fact rather
+        than only offered as a control: an operator glancing at the screen can
+        tell which city the tablet is set to without opening the selector, which
+        is what makes a wrongly-set device noticeable early rather than after a
+        hundred riders.
+      */}
       <CampaignHeroHeader
         lead="Test Ride"
         accent="Registration"
         subtitle={`${station.label} · ${station.stationId}`}
+        location={location}
       />
 
       {deviceError !== null && (
@@ -127,16 +149,20 @@ export function RegistrationScreen() {
           )}
 
           {/*
-            The venue and the test-ride time are attached here, on the way to
-            the store, and nowhere else. This is the new-registration path: the
-            correction path below calls `handleCorrection`, which never stamps,
-            so fixing an email address at 16:10 cannot rewrite a ride that
-            happened at 15:42.
+            The test-ride time is attached here, on the way to the store, and
+            nowhere else. This is the new-registration path: the correction path
+            below calls `handleCorrection`, which never stamps, so fixing an
+            email address at 16:10 cannot rewrite a ride that happened at 15:42.
+
+            The venue is no longer stamped at all. It comes from the form, which
+            is the only thing that knows which city the operator chose.
           */}
           <CampaignRegistrationForm
             onSubmit={(values) => void submit(stampEventFields(values))}
             busy={phase.status === 'saving'}
             resetKey={formGeneration}
+            deviceLocation={location ?? ''}
+            onDeviceLocationChange={setLocation}
           />
         </section>
       )}

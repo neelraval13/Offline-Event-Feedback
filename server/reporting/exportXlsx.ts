@@ -134,6 +134,71 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
     ['Responses this build cannot read', overview.unreadableResponses],
   ]
 
+  /* ---- Locations ----
+   *
+   * An event that runs in more than one city on one day needs its figures both
+   * ways round: combined, which is every other number on this sheet, and per
+   * city, which is this block. Splitting the event into two event IDs would
+   * have given the second without the first and forced the combined view to be
+   * rebuilt by hand in a spreadsheet.
+   *
+   * Driven entirely by what the run actually holds, so a single-city event
+   * produces a single pair of lines rather than a table of zeros for cities it
+   * never visited, and a city added next season needs no change here.
+   */
+  summaryRows.push(['', ''], ['LOCATIONS', ''])
+
+  for (const entry of overview.locations.byLocation) {
+    if (entry.location === null) {
+      continue
+    }
+    summaryRows.push([`Registrations in ${entry.location}`, entry.registrations])
+  }
+  for (const entry of overview.locations.byLocation) {
+    if (entry.location === null) {
+      continue
+    }
+    summaryRows.push([`Responses in ${entry.location}`, entry.feedback])
+  }
+
+  /*
+   * The unlocated line appears only when there is something to report.
+   *
+   * These are records captured before the field existed, and the wording says
+   * that rather than naming a city. A zero row on an event where every record
+   * carries a location would invite a reader to wonder what was missing.
+   */
+  const unlocated = overview.locations.byLocation.find(
+    (entry) => entry.location === null,
+  )
+  if (unlocated !== undefined) {
+    summaryRows.push(
+      ['Registrations with no location recorded', unlocated.registrations],
+      ['Responses with no location recorded', unlocated.feedback],
+      [
+        '  What a blank location means',
+        'Captured before this event recorded a location. It is left blank rather than filled in with a venue nobody chose.',
+      ],
+    )
+  }
+
+  /*
+   * The disagreement count, stated even when it is zero.
+   *
+   * Unlike the line above, a zero here is the reassuring answer to a question a
+   * reader of a two-city event will ask, so it is worth printing.
+   */
+  summaryRows.push([
+    'Responses whose registration names a different location',
+    overview.locations.mismatchedLocations,
+  ])
+  if (overview.locations.mismatchedLocations > 0) {
+    summaryRows.push([
+      '  Neither location is corrected',
+      'Both are shown side by side on the Participant Feedback sheet, flagged in the Location Mismatch column. The data cannot say which is right, so nothing is overwritten.',
+    ])
+  }
+
   /* ---- Flying Flea ---- */
   if (campaignAnalytics.analysedResponses > 0) {
     summaryRows.push(
@@ -313,6 +378,9 @@ export async function buildWorkbook(input: WorkbookInput): Promise<Buffer> {
       row.respondentName,
       row.respondentPhone,
       row.respondentEmail,
+      // Also appended, and blank on every response captured before the field
+      // existed. Never inferred from the matched registration.
+      row.location,
     ])
   }
 

@@ -195,6 +195,12 @@ export const flyingFleaFeedbackAnswersSchema = z.object({
  * Bumping the version would have made that tablet's records unacceptable until
  * somebody found it and updated it, which is the one thing an offline-first
  * system must never require. See docs/architecture.md.
+ *
+ * `location` is the same kind of addition and is held to the same rule. It is
+ * optional here precisely so that an August tablet, which never recorded one,
+ * can still upload its last unsynced response to a server that understands the
+ * field. Optional on the wire does not mean optional in the application: the
+ * September client refuses to create a response without one.
  */
 const feedbackWireObject = z.object({
     kind: z.literal('feedback'),
@@ -216,6 +222,22 @@ const feedbackWireObject = z.object({
     eventDay,
     stationId: identifier,
     deviceId: uuid,
+
+    /*
+     * The city the response was captured in.
+     *
+     * Event metadata, not identity: `checkCaptureIdentity` below neither
+     * requires nor forbids it under any capture method, and reconciliation
+     * never matches on it. It sits here with `eventId` and `stationId` because
+     * that is what it is, a fact about the desk rather than about the rider.
+     *
+     * Bounded by the same `MAX_LOCATION_LENGTH` a registration's location uses,
+     * so the two cannot disagree about what fits, and left as a free string
+     * rather than an enum of today's two cities. An enum here would reject a
+     * perfectly valid record from a past event the moment the city list
+     * changed, and the server holds more than one event's data.
+     */
+    location: z.string().min(1).max(MAX_LOCATION_LENGTH).optional(),
 
     /*
      * The pair is validated together below: a record may not declare one
