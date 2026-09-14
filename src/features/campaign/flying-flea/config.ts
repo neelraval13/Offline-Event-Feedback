@@ -16,7 +16,7 @@ export type { CampaignQuestion }
 /*
  * The Flying Flea campaign, in one place.
  *
- * Every vehicle name, colour, venue and question in this application comes from
+ * Every vehicle name, colour and question in this application comes from
  * here. Scattering them would mean a campaign that adds a fifth bike has to be
  * found in four components, and the one that gets missed is the one staff use.
  *
@@ -26,9 +26,13 @@ export type { CampaignQuestion }
  * itself, and the disagreement is invisible until a report quotes a prompt no
  * rider ever saw.
  *
- * What is here is deployment and presentation: which bikes are at this venue,
- * which venue that is, what the hero says. All of it can change without
- * changing the meaning of a single stored answer.
+ * What is here is deployment and presentation: which bikes are on offer and
+ * what the hero says. All of it can change without changing the meaning of a
+ * single stored answer.
+ *
+ * The venue is NOT here any more. This event runs in two cities on the same
+ * day, so the location is no longer a property of the build; it is chosen on
+ * the device and stamped onto each record. See `src/config/eventLocations.ts`.
  *
  * No persistence, validation or business logic lives here. This module is data.
  */
@@ -45,15 +49,6 @@ export interface FlyingFleaCampaign {
   readonly vehicles: readonly string[]
   readonly colours: readonly FlyingFleaColour[]
   readonly genders: readonly FlyingFleaGender[]
-  /**
-   * The venue this build is deployed to.
-   *
-   * Not nullable, and there is no list of alternatives beside it: this event
-   * runs at exactly one address, so the venue is a property of the deployment
-   * rather than a question for the operator. It is still persisted on every
-   * registration as `location`; what changed is who supplies it.
-   */
-  readonly lockedLocation: string
   readonly ratingScale: readonly Rating1To7[]
   readonly ratingQuestions: readonly CampaignQuestion[]
   readonly textQuestions: readonly CampaignQuestion[]
@@ -81,7 +76,6 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
   vehicles: ['Vehicle 1', 'Vehicle 2', 'Vehicle 3', 'Vehicle 4'],
   colours: FLYING_FLEA_COLOURS,
   genders: FLYING_FLEA_GENDERS,
-  lockedLocation: 'Richardson & Cruddas',
 
   ratingScale: RATINGS_1_TO_7,
 
@@ -101,10 +95,11 @@ export const FLYING_FLEA_CAMPAIGN: FlyingFleaCampaign = {
  * licence and pincode are not. Nothing is added to that list: an event desk
  * with a queue is the worst possible place to discover a newly mandatory field.
  *
- * `location` stays on the list because a registration without a venue is still
- * refused. The operator is simply no longer the one who answers it: the venue
- * is `lockedLocation` and the test-ride time is the clock, both attached at
- * submit. See `eventStamp.ts`.
+ * `location` stays on the list, and for this event the operator answers it
+ * again. It is a two-option selector rather than the free-text field it once
+ * was, because the event runs in Bengaluru and Hyderabad and a typed venue is
+ * a venue that will eventually be typed three different ways. The test-ride
+ * time remains the clock's answer, attached at submit. See `eventStamp.ts`.
  *
  * Colour is absent because it cannot be unanswered: the supplied control is a
  * toggle that always holds one of the two colours.

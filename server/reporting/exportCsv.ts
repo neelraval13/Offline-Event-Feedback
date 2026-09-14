@@ -182,6 +182,19 @@ export const FEEDBACK_CSV_HEADER = [
   'respondent_name',
   'respondent_phone',
   'respondent_email',
+  /*
+   * The city Point B recorded, appended for the same reason the respondent
+   * columns above were: every existing column keeps its name and its position,
+   * so a script that indexes by column number or a saved spreadsheet import
+   * carries on working. Inserting it beside the other event metadata would have
+   * been tidier to read and would have silently shifted twenty columns.
+   *
+   * Blank on every response captured before the field existed. Never filled in
+   * from the matched registration: this column reports what Point B recorded.
+   * The two locations appear side by side on the Participant Feedback sheet,
+   * which is where a comparison belongs.
+   */
+  'feedback_location',
 ] as const
 
 export function feedbackCsv(
@@ -219,6 +232,7 @@ export function feedbackCsv(
       row.respondentName,
       row.respondentPhone,
       row.respondentEmail,
+      row.location,
     ]),
   )
 }

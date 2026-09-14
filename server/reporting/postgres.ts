@@ -15,6 +15,7 @@ import {
   type FeedbackDetail,
   type FeedbackRow,
   type FreshnessReport,
+  type LocationBreakdown,
   type OverviewResponse,
   type Page,
   type RegistrationDetail,
@@ -216,6 +217,105 @@ export async function assessFreshness(
   }
 }
 
+/**
+ * Registrations and responses by city, for the rows one run classified.
+ *
+ * Scoped to the run, not to the tables as they stand now, so the lines add up
+ * to the run's own counts. A breakdown that disagreed with the totals printed
+ * beside it would send a reader looking for a bug that was not there.
+ *
+ * Two queries and a merge rather than one FULL OUTER JOIN. A city can
+ * legitimately appear on one side and not the other, and a Point A desk that
+ * opened in Hyderabad before the Point B desk did should show as a row with
+ * registrations and no responses, not vanish. The merge below makes that case
+ * ordinary instead of clever.
+ */
+async function buildLocationBreakdown(
+  sql: Sql,
+  runId: string,
+): Promise<LocationBreakdown> {
+  const [registrationRows, feedbackRows, mismatchRows] = await Promise.all([
+    sql<Row[]>`
+      SELECT reg.location AS loc, count(*)::int AS n
+      FROM reconciliation_registration_results res
+      JOIN registrations reg ON reg.record_id = res.registration_record_id
+      WHERE res.run_id = ${runId}
+      GROUP BY reg.location
+    `,
+    sql<Row[]>`
+      SELECT fb.location AS loc, count(*)::int AS n
+      FROM reconciliation_feedback_results res
+      JOIN feedback fb ON fb.record_id = res.feedback_record_id
+      WHERE res.run_id = ${runId}
+      GROUP BY fb.location
+    `,
+    /*
+     * Matched responses whose two locations positively disagree.
+     *
+     * Both sides must be present: a NULL on either is an absence of evidence,
+     * not a conflict, and counting August rows as disagreements would bury the
+     * few that are real. The predicate is the SQL twin of `locationsDisagree`
+     * in shared/reporting/location.ts, and the two are pinned together by test.
+     */
+    sql<Row[]>`
+      SELECT count(*)::int AS n
+      FROM reconciliation_feedback_results res
+      JOIN feedback fb ON fb.record_id = res.feedback_record_id
+      JOIN registrations reg ON reg.record_id = res.registration_record_id
+      WHERE res.run_id = ${runId}
+        AND fb.location IS NOT NULL AND fb.location <> ''
+        AND reg.location IS NOT NULL AND reg.location <> ''
+        AND fb.location <> reg.location
+    `,
+  ])
+
+  const counts = new Map<string | null, { registrations: number; feedback: number }>()
+  const entry = (location: string | null) => {
+    const existing = counts.get(location)
+    if (existing !== undefined) {
+      return existing
+    }
+    const created = { registrations: 0, feedback: 0 }
+    counts.set(location, created)
+    return created
+  }
+
+  for (const row of registrationRows) {
+    entry(toStringOrNull(row['loc'])).registrations += Number(row['n'])
+  }
+  for (const row of feedbackRows) {
+    entry(toStringOrNull(row['loc'])).feedback += Number(row['n'])
+  }
+
+  /*
+   * Cities alphabetically, then the unlocated line last.
+   *
+   * Last rather than first because it is the line least likely to be acted on,
+   * and sorted rather than left in database order so two runs over the same
+   * data produce the same sheet.
+   */
+  const byLocation = [...counts.entries()]
+    .sort(([left], [right]) => {
+      if (left === null) {
+        return right === null ? 0 : 1
+      }
+      if (right === null) {
+        return -1
+      }
+      return left.localeCompare(right)
+    })
+    .map(([location, totals]) => ({
+      location,
+      registrations: totals.registrations,
+      feedback: totals.feedback,
+    }))
+
+  return {
+    byLocation,
+    mismatchedLocations: Number(mismatchRows[0]?.['n'] ?? 0),
+  }
+}
+
 export async function buildOverview(
   sql: Sql,
   eventId: string,
@@ -288,6 +388,7 @@ export async function buildOverview(
       (response) => !READABLE_FORM_VERSIONS.includes(response.formVersion),
     ).length,
     coverage: computeCoverage(run),
+    locations: await buildLocationBreakdown(sql, run.runId),
   }
 }
 
@@ -384,6 +485,8 @@ export interface RegistrationQuery {
   readonly status?: 'matched' | 'without_feedback' | 'multiple_feedback' | 'all'
   readonly search?: string
   readonly duplicateCandidateOnly?: boolean
+  /** One of the event's cities, or absent for all of them. */
+  readonly location?: string
   readonly limit?: number
   readonly cursor?: string
 }
@@ -446,6 +549,7 @@ export async function queryRegistrations(
   const cursor = decodeCursor(query.cursor)
   const status = query.status ?? 'all'
   const search = query.search?.trim() ?? ''
+  const location = query.location?.trim() ?? ''
 
   const rows = await sql<Row[]>`
     WITH matched_feedback AS (
@@ -485,6 +589,12 @@ export async function queryRegistrations(
       ${status === 'all' ? sql`` : sql`AND res.status = ${status}`}
       ${query.duplicateCandidateOnly === true ? sql`AND dup.record_id IS NOT NULL` : sql``}
       ${
+        // The registration's own city. A registration has exactly one location
+        // and it is the one Point A recorded, so there is no second candidate
+        // to be careful about here as there is on the feedback side.
+        location === '' ? sql`` : sql`AND reg.location = ${location}`
+      }
+      ${
         search === ''
           ? sql``
           : sql`AND (reg.public_code ILIKE ${`%${search}%`}
@@ -522,6 +632,12 @@ export interface FeedbackQuery {
     | 'multiple_feedback'
     | 'all'
   readonly search?: string
+  /**
+   * One of the event's cities, or absent for all of them.
+   *
+   * Matched against the response's own location. See the note at the filter.
+   */
+  readonly location?: string
   readonly limit?: number
   readonly cursor?: string
 }
@@ -551,6 +667,10 @@ function mapFeedbackRow(row: Row): FeedbackRow {
     respondentName: toStringOrNull(row['respondent_name']),
     respondentPhone: toStringOrNull(row['respondent_phone']),
     respondentEmail: toStringOrNull(row['respondent_email']),
+    // Null for a response captured before the field existed, and never filled
+    // in from the registration below: this column reports what Point B
+    // recorded, not what can be deduced about it.
+    location: toStringOrNull(row['location']),
     formVersion: String(row['form_version']),
     createdAt: toIso(row['created_at']),
     revision: Number(row['revision']),
@@ -593,6 +713,7 @@ function mapFeedbackRow(row: Row): FeedbackRow {
             recordId: String(linkedId),
             publicCode: String(row['linked_public_code']),
             name: String(row['linked_name']),
+            location: toStringOrNull(row['linked_location']),
           },
   }
 }
@@ -605,11 +726,13 @@ export async function queryFeedback(
   const cursor = decodeCursor(query.cursor)
   const status = query.status ?? 'all'
   const search = query.search?.trim() ?? ''
+  const location = query.location?.trim() ?? ''
 
   const rows = await sql<Row[]>`
     -- Driven from the run's own results, same rule as the participant browser.
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
            fb.respondent_name, fb.respondent_phone, fb.respondent_email,
+           fb.location,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -628,12 +751,24 @@ export async function queryFeedback(
            res.status, res.match_method,
            reg.record_id  AS linked_record_id,
            reg.public_code AS linked_public_code,
-           reg.name        AS linked_name
+           reg.name        AS linked_name,
+           reg.location    AS linked_location
     FROM reconciliation_feedback_results res
     JOIN feedback fb ON fb.record_id = res.feedback_record_id
     LEFT JOIN registrations reg ON reg.record_id = res.registration_record_id
     WHERE res.run_id = ${query.runId} AND fb.event_id = ${query.eventId}
       ${status === 'all' ? sql`` : sql`AND res.status = ${status}`}
+      ${
+        /*
+         * The city filter reads the RESPONSE's own location, never the
+         * registration's. Asking for Hyderabad means "responses taken in
+         * Hyderabad"; answering it with responses whose registration was in
+         * Hyderabad would quietly exclude every direct response, which are the
+         * rows that have no registration and are exactly the ones a per-city
+         * count must not lose.
+         */
+        location === '' ? sql`` : sql`AND fb.location = ${location}`
+      }
       ${
         /*
          * Searching a response by what is on it, whichever identity it has.
@@ -727,6 +862,7 @@ export async function getRegistrationDetail(
   const feedbackRows = await sql<Row[]>`
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
            fb.respondent_name, fb.respondent_phone, fb.respondent_email,
+           fb.location,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -743,7 +879,10 @@ export async function getRegistrationDetail(
            CASE WHEN fb.form_version = ${FLYING_FLEA_FORM_VERSION}
                 THEN fb.answers ->> 'overallExperienceRating' END AS ff_overall,
            res.status, res.match_method,
-           NULL AS linked_record_id, NULL AS linked_public_code, NULL AS linked_name
+           NULL AS linked_record_id, NULL AS linked_public_code, NULL AS linked_name,
+           -- This IS the registration being viewed, so there is no separate
+           -- link to draw and no second location to compare against.
+           NULL AS linked_location
     FROM reconciliation_feedback_results res
     JOIN feedback fb ON fb.record_id = res.feedback_record_id
     WHERE res.run_id = ${runId} AND res.registration_record_id = ${recordId}
@@ -811,7 +950,8 @@ export async function getFeedbackDetail(
     SELECT fb.*, res.status, res.match_method,
            reg.record_id  AS linked_record_id,
            reg.public_code AS linked_public_code,
-           reg.name        AS linked_name
+           reg.name        AS linked_name,
+           reg.location    AS linked_location
     FROM reconciliation_feedback_results res
     JOIN feedback fb ON fb.record_id = res.feedback_record_id
     LEFT JOIN registrations reg ON reg.record_id = res.registration_record_id
@@ -1077,6 +1217,10 @@ export interface FeedbackExportRow {
   readonly registrationName: string | null
   readonly registrationPhone: string | null
   readonly registrationEmail: string | null
+  /** Where Point B recorded this response. Null before the field existed. */
+  readonly location: string | null
+  /** Where Point A recorded the matched registration, for comparison. */
+  readonly registrationLocation: string | null
   /* `feedback-v1` answers. Blank for any other questionnaire. */
   readonly overallRating: string | null
   readonly experience: string | null
@@ -1101,6 +1245,7 @@ export async function exportFeedbackRows(
     -- run's own feedback count.
     SELECT fb.record_id, fb.public_code, fb.participant_id, fb.capture_method,
            fb.respondent_name, fb.respondent_phone, fb.respondent_email,
+           fb.location,
            fb.form_version, fb.created_at, fb.revision,
            CASE WHEN fb.form_version = ${SUPPORTED_FORM_VERSION}
                 THEN fb.answers ->> 'overall_rating' END AS overall_rating,
@@ -1126,7 +1271,8 @@ export async function exportFeedbackRows(
                 THEN fb.answers ->> 'overallExperienceComments' END AS ff_comments,
            res.status, res.match_method,
            reg.record_id AS reg_id, reg.public_code AS reg_code,
-           reg.name AS reg_name, reg.phone AS reg_phone, reg.email AS reg_email
+           reg.name AS reg_name, reg.phone AS reg_phone, reg.email AS reg_email,
+           reg.location AS reg_location
     FROM reconciliation_feedback_results res
     JOIN feedback fb ON fb.record_id = res.feedback_record_id
     LEFT JOIN registrations reg ON reg.record_id = res.registration_record_id
@@ -1152,6 +1298,8 @@ export async function exportFeedbackRows(
     registrationName: toStringOrNull(row['reg_name']),
     registrationPhone: toStringOrNull(row['reg_phone']),
     registrationEmail: toStringOrNull(row['reg_email']),
+    location: toStringOrNull(row['location']),
+    registrationLocation: toStringOrNull(row['reg_location']),
     overallRating: toStringOrNull(row['overall_rating']),
     experience: toStringOrNull(row['experience']),
     recommend: toStringOrNull(row['recommend']),

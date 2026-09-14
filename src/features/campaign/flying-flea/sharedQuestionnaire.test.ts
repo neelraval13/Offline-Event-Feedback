@@ -66,13 +66,25 @@ describe('the campaign screens render the shared questionnaire', () => {
   })
 
   it('keeps presentation config out of the shared definition', () => {
-    // Vehicles, the venue and hero copy change without changing what any stored
-    // answer means, so they stay client-side.
+    // Vehicles and hero copy change without changing what any stored answer
+    // means, so they stay client-side.
     const sharedExports = Object.keys(FLYING_FLEA_QUESTIONS[0] ?? {})
 
     expect(sharedExports).toEqual(['key', 'prompt', 'kind'])
     expect(FLYING_FLEA_CAMPAIGN.vehicles.length).toBeGreaterThan(0)
-    expect(FLYING_FLEA_CAMPAIGN.lockedLocation.length).toBeGreaterThan(0)
+  })
+
+  it('no longer carries a venue at all', () => {
+    /*
+     * `lockedLocation` was removed rather than repointed. The September event
+     * runs in two cities, so a single compiled venue is not merely stale, it is
+     * a value that cannot be correct; leaving the field in place with one of
+     * the two cities in it would have kept the shape of the bug.
+     *
+     * The check is on the object rather than on the type because a type-only
+     * removal is invisible to a build that reads the field dynamically.
+     */
+    expect('lockedLocation' in FLYING_FLEA_CAMPAIGN).toBe(false)
   })
 
   it('pins the form version that every reader branches on', () => {

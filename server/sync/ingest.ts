@@ -94,7 +94,31 @@ const REGISTRATION_MUTABLE = [
   'pincode',
   'updatedAt',
 ] as const
-const FEEDBACK_MUTABLE = ['formVersion', 'answers', 'updatedAt'] as const
+/*
+ * `location` is mutable, and is not identity.
+ *
+ * Mutable because a correction has to be able to reach it, on the same
+ * principle as a registration's campaign fields: a desk moved between halls, an
+ * operator who noticed the device was set to the wrong city. Immutable fields
+ * are the ones a printed sticker refers to, and no sticker refers to a venue.
+ *
+ * Listing it here also gives the idempotency rule the right answer in both
+ * directions. A retry of the same response with the same location matches on
+ * every mutable field and comes back `already_current`, which is what lets a
+ * device stop resending it. Two copies at the same revision claiming different
+ * cities are recognised as a conflict rather than being accepted in whichever
+ * order they happened to arrive, which is exactly the treatment a disagreement
+ * about an answer already gets.
+ *
+ * An August response has no location on either side, and `deepEqual(undefined,
+ * undefined)` is true, so historical records keep re-delivering cleanly.
+ */
+const FEEDBACK_MUTABLE = [
+  'formVersion',
+  'answers',
+  'location',
+  'updatedAt',
+] as const
 
 function deepEqual(left: unknown, right: unknown): boolean {
   if (left === right) {

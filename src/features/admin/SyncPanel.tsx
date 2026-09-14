@@ -22,6 +22,29 @@ import {
  *
  * The device token is never displayed, and neither is the enrolment code; it
  * is cleared from component state the moment the attempt finishes.
+ *
+ * ## Credentials are bound to one event, and this panel says so
+ *
+ * A device token is issued for a specific `eventId` and the server checks it:
+ * `authenticate` in server/app.ts resolves the token against the event named in
+ * the batch, and `ingestRecord` refuses any record whose own `eventId` differs
+ * from the batch's, with `wrongEvent`.
+ *
+ * So a tablet that ran the August event and is opened on the September build is
+ * holding a credential that cannot upload anything. Reporting that as
+ * "Enrolled" was worse than useless: it is the one word that tells an operator
+ * to stop worrying, and behind it the opportunistic sync below would fire on
+ * every visit against an event the token does not cover. This panel therefore
+ * compares the stored event with the configured one and reports the mismatch
+ * explicitly, and the automatic attempts are gated on a credential for THIS
+ * event rather than on a credential existing.
+ *
+ * Re-enrolling is offered rather than forced, and the old credential is never
+ * discarded on this panel's own initiative. Pending records from the previous
+ * event are the reason: they can only be uploaded by a build configured for
+ * their event, and a client that quietly swapped the credential would leave
+ * them to be marked `wrongEvent` and parked in error on the next sync. The
+ * guard below states the count and requires the operator to acknowledge it.
  */
 
 interface SyncPanelProps {
@@ -40,10 +63,36 @@ const FAILURE_MESSAGES: Record<string, string> = {
   rejected:
     'The central server refused the request. Your local records are safe and remain pending.',
   not_configured: 'This build has no central server configured.',
+  /*
+   * Not a transport failure in the usual sense: nothing was sent. It travels on
+   * the same channel because the operator-facing fact is identical, the run
+   * stopped without the server saying anything, and the reason belongs in the
+   * same sentence.
+   */
+  event_mismatch:
+    'This device is enrolled for a different event, so nothing was sent. Enrol it for this event first.',
 }
 
+/**
+ * What this browser's stored credential is good for.
+ *
+ * Three outcomes rather than a boolean, because "has a credential" and "can
+ * sync this event" stopped being the same question the moment a second event
+ * existed.
+ */
+type EnrolmentState =
+  | { readonly status: 'checking' }
+  | { readonly status: 'none' }
+  /** Enrolled for the event this build is configured for. */
+  | { readonly status: 'current' }
+  /** Enrolled, but for a different event. Cannot upload anything here. */
+  | { readonly status: 'other-event'; readonly eventId: string }
+
 export function SyncPanel({ onDataChanged }: SyncPanelProps) {
-  const [credentialPresent, setCredentialPresent] = useState<boolean | null>(null)
+  const [enrolment, setEnrolment] = useState<EnrolmentState>({
+    status: 'checking',
+  })
+  const [acknowledgedStale, setAcknowledgedStale] = useState(false)
   const [activity, setActivity] = useState<SyncActivity | null>(null)
   const [counts, setCounts] = useState<LocalCounts | null>(null)
   const [secret, setSecret] = useState('')
@@ -57,10 +106,20 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
     const [credential, syncActivity, localCounts] = await Promise.all([
       readSyncCredential(db),
       readSyncActivity(db),
-      getLocalCounts(db),
+      getLocalCounts(db, EVENT_CONFIG.eventId),
     ])
 
-    setCredentialPresent(credential !== null)
+    /*
+     * The comparison, in the one place that reads the credential. Doing it here
+     * rather than at each use means no caller can forget it.
+     */
+    setEnrolment(
+      credential === null
+        ? { status: 'none' }
+        : credential.eventId === EVENT_CONFIG.eventId
+          ? { status: 'current' }
+          : { status: 'other-event', eventId: credential.eventId },
+    )
     setActivity(syncActivity)
     setCounts(localCounts)
   }, [])
@@ -108,23 +167,29 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
    * says connectivity returned. `navigator.onLine` is only a hint: it reports
    * a link, not a reachable server, so a failure here is silent.
    */
+  /*
+   * Both automatic attempts are gated on `current`, not on "a credential
+   * exists". With a stale credential every attempt is a guaranteed 401 against
+   * an event the token does not cover, and the only visible result would be a
+   * red banner on a screen where nothing is actually broken yet.
+   */
   useEffect(() => {
-    if (credentialPresent !== true || openedRef.current) {
+    if (enrolment.status !== 'current' || openedRef.current) {
       return
     }
     openedRef.current = true
     void sync(false)
-  }, [credentialPresent, sync])
+  }, [enrolment.status, sync])
 
   useEffect(() => {
-    if (credentialPresent !== true) {
+    if (enrolment.status !== 'current') {
       return
     }
 
     const onOnline = () => void sync(false)
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
-  }, [credentialPresent, sync])
+  }, [enrolment.status, sync])
 
   async function handleEnroll(event: FormEvent) {
     event.preventDefault()
@@ -168,12 +233,31 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
     })
 
     setMessage('This device is enrolled for central sync.')
+    setAcknowledgedStale(false)
     await refresh()
     setBusy(false)
   }
 
   const formatDate = (value: string | null) =>
     value === null ? 'Never' : new Date(value).toLocaleString()
+
+  /*
+   * Undelivered records belonging to ANOTHER event.
+   *
+   * This is the figure the re-enrolment guard is about, and it is deliberately
+   * not "everything pending on the device". A September device holding
+   * September records that have not synced yet is in a perfectly ordinary
+   * state and enrolling changes nothing about them. A device holding August
+   * records that have not reached a server is the dangerous case: this build
+   * cannot deliver them at all, and the operator is about to be offered a
+   * button that looks like it would help.
+   *
+   * `pending` and `error` together, not just `pending`: a record already parked
+   * in error is equally undelivered and equally in need of the other build, and
+   * counting only the optimistic half would understate what is at stake.
+   */
+  const foreignUndelivered = counts?.otherEvents.undelivered ?? 0
+  const foreignEventIds = counts?.otherEvents.eventIds ?? []
 
   if (!isSyncConfigured()) {
     return (
@@ -199,11 +283,13 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
         <div>
           <dt>Status</dt>
           <dd data-testid="sync-status">
-            {credentialPresent === null
+            {enrolment.status === 'checking'
               ? 'Checking…'
-              : credentialPresent
+              : enrolment.status === 'current'
                 ? 'Enrolled'
-                : 'Not enrolled'}
+                : enrolment.status === 'other-event'
+                  ? 'Enrolled for a different event'
+                  : 'Not enrolled'}
           </dd>
         </div>
         <div>
@@ -235,7 +321,67 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
         </p>
       )}
 
-      {credentialPresent === false && (
+      {enrolment.status === 'other-event' && (
+        <div
+          className="notice notice--error"
+          role="alert"
+          data-testid="sync-event-mismatch"
+        >
+          <p>
+            This device holds a sync credential for a different event. It cannot
+            upload anything for {EVENT_CONFIG.eventId}, and the central server
+            would refuse every record it sent.
+          </p>
+          {foreignUndelivered > 0 ? (
+            /*
+             * The dangerous case, stated in full.
+             *
+             * These records were captured for the previous event and carry its
+             * event ID. A build configured for this event cannot upload them at
+             * all: the server answers `wrongEvent` and the client parks each one
+             * with a permanent error code. They are not lost, they are simply
+             * unsendable from here, and the only ways out are the previous
+             * build or an encrypted backup. The operator has to know that
+             * before, not after.
+             */
+            <>
+              <p data-testid="sync-stale-pending">
+                <strong>
+                  {foreignUndelivered} record(s) from{' '}
+                  {foreignEventIds.join(', ')} have not reached the central
+                  server
+                </strong>{' '}
+                and are still on this device. Enrolling for{' '}
+                {EVENT_CONFIG.eventId} will not make them sendable: the server
+                accepts a record only under the event it was captured for, and
+                this build will never attempt them. Close the previous event
+                first, or take an encrypted backup, before you continue.
+              </p>
+              <label className="field__checkbox">
+                <input
+                  type="checkbox"
+                  checked={acknowledgedStale}
+                  data-testid="sync-stale-acknowledge"
+                  onChange={(event) =>
+                    setAcknowledgedStale(event.target.checked)
+                  }
+                />{' '}
+                I have dealt with those {foreignUndelivered} record(s) and
+                understand they cannot be uploaded from this build.
+              </label>
+            </>
+          ) : (
+            <p data-testid="sync-stale-clean">
+              No records from another event are waiting to be uploaded, so it is
+              safe to enrol for this event.
+            </p>
+          )}
+        </div>
+      )}
+
+      {(enrolment.status === 'none' ||
+        (enrolment.status === 'other-event' &&
+          (foreignUndelivered === 0 || acknowledgedStale))) && (
         <form className="registration-form" onSubmit={(e) => void handleEnroll(e)}>
           <div className="field">
             <label className="field__label" htmlFor="enrollment-code">
@@ -256,7 +402,7 @@ export function SyncPanel({ onDataChanged }: SyncPanelProps) {
         </form>
       )}
 
-      {credentialPresent === true && (
+      {enrolment.status === 'current' && (
         <div className="button-row">
           <button
             type="button"

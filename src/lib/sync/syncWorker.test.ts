@@ -1,3 +1,4 @@
+import { EVENT_CONFIG } from '../../config/event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestDb, destroyTestDb } from '../../test/db'
 import { recordContextFor } from '../../config/recordContext'
@@ -35,7 +36,19 @@ let database: OfflineEventDb
 beforeEach(async () => {
   database = createTestDb()
   await getOrCreateDeviceId(database)
-  await storeSyncCredential({ eventId: 'evt-dev-001', token: 'test-token' }, database)
+  /*
+   * The credential names this build's event, as a real enrolment does.
+   *
+   * It used to name a placeholder, which was harmless while nothing compared
+   * the credential's event with the records'. It is not harmless now: a run
+   * whose credential belongs to another event refuses to attempt anything, and
+   * a fixture that enrolled for one event while capturing records under another
+   * would be testing a device that could never sync.
+   */
+  await storeSyncCredential(
+    { eventId: EVENT_CONFIG.eventId, token: 'test-token' },
+    database,
+  )
 })
 
 afterEach(async () => {
@@ -61,6 +74,7 @@ async function captureFeedback(
   const deviceId = await getOrCreateDeviceId(database)
   return createFeedback(database, {
     ...recordContextFor('feedback', deviceId),
+    location: 'Bengaluru',
     identity: {
       captureMethod: 'qr',
       publicCode: registration.publicCode,
@@ -404,6 +418,7 @@ describe('wire records', () => {
     const deviceId = await getOrCreateDeviceId(database)
     const feedback = await createFeedback(database, {
       ...recordContextFor('feedback', deviceId),
+      location: 'Bengaluru',
       identity: { captureMethod: 'manual', publicCode: registration.publicCode },
       formVersion: 'feedback-v1',
       answers: { overall_rating: 3, experience: 'okay', recommend: false },
@@ -417,6 +432,7 @@ describe('wire records', () => {
     const deviceId = await getOrCreateDeviceId(database)
     const feedback = await createFeedback(database, {
       ...recordContextFor('feedback', deviceId),
+      location: 'Bengaluru',
       identity: {
         captureMethod: 'contact',
         respondentName: 'Grace Hopper',
@@ -473,6 +489,7 @@ describe('wire records', () => {
     for (const identity of identities) {
       const record = await createFeedback(database, {
         ...recordContextFor('feedback', deviceId),
+        location: 'Bengaluru',
         identity,
         formVersion: 'feedback-v1',
         answers: { overall_rating: 4, experience: 'good', recommend: true },
@@ -531,12 +548,17 @@ describe('batching', () => {
     const registration = await captureRegistration()
     await captureFeedback(registration)
 
-    const eligible = await collectEligible(database)
+    const { eligible, foreignEventRecords } = await collectEligible(
+      database,
+      EVENT_CONFIG.eventId,
+    )
 
     expect(eligible).toHaveLength(2)
     expect(eligible.map((entry) => entry.kind).sort()).toEqual([
       'feedback',
       'registration',
     ])
+    // Nothing from another event on a device that has only run this one.
+    expect(foreignEventRecords).toBe(0)
   })
 })

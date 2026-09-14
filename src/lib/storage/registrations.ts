@@ -260,14 +260,41 @@ export async function updateRegistration(
 export async function listRecentRegistrations(
   database: OfflineEventDb,
   limit: number,
+  eventId: string,
 ): Promise<RegistrationRecord[]> {
   if (limit <= 0) {
     return []
   }
 
+  /*
+   * Scoped to one event, and the argument is required so a caller cannot
+   * silently ask for every event's records.
+   *
+   * This list is the station's operational surface: it is what an operator
+   * reprints from, and reprinting is how a record reaches the correction form.
+   * An unscoped list would therefore offer a previous event's rider for
+   * correction on a device configured for this one, where the campaign form
+   * would ask for a venue from this event's list and a saved correction would
+   * rewrite a fact about an event that is over.
+   *
+   * ## The filter has to come before the limit
+   *
+   * `eventId` is not indexed, so the scoping is a predicate rather than a
+   * range. Dexie applies a `filter` during iteration and `limit` counts only
+   * the rows that pass it, so this walks the `createdAt` index newest first and
+   * stops as soon as it has `limit` of THIS event's records.
+   *
+   * Limiting first would be a different query and a wrong one: on a device
+   * holding a previous event, the newest `limit` rows could all belong to that
+   * event, and the station would show an empty list while its own
+   * registrations sat just behind them. Ordering the two operations the other
+   * way round also avoids reading the whole table into memory to throw most of
+   * it away.
+   */
   return database.registrations
     .orderBy('createdAt')
     .reverse()
+    .filter((record) => record.eventId === eventId)
     .limit(limit)
     .toArray()
 }

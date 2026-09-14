@@ -575,6 +575,31 @@ function validateFeedback(
     issues.push(`${where}: unsupported questionnaire version`)
   }
 
+  /*
+   * The capture location, checked only when it is there.
+   *
+   * Absent is valid and always will be: every response captured before the
+   * September event has no location, and a restore that refused them would make
+   * this build unable to read backups taken from the very devices it replaces.
+   * Present-but-wrong is a different matter and is refused, because a response
+   * carrying a 900-character location is not a response anybody captured.
+   *
+   * The check is a bound rather than the two-city list, matching the wire
+   * schema exactly. A backup is a record of what a device held, and an August
+   * device legitimately held `Richardson & Cruddas` on its registrations;
+   * validating restores against today's city list would turn a valid archive
+   * into an invalid one every time the event moved.
+   */
+  const location = input['location']
+  if (
+    location !== undefined &&
+    (typeof location !== 'string' ||
+      location.length === 0 ||
+      location.length > MAX_LOCATION_LENGTH)
+  ) {
+    issues.push(`${where}: invalid location`)
+  }
+
   validateFeedbackIdentity(input, captureMethod, where, issues)
   validateFeedbackAnswers(input['answers'], where, issues, formVersion)
 

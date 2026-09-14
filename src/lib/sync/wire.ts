@@ -95,6 +95,14 @@ export function toFeedbackWire(record: FeedbackRecord): FeedbackWireRecord {
     eventDay: record.eventDay,
     stationId: record.stationId,
     deviceId: record.deviceId,
+    /*
+     * Copied only when present, exactly as the registration's campaign fields
+     * are and for the same reason: the schema's optionals reject a key that is
+     * present and empty, so spreading `undefined` would stop an August response
+     * uploading. Absent here means the response was captured before the field
+     * existed, which is the truth about it.
+     */
+    ...(record.location === undefined ? {} : { location: record.location }),
     formVersion: record.formVersion,
     answers: record.answers,
     createdAt: record.createdAt,

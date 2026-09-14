@@ -3,6 +3,8 @@ import { BrandButton } from '../../../../components/brand/BrandButton'
 import { BrandCard } from '../../../../components/brand/BrandCard'
 import { BrandField } from '../../../../components/brand/BrandField'
 import { BrandSectionHeading } from '../../../../components/brand/BrandSectionHeading'
+import { EventLocationOptions } from '../../../../components/EventLocationOptions'
+import { isEventLocation, type EventLocation } from '../../../../config/eventLocations'
 import type {
   CampaignFieldCorrections,
   FlyingFleaColour,
@@ -34,12 +36,16 @@ import { VehicleSelector } from './VehicleSelector'
  *     on a rendered keypad instead of a number typed on the tablet's own
  *     keyboard, with no paste and no autofill. The fields are `inputMode`
  *     numeric inputs, which raise the same keypad the dial imitates.
- *   - Location and Test Ride Date & Time are NOT asked. There is one venue and
- *     one day, and the ride is happening now; both are attached at submit from
- *     configuration and the venue clock (see `eventStamp.ts`), and shown as
- *     event metadata above the form instead. A read-only input holding an
- *     answer the operator cannot change is still a control they have to look at
- *     and tab past, several hundred times a day.
+ *   - Test Ride Date & Time is NOT asked. There is one day and the ride is
+ *     happening now, so it is attached at submit from the venue clock (see
+ *     `eventStamp.ts`) and shown as event metadata above the form instead. A
+ *     read-only input holding an answer the operator cannot change is still a
+ *     control they have to look at and tab past, several hundred times a day.
+ *   - Location IS asked again, once. The event runs in two cities on the same
+ *     day, so it can no longer be read off the build. It is answered once per
+ *     device and then remembered, which costs the operator one tap a shift
+ *     rather than one a rider, and it sits in its own card above the numbered
+ *     steps so it does not read as a question about the person.
  *
  * Name is focused on arrival, tab order runs down the fields to the button, and
  * validation runs on submit, errors that appear while someone is still typing
@@ -55,6 +61,25 @@ interface CampaignRegistrationFormProps {
   readonly resetKey: number
   readonly submitLabel?: string
   readonly initialDraft?: CampaignRegistrationDraft
+  /**
+   * The city this device is set to, used to seed a blank form.
+   *
+   * This is what makes "Next rider" keep the venue while clearing the person:
+   * the reset builds its draft from this value rather than from nothing. Empty
+   * on a device that has not been told where it is, which leaves the selector
+   * unchosen and the form unsubmittable, deliberately.
+   */
+  readonly deviceLocation?: '' | EventLocation
+  /**
+   * Called when the operator changes the city, so the device can remember it.
+   *
+   * Omitted on the correction path, and that omission is the whole distinction
+   * between the two uses of this control. Correcting one rider's record to say
+   * Hyderabad is a statement about that record; it must not silently re-point
+   * the desk and put Hyderabad on the next hundred riders registered in
+   * Bengaluru.
+   */
+  readonly onDeviceLocationChange?: (location: EventLocation) => void
 }
 
 export function CampaignRegistrationForm({
@@ -63,15 +88,17 @@ export function CampaignRegistrationForm({
   resetKey,
   submitLabel = 'Register & Print',
   initialDraft,
+  deviceLocation = '',
+  onDeviceLocationChange,
 }: CampaignRegistrationFormProps) {
   const [draft, setDraft] = useState<CampaignRegistrationDraft>(
-    initialDraft ?? emptyCampaignDraft(),
+    initialDraft ?? emptyCampaignDraft(deviceLocation),
   )
   const [errors, setErrors] = useState<CampaignFieldErrors>({})
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setDraft(initialDraft ?? emptyCampaignDraft())
+    setDraft(initialDraft ?? emptyCampaignDraft(deviceLocation))
     setErrors({})
     nameRef.current?.focus()
     // Keyed on resetKey alone: re-running on every prop identity change would
@@ -81,6 +108,19 @@ export function CampaignRegistrationForm({
 
   function patch(values: Partial<CampaignRegistrationDraft>) {
     setDraft((current) => ({ ...current, ...values }))
+  }
+
+  /*
+   * A location change updates the draft, and on the registration path also the
+   * device's memory. Both, in that order, so the field the operator is looking
+   * at changes even if the write to storage fails on a locked-down browser.
+   */
+  function chooseLocation(raw: string) {
+    const next = isEventLocation(raw) ? raw : ''
+    patch({ location: next })
+    if (next !== '') {
+      onDeviceLocationChange?.(next)
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -101,6 +141,45 @@ export function CampaignRegistrationForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
+      {/*
+        The city, first and on its own.
+
+        Not folded into Personal Details, because it is not a question about
+        the rider: it is where this desk is, and it stays put across hundreds of
+        registrations. Sitting above Step 01 in its own card, it reads as a
+        setting for the session rather than as the eleventh thing to type, while
+        remaining a real required field that refuses a blank submit.
+
+        It carries no step number for the same reason. The numbered steps are
+        the sequence staff walk a rider through, and this is not part of it.
+      */}
+      <BrandCard labelledBy="ff-event-location">
+        <BrandSectionHeading
+          id="ff-event-location"
+          title="Event Location"
+          subtitle="Where this device is recording. Stays set until you change it."
+        />
+        <BrandField label="Location" required error={errors.location}>
+          {(field) => (
+            <select
+              {...field}
+              value={draft.location}
+              disabled={busy}
+              data-testid="event-location"
+              onChange={(event) => chooseLocation(event.target.value)}
+            >
+              {/*
+                The placeholder disappears once a city is chosen, so a mis-tap
+                cannot put the form back into the unchosen state.
+              */}
+              <EventLocationOptions
+                placeholder={draft.location === '' ? 'Select location' : false}
+              />
+            </select>
+          )}
+        </BrandField>
+      </BrandCard>
+
       <BrandCard labelledBy="ff-step-vehicle">
         <BrandSectionHeading
           id="ff-step-vehicle"

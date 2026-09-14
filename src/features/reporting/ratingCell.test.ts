@@ -18,6 +18,9 @@ import { ratingCell } from './ratingCell'
 function row(overrides: Partial<FeedbackRow>): FeedbackRow {
   return {
     recordId: '019ffc65-4559-7125-9453-de82fb849ed8',
+    // Present on every September response. Neither of these modules reads it;
+    // it is here because the row type requires it, which is the point.
+    location: 'Bengaluru',
     publicCode: 'B1-B8EFD9-00001-X',
     participantId: '019ffc65-4559-7125-9453-e230415644f1',
     captureMethod: 'qr',

@@ -46,6 +46,7 @@ async function captureRealRecords(database: OfflineEventDb) {
 
   const feedback = await createFeedback(database, {
     ...recordContextFor('feedback', deviceId),
+    location: 'Bengaluru',
     identity: {
       captureMethod: 'qr',
       publicCode: registration.publicCode,

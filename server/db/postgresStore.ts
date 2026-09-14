@@ -119,6 +119,15 @@ function mapFeedback(row: Row): CentralFeedback {
     ...optional('respondentName', row['respondent_name']),
     ...optional('respondentPhone', row['respondent_phone']),
     ...optional('respondentEmail', row['respondent_email']),
+    /*
+     * Omitted when NULL, like every other optional above. A response captured
+     * before the field existed must read back with no `location` key at all,
+     * because ingest compares this shape field by field against the incoming
+     * record: one that read back `location: null` where the device sent nothing
+     * would differ from itself, and an ordinary retry would come back
+     * `conflict` and be retried forever.
+     */
+    ...optional('location', row['location']),
     captureMethod: String(row['capture_method']) as CentralFeedback['captureMethod'],
     eventId: String(row['event_id']),
     eventDay: toDay(row['event_day']),
@@ -317,7 +326,7 @@ export function createPostgresStore(sql: Sql): SyncStore {
         INSERT INTO feedback (
           record_id, participant_id, public_code, capture_method,
           respondent_name, respondent_phone, respondent_email,
-          event_id, event_day, station_id, source_device_id,
+          event_id, event_day, station_id, source_device_id, location,
           form_version, answers,
           created_at, updated_at, revision,
           first_received_at, last_received_at, last_uploader_device_id,
@@ -328,6 +337,10 @@ export function createPostgresStore(sql: Sql): SyncStore {
           ${record.respondentName ?? null}, ${record.respondentPhone ?? null},
           ${record.respondentEmail ?? null},
           ${record.eventId}, ${record.eventDay}, ${record.stationId}, ${record.deviceId},
+          -- NULL for a response captured before the field existed. Never
+          -- defaulted to a city: an invented venue is indistinguishable from a
+          -- recorded one once it is in the column.
+          ${record.location ?? null},
           ${record.formVersion}, ${sql.json(record.answers)},
           ${record.createdAt}, ${record.updatedAt}, ${record.revision},
           ${receivedAt}, ${receivedAt}, ${uploaderDeviceId},
@@ -356,6 +369,11 @@ export function createPostgresStore(sql: Sql): SyncStore {
         UPDATE feedback SET
           form_version = ${record.formVersion},
           answers = ${sql.json(record.answers)},
+          -- Mutable, like the answers and unlike the identity columns: see
+          -- FEEDBACK_MUTABLE in server/sync/ingest.ts. A revision that clears
+          -- it writes NULL rather than leaving the previous city in place,
+          -- because a stale venue is worse than a missing one.
+          location = ${record.location ?? null},
           updated_at = ${record.updatedAt},
           revision = ${record.revision},
           last_received_at = ${receivedAt},

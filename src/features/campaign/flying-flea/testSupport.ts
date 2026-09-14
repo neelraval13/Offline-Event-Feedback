@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
+import type { EventLocation } from '../../../config/eventLocations'
 import { FLYING_FLEA_CAMPAIGN } from './config'
 
 /*
@@ -13,10 +14,14 @@ import { FLYING_FLEA_CAMPAIGN } from './config'
  */
 
 /*
- * Venue and test-ride time are absent on purpose. They are no longer controls:
- * the venue is `lockedLocation` and the time is the venue clock at submit, both
- * attached by `eventStamp.ts`. A helper that could still "fill" them would let
- * a test claim to exercise an input that does not exist.
+ * Test-ride time is absent on purpose. It is not a control: the time is the
+ * venue clock at submit, attached by `eventStamp.ts`. A helper that could still
+ * "fill" it would let a test claim to exercise an input that does not exist.
+ *
+ * The venue IS a control again, and this helper answers it. The September event
+ * runs in two cities, so the form starts with nothing chosen and refuses to
+ * submit until one is. A helper that skipped it would make every suite that
+ * needs a registered rider fail for a reason none of them are about.
  */
 export interface CampaignRiderInput {
   readonly name: string
@@ -26,6 +31,11 @@ export interface CampaignRiderInput {
   readonly gender?: string
   readonly drivingLicence?: string
   readonly pincode?: string
+  /**
+   * The city to record. Defaults to the first, which keeps suites that do not
+   * care about location from having to state one.
+   */
+  readonly location?: EventLocation
 }
 
 export const SAMPLE_RIDER: CampaignRiderInput = {
@@ -42,6 +52,17 @@ export async function fillCampaignRegistration(
   container: HTMLElement | undefined = undefined,
 ): Promise<void> {
   const scope = container === undefined ? screen : within(container)
+
+  /*
+   * The city first, because it is the first control on the form and because
+   * nothing can be saved without it. Selected every time rather than only when
+   * the caller names one: a form that opened with a remembered city would
+   * accept a no-op selection, and one that did not would fail to submit.
+   */
+  await user.selectOptions(
+    scope.getByLabelText(/^Location/),
+    rider.location ?? 'Bengaluru',
+  )
 
   await user.click(
     scope.getByRole('button', {

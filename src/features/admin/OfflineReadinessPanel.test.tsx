@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AdminScreen } from './AdminScreen'
 import { RegistrationScreen } from '../registration/RegistrationScreen'
 import { FeedbackScreen } from '../feedback/FeedbackScreen'
+import { givenDeviceLocation } from '../../test/eventLocation'
 import { FakeScanner } from '../feedback/testScanner'
 import { setOfflineShell } from '../../lib/pwa/shellInstance'
 import type {
@@ -219,6 +220,9 @@ describe('operational screens stay free of update prompts', () => {
 
   it('Point B shows nothing about updates or readiness', async () => {
     setOfflineShell(fakeShell({ readiness: 'ready', updateAvailable: true }))
+    // Point B offers no way in until the device knows which city it is in, so
+    // the start controls this test waits for need a configured device.
+    givenDeviceLocation('Bengaluru')
     const scanner = new FakeScanner()
     const { container } = render(
       <FeedbackScreen createScanner={() => scanner} />,

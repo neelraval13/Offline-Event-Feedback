@@ -22,12 +22,12 @@ describe('the real event this build is for', () => {
    */
 
   it('runs on the day of the Flying Flea test rides', () => {
-    expect(EVENT_CONFIG.eventDay).toBe('2026-08-23')
+    expect(EVENT_CONFIG.eventDay).toBe('2026-09-20')
   })
 
-  it('is named for the campaign and the venue', () => {
+  it('is named for the campaign and both cities', () => {
     expect(EVENT_CONFIG.eventName).toBe(
-      'Flying Flea Test Ride - Richardson & Cruddas',
+      'Flying Flea Test Ride - Bengaluru & Hyderabad',
     )
   })
 
@@ -54,22 +54,38 @@ describe('the real event this build is for', () => {
     )
   })
 
-  it('abbreviates the campaign and the venue, and spells out the day', () => {
+  it('abbreviates the campaign and spells out the day', () => {
     // Stable: derived from facts about the event that cannot change, rather
-    // than generated. `ff` is the campaign and `rc` is the venue; the day is
-    // written in full because it is the part that distinguishes one run of this
-    // campaign from the next.
-    expect(EVENT_CONFIG.eventId).toBe('ff-rc-2026-08-23')
+    // than generated. `ff` is the campaign; the day is written in full because
+    // it is the part that distinguishes one run of this campaign from the next.
+    expect(EVENT_CONFIG.eventId).toBe('ff-2026-09-20')
     expect(EVENT_CONFIG.eventId).toContain(EVENT_CONFIG.eventDay)
+  })
+
+  it('names no venue, because the event runs in two cities', () => {
+    /*
+     * The August ID carried `rc` for Richardson & Cruddas, which was honest
+     * while the campaign ran at one address. This event runs in Bengaluru and
+     * Hyderabad on the same day and is deliberately ONE event: one
+     * reconciliation run, one workbook, one participant population. Putting a
+     * city in the ID would either be false on half the devices or force the
+     * event into two IDs and split every combined figure.
+     *
+     * The city is per-record data instead. Asserted here so that a future
+     * edit which "helpfully" restores a venue segment has to argue with a test.
+     */
+    for (const city of ['bengaluru', 'hyderabad', 'blr', 'hyd', 'rc']) {
+      expect(EVENT_CONFIG.eventId).not.toContain(city)
+    }
   })
 
   it('stays short, because every character is printed on every sticker', () => {
     /*
-     * The ID is encoded verbatim into the QR payload. Spelling the venue out
+     * The ID is encoded verbatim into the QR payload. Spelling a venue out
      * (`flying-flea-richardson-cruddas-2026-08-23`) took the payload from 114
      * bytes to 139 and every symbol from 45 modules to 49 inside the same 26 mm,
-     * for information no scanner reads. The full names live in `eventName` and
-     * `lockedLocation`, neither of which is printed.
+     * for information no scanner reads. The full name lives in `eventName`,
+     * which is not printed.
      *
      * 24 characters is the budget that keeps the payload under 124 bytes, which
      * is where the symbol would grow again.

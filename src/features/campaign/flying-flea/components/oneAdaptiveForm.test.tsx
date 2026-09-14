@@ -75,20 +75,36 @@ describe('Point A renders one of everything', () => {
 
 describe('what Point A no longer asks', () => {
   /*
-   * There is one venue and one day, and the ride is happening now. Both values
-   * are still stored on every registration; they are attached at submit from
-   * configuration and the venue clock instead of being typed. What must not
-   * come back is a control: a disabled or read-only input holding an answer the
-   * operator cannot change still costs a tab stop and a glance, several hundred
-   * times a day.
+   * There is one day and the ride is happening now, so the test-ride time is
+   * still stored on every registration and still never typed: it is attached at
+   * submit from the venue clock. What must not come back is a control for it.
+   * A disabled or read-only input holding an answer the operator cannot change
+   * still costs a tab stop and a glance, several hundred times a day.
+   *
+   * The venue went the other way for the September event and is asked for
+   * again, once per device rather than once per rider. It is asserted below as
+   * a control that must be present, which is the opposite of what this file
+   * asserted about it in August, and deliberately so: the event now runs in two
+   * cities on one day and no build-time constant can answer it.
    */
 
-  it('offers no venue control of any kind', () => {
+  it('asks for the venue once, as a real control', () => {
     renderRegistration()
 
-    expect(screen.queryByLabelText(/^Location/)).toBeNull()
-    expect(document.querySelectorAll('select')).toHaveLength(1) // Gender only.
-    expect(screen.queryByText('Select location')).toBeNull()
+    const location = screen.getByLabelText(/^Location/)
+    expect(location).toBeDefined()
+    expect(location.tagName).toBe('SELECT')
+
+    // Location and Gender. Two selects, no more: the venue did not arrive as a
+    // second control beside a read-only caption.
+    expect(document.querySelectorAll('select')).toHaveLength(2)
+  })
+
+  it('opens that control with nothing chosen', () => {
+    renderRegistration()
+
+    expect((screen.getByLabelText(/^Location/) as HTMLSelectElement).value).toBe('')
+    expect(screen.getByText('Select location')).toBeDefined()
   })
 
   it('offers no date or time control of any kind', () => {
@@ -101,7 +117,7 @@ describe('what Point A no longer asks', () => {
     }
   })
 
-  it('leaves no read-only or disabled field standing in for them', () => {
+  it('leaves no read-only or disabled field standing in for the ride time', () => {
     renderRegistration()
 
     for (const control of document.querySelectorAll('input, select, textarea')) {

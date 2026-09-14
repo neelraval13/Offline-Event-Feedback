@@ -3,6 +3,7 @@ import {
   REGISTRATION_HEADER_ALT,
   REGISTRATION_HEADER_IMAGE,
 } from '../assets'
+import type { EventLocation } from '../../../../config/eventLocations'
 import { FLYING_FLEA_CAMPAIGN } from '../config'
 import { EventMeta } from './EventMeta'
 
@@ -31,12 +32,25 @@ interface CampaignHeroHeaderProps {
   readonly lead: string
   /** The station line under the title. */
   readonly subtitle: string
+  /**
+   * The city this device is recording, forwarded to the caption below.
+   *
+   * Passed through rather than read here, and rendered by `EventMeta` rather
+   * than added beside it, because the venue must appear exactly once on a
+   * screen. A station that rendered its own city line would state it twice,
+   * and two statements of the same fact are two things that can disagree.
+   *
+   * Null on a surface that is not capturing anything, where the caption names
+   * both of the event's cities instead.
+   */
+  readonly location?: EventLocation | null
 }
 
 export function CampaignHeroHeader({
   accent,
   lead,
   subtitle,
+  location = null,
 }: CampaignHeroHeaderProps) {
   return (
     <header className="ff-hero">
@@ -65,7 +79,7 @@ export function CampaignHeroHeader({
         </div>
       </div>
 
-      <EventMeta />
+      <EventMeta location={location} />
     </header>
   )
 }

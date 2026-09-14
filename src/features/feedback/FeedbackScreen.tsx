@@ -1,6 +1,8 @@
 import { BrandButton } from '../../components/brand/BrandButton'
 import { CampaignHeroHeader } from '../campaign/flying-flea/components/CampaignHeroHeader'
+import { EventLocationOptions } from '../../components/EventLocationOptions'
 import { stationFor } from '../../config/event'
+import { isEventLocation } from '../../config/eventLocations'
 import type { QrScannerFactory } from '../../lib/scanner'
 import { CampaignFeedbackForm } from '../campaign/flying-flea/components/CampaignFeedbackForm'
 import { CampaignSuccessPanel } from '../campaign/flying-flea/components/CampaignSuccessPanel'
@@ -27,6 +29,19 @@ interface FeedbackScreenProps {
  * is, because the rider typed it and it is the identity of their response; it
  * is displayed back only as they typed it, and it is never looked up against
  * anything.
+ *
+ * ## The city is chosen before anything else can start
+ *
+ * Until this device knows which city it is in, none of the three ways in are
+ * offered: the screen shows the selector and nothing else. That is a harder
+ * gate than Point A's, on purpose. Point A's operator is typing for a minute
+ * and can be told at submit; Point B's rider answers six questions in under a
+ * minute and would have to answer them again.
+ *
+ * It matters most for the contact path. A scanned or typed response could in
+ * principle have its city recovered later from the registration its code points
+ * at; a direct response points at nothing, so a missing city on one is missing
+ * permanently.
  */
 export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
   const station = stationFor('feedback')
@@ -34,6 +49,10 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
     state,
     savedCount,
     videoRef,
+    location,
+    setLocation,
+    locationReady,
+    responseInProgress,
     startScanner,
     openManualEntry,
     openContactEntry,
@@ -56,7 +75,63 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
         lead="Test Ride"
         accent="Feedback"
         subtitle={`${station.label} · ${station.stationId}`}
+        location={location}
       />
+
+      {/*
+        The selector: always visible, and changeable except while a rider is
+        part-way through answering.
+
+        It stays on screen after a city is chosen rather than disappearing into
+        a settings panel: a Point B desk can move between halls, and an operator
+        who cannot see which city the tablet is recording has no way to notice
+        it is wrong. It is a compact row rather than a card so it does not
+        compete with the three ways in below it.
+
+        It is disabled while a response is open. The response already carries
+        the city it started in, so changing this could not corrupt it; what a
+        live control would do is tell the operator they had changed something
+        about the rider in front of them when they had not.
+      */}
+      <div className="field" data-testid="point-b-location-field">
+        <label className="field__label" htmlFor="point-b-location">
+          Event location
+        </label>
+        <select
+          id="point-b-location"
+          className="field__input"
+          value={location ?? ''}
+          disabled={responseInProgress}
+          data-testid="point-b-location"
+          onChange={(event) => {
+            const next = event.target.value
+            if (isEventLocation(next)) {
+              setLocation(next)
+            }
+          }}
+        >
+          <EventLocationOptions placeholder={locationReady ? false : 'Select location'} />
+        </select>
+        {responseInProgress && (
+          <p className="screen__note" data-testid="point-b-location-locked">
+            This response is being recorded in {location}. Finish or cancel it to
+            change the location for the next rider.
+          </p>
+        )}
+      </div>
+
+      {!locationReady && (
+        /*
+          Stated as an instruction, not as an error. Nothing has gone wrong: a
+          device that has just been set up has simply not been told where it is,
+          and this is the first thing the operator does with it.
+        */
+        <p className="notice" role="status" data-testid="point-b-location-required">
+          Choose the event location before recording feedback. Every response is
+          stamped with the city it was captured in, and a response with no city
+          cannot be attributed to one afterwards.
+        </p>
+      )}
 
       {/* The preview element must exist before the camera starts, so it is
           always mounted and only shown while scanning. */}
@@ -76,7 +151,7 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
         />
       </div>
 
-      {state.status === 'idle' && (
+      {state.status === 'idle' && locationReady && (
         <section className="point-b__start">
           <p className="screen__lede">
             Scan the QR on the participant’s sticker, or enter the printed code.
@@ -271,8 +346,13 @@ export function FeedbackScreen({ createScanner }: FeedbackScreenProps) {
         </section>
       )}
 
+      {/*
+        Scoped to this event, and the wording says so. A device re-used from a
+        previous event without being wiped still holds that event's responses,
+        and a bare "saved on this device" would open the shift reading forty.
+      */}
       <p className="screen__note">
-        Responses saved on this device: {savedCount}
+        Responses saved on this device for this event: {savedCount}
       </p>
     </article>
   )

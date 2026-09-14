@@ -29,6 +29,7 @@ export {
 } from './registrations'
 export {
   countFeedback,
+  countFeedbackForEvent,
   createFeedback,
   getFeedbackByRecordId,
   hasFeedbackForPublicCode,
@@ -45,9 +46,15 @@ export {
 } from './transport'
 export {
   getLocalCounts,
+  type ForeignEventCounts,
   type LocalCounts,
   type StoreCounts,
 } from './counts'
+export {
+  belongsToEvent,
+  partitionByEvent,
+  type EventPartition,
+} from './eventScope'
 export {
   getDatabaseStatus,
   type DatabaseState,

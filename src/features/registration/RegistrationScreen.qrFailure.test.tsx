@@ -1,3 +1,4 @@
+import { EVENT_CONFIG } from '../../config/event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -82,7 +83,7 @@ describe('QR rendering fails after the registration is saved', () => {
     await submitParticipant()
     await screen.findByText(/The registration is saved/)
 
-    const record = (await listRecentRegistrations(db, 1))[0]
+    const record = (await listRecentRegistrations(db, 1, EVENT_CONFIG.eventId))[0]
     expect(screen.getByTestId('saved-public-code').textContent).toBe(
       record?.publicCode,
     )
@@ -110,13 +111,13 @@ describe('QR rendering fails after the registration is saved', () => {
     const user = await submitParticipant()
     await screen.findByText(/The registration is saved/)
 
-    const before = (await listRecentRegistrations(db, 5))[0]
+    const before = (await listRecentRegistrations(db, 5, EVENT_CONFIG.eventId))[0]
     await user.click(screen.getByRole('button', { name: 'Retry sticker' }))
 
     const sticker = await screen.findByTestId('sticker')
     expect(sticker.textContent).toContain(before?.publicCode)
 
-    const after = await listRecentRegistrations(db, 5)
+    const after = await listRecentRegistrations(db, 5, EVENT_CONFIG.eventId)
     expect(after).toHaveLength(1)
     expect(after[0]).toEqual(before)
   })
@@ -131,7 +132,7 @@ describe('QR rendering fails after the registration is saved', () => {
     await user.click(screen.getByRole('button', { name: 'Retry sticker' }))
     await screen.findByTestId('sticker')
 
-    const record = (await listRecentRegistrations(db, 1))[0]
+    const record = (await listRecentRegistrations(db, 1, EVENT_CONFIG.eventId))[0]
     const [firstPayload] = renderQrSvgMock.mock.calls[0] ?? []
     const [retryPayload] = renderQrSvgMock.mock.calls[1] ?? []
 

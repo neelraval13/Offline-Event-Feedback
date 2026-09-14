@@ -102,6 +102,46 @@ appear in the output.
 
 ## D. Deploy
 
+### The order, when a migration is involved
+
+One Vercel release contains **both** halves of this application: the browser
+build and the API that serves `/api`. There is no way to ship the server first
+and the client second, so anything the new server needs from the database must
+already be there when that single release goes live.
+
+For the September event that means **migration `009_feedback_location.sql` is
+applied to production Neon before the release is deployed**, not merely before
+devices are updated. The new API reads and writes `feedback.location`; deploying
+ahead of the migration would give an API that errors on every feedback insert
+while the old client kept handing it records.
+
+The migration is additive and safe to apply early: the column is nullable with
+no default, so the release that is *currently* live, which never mentions it,
+carries on working untouched. That is what makes this order possible at all.
+
+```
+1. Confirm the previous event's data is closed and backed up.
+2. Apply migration 009 to production Neon.
+3. Verify the migration ledger, the feedback.location column and the
+   feedback_event_location_idx index all exist.
+4. Confirm the CURRENT production build still works after the migration.
+   This is the checkpoint: if anything is wrong, nothing has been deployed yet
+   and the migration is a nullable column nobody reads.
+5. Deploy the September application and API build.
+6. Verify /api/health.
+7. Smoke-test enrolment, Point A, Point B, sync and Reporting.
+8. Only then prepare the event devices.
+```
+
+Steps 4 and 7 are the two that are easy to skip and the two worth the minutes.
+Step 4 proves the migration did no harm while a rollback is still free; step 7
+proves the release works before twenty tablets are configured against it.
+
+Rolling back is section K. Note that rolling the *release* back does not roll
+the migration back, and does not need to: the old build ignores the column.
+
+### Triggering it
+
 Trigger the first deployment (importing the project does this automatically).
 
 Watch the build log for the line from the build verifier:

@@ -9,6 +9,7 @@ import {
   Result,
 } from '@zxing/library'
 import { FeedbackScreen } from './FeedbackScreen'
+import { givenDeviceLocation } from '../../test/eventLocation'
 import { createZxingScanner } from '../../lib/scanner'
 import { EVENT_CONFIG } from '../../config/event'
 import { answerCampaignFeedback } from '../campaign/flying-flea/testSupport'
@@ -72,6 +73,13 @@ function stickerPayload(): { publicCode: string; qr: string } {
 }
 
 beforeEach(async () => {
+  /*
+   * Point B refuses to start anything until the device knows which city it is
+   * in, so every suite here begins with a device that has been set up, which is
+   * the state a tablet is in by the time a rider reaches it. The gate itself is
+   * tested separately, where the absence of a location is the subject.
+   */
+  givenDeviceLocation('Bengaluru')
   await db.open()
   await Promise.all([db.feedback.clear(), db.registrations.clear()])
 

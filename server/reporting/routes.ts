@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { z } from 'zod'
 import type { Sql } from 'postgres'
+import { MAX_LOCATION_LENGTH } from '../../shared/campaign/flyingFlea.js'
 import { runReconciliation } from '../reconciliation/postgres.js'
 import { authorizeReporting } from './auth.js'
 import {
@@ -61,6 +62,20 @@ const cursor = z
   .max(512)
   .refine((value) => parseCursor(value) !== null, 'not a cursor')
 
+/*
+ * The city filter: a bounded string, not an enum of this season's two venues.
+ *
+ * The server holds every event this deployment has ever run, and an enum here
+ * would refuse a perfectly valid filter for a city the campaign visited last
+ * season the moment the client's list changed. The client offers the two
+ * current cities as buttons; the API accepts whatever the data can contain, and
+ * a value matching nothing simply returns no rows.
+ *
+ * Bounded by the same constant the wire and the registration schema use, so no
+ * filter can be longer than a value that could have been stored.
+ */
+const locationFilter = z.string().min(1).max(MAX_LOCATION_LENGTH).optional()
+
 /** Query-string parameters, which are only ever ids, never a search term. */
 const idQuerySchema = z.object({
   eventId,
@@ -90,6 +105,7 @@ const registrationQuerySchema = z.object({
     .optional(),
   search: z.string().max(200).optional(),
   duplicateCandidateOnly: z.boolean().optional(),
+  location: locationFilter,
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
   cursor: cursor.optional(),
 })
@@ -108,6 +124,7 @@ const feedbackQuerySchema = z.object({
     ])
     .optional(),
   search: z.string().max(200).optional(),
+  location: locationFilter,
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
   cursor: cursor.optional(),
 })
@@ -242,6 +259,9 @@ export function createReportingRoutes(options: ReportingOptions) {
       ...(parsed.data.duplicateCandidateOnly === undefined
         ? {}
         : { duplicateCandidateOnly: parsed.data.duplicateCandidateOnly }),
+      ...(parsed.data.location === undefined
+        ? {}
+        : { location: parsed.data.location }),
       ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
       ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }),
     })
@@ -272,6 +292,9 @@ export function createReportingRoutes(options: ReportingOptions) {
       runId: run.runId,
       ...(parsed.data.status === undefined ? {} : { status: parsed.data.status }),
       ...(parsed.data.search === undefined ? {} : { search: parsed.data.search }),
+      ...(parsed.data.location === undefined
+        ? {}
+        : { location: parsed.data.location }),
       ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
       ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }),
     })

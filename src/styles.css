@@ -655,6 +655,25 @@ a {
   color: #8a5300;
 }
 
+/* A value that was never captured, said in words rather than left blank: an
+   empty cell in a column of cities reads as data that failed to load. */
+.report-muted {
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+}
+
+/* The acknowledgement in front of re-enrolling a device that still holds
+   records for another event. A real checkbox with its label beside it, laid out
+   on one line so the sentence reads as a sentence. */
+.field__checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .report-detail {
   margin-top: 1rem;
   padding: 0.9rem 1rem;

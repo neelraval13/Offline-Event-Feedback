@@ -26,11 +26,15 @@ Open `#/a`.
    selected.
 2. Confirm the colour selector starts on **Flea Green** and switches to **Storm
    Black** cleanly. It must never show both or neither.
-3. Confirm the venue and date read **Richardson & Cruddas** and **23 August 2026**
-   under the banner, and that neither is a form control.
-4. Fill Name, Email ID, Phone Number. Leave Gender, Driving Licence No and
+3. Confirm the date reads **20 September 2026** under the banner, and that it is
+   not a form control.
+4. Confirm the **Event Location** card sits above Step 01 with nothing chosen on
+   a device that has not been set up, and that the caption under the banner reads
+   **Bengaluru / Hyderabad** until you pick one. Choose a city and confirm the
+   caption changes to it.
+5. Fill Name, Email ID, Phone Number. Leave Gender, Driving Licence No and
    Pincode blank.
-5. Note the time on a clock, then submit.
+6. Note the time on a clock, then submit.
 
 **Expect** the registration to save and a sticker to appear. Then:
 
@@ -41,12 +45,12 @@ Open `#/a`.
 The sticker must show no name, phone, email, licence, vehicle, location or
 pincode. Look at it and confirm.
 
-### The venue and the time nobody typed
+### The city, and the time nobody typed
 
 Open Admin, export a backup, and read the record just written.
 
-- `location` is `Richardson & Cruddas`.
-- `testRideAt` is `2026-08-23T` followed by the clock time you noted at submit,
+- `location` is the city you chose, exactly: `Bengaluru` or `Hyderabad`.
+- `testRideAt` is `2026-09-20T` followed by the clock time you noted at submit,
   to the minute, in Indian time. Not the time the form was opened, and not the
   device's calendar date if that differs.
 
@@ -57,12 +61,37 @@ its email address, and confirm `testRideAt` is unchanged afterwards.
 This is worth doing on a device whose own timezone is deliberately set to
 something other than India: the stored time must not move.
 
+### The city, specifically
+
+Four things to try, because each is a different way to get a wrong city into the
+data and none of them shows up afterwards:
+
+1. **Submit with nothing chosen.** The form must refuse with *Select the event
+   location.* and write nothing. Check the local record count did not move.
+2. **Register, then press Next rider.** The city must stay; the name, email and
+   phone must clear. This is what saves an operator two hundred taps.
+3. **Register one rider in each city.** Confirm the two records differ. A control
+   that looks like a choice and writes a constant passes a one-city test.
+4. **Correct a record's location.** The public code, participant ID and
+   `testRideAt` must all be unchanged, the revision must increment, and the
+   *device* must still be set to the city it was on before the correction.
+
+On a tablet that ran the August event, confirm Point A opens with **no** city
+chosen rather than inheriting the old venue.
+
 ### QR density
 
 The event ID is encoded into every sticker, so it is kept short on purpose:
-`ff-rc-2026-08-23` gives a 114-byte payload and a 45-module symbol, which is a
-size Point B has already been tested against by hand. Spelling the venue out
-inside the ID would give 139 bytes and 49 modules, a denser code on every label.
+`ff-2026-09-20` gives a 111-byte payload and a 41 or 45-module symbol, both sizes
+Point B has already been tested against by hand. The September ID names no venue,
+because the event runs in two cities, so it is three bytes shorter than August's
+`ff-rc-2026-08-23` and the symbol moved away from the size boundary rather than
+towards it. Spelling a venue out inside the ID would give 139 bytes and 49
+modules, a denser code on every label.
+
+The city is deliberately **not** in the QR payload. A sticker is printed at Point
+A and read at Point B, and both already know which city they are in; encoding it
+would spend bytes on every label to tell a scanner something it can see.
 
 Nothing new to check here, then, beyond the usual: the first few printed stickers
 must decode first time at Point B. If a future event lengthens the ID past about

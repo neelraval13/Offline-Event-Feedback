@@ -92,6 +92,50 @@ contract, sync, reconciliation and reporting are exactly as Phases 0–8 left th
 
 Campaign QA: [docs/flying-flea-qa.md](docs/flying-flea-qa.md).
 
+### The September 2026 event: one event, two cities
+
+`ff-2026-09-20`, on 20 September 2026, running in **Bengaluru and Hyderabad on
+the same day**. Deliberately one event ID, not two.
+
+- **Why one ID.** One questionnaire, one participant population, one
+  reconciliation run, one workbook. Two IDs would split every combined figure and
+  force it to be reassembled by hand in a spreadsheet, which is the work this
+  system exists to remove. The city is per-record data instead, so the event ID
+  names no venue and is three bytes shorter than August's.
+- **Both stations record the city.** Point A stamps it on every registration,
+  Point B on every response, including direct contact responses. That last case
+  is why it cannot be optional in practice: a direct response matches no
+  registration, so nothing else could ever say where it was given.
+- **Chosen once per device, never defaulted.** The operator picks a city and the
+  device remembers it for this event. There is no fallback to the first city:
+  Bengaluru and Hyderabad are indistinguishable in the data afterwards, so a
+  silent default would be undetectable and uncorrectable. Point A refuses at
+  submit; Point B refuses to start.
+- **Scoped so an old event cannot leak in.** The preference is keyed by event ID
+  and is not carried in a backup, so a tablet that ran August opens with nothing
+  chosen and a restored backup cannot set a replacement machine's venue
+  invisibly.
+- **Additive everywhere else.** `feedback.location` is optional on the wire, in
+  the local record and in a backup, so an August tablet can still upload and an
+  August archive can still restore. The protocol stays at version 1 and migration
+  `009_feedback_location.sql` backfills nothing: NULL means the location was not
+  captured, and reporting shows that as blank rather than inventing a venue.
+- **The migration goes first.** One Vercel release ships the client and the API
+  together, so `009_feedback_location.sql` is applied to production **before that
+  release is deployed**, not merely before devices update. Being additive and
+  nullable is what makes that safe: the build that is currently live never
+  mentions the column. The full sequence is in
+  [docs/vercel-production.md](docs/vercel-production.md#d-deploy).
+- **Reporting reads it three ways.** Combined, Bengaluru, Hyderabad. Where a
+  matched response and its registration name different cities, both are kept and
+  the disagreement is shown; neither is corrected against the other.
+- **Stale credentials are caught.** Sync credentials are event-bound, so a device
+  still holding August's is reported as `Enrolled for a different event`, never as
+  `Enrolled`, and no sync is attempted with it.
+
+Device rollover runbook:
+[docs/september-event-rollover.md](docs/september-event-rollover.md).
+
 ### Central reporting
 
 The first API that returns participant PII, and the only screen that shows the
@@ -153,7 +197,7 @@ central registrations + feedback  ->  reconciliation run  ->  derived results
   printed by the CLI, or logged.
 
 ```bash
-pnpm server:reconcile -- --event ff-rc-2026-08-23
+pnpm server:reconcile -- --event ff-2026-09-20
 ```
 
 See [docs/reconciliation-test.md](docs/reconciliation-test.md) for the
@@ -382,7 +426,7 @@ pnpm icons       # regenerate the temporary PWA icons
 cp .env.example .env   # then fill in DATABASE_URL and SYNC_ENROLLMENT_SECRET
 pnpm server:migrate    # apply the schema deliberately; never on startup
 pnpm server:start      # serve the ingest API on :8788, unprefixed
-pnpm server:reconcile -- --event ff-rc-2026-08-23   # classify central data
+pnpm server:reconcile -- --event ff-2026-09-20   # classify central data
 pnpm server:typecheck
 pnpm server:test
 ```

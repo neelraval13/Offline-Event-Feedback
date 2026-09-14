@@ -108,22 +108,64 @@ Required-ness is read from the supplied form's submit handler. Nothing was added
 to that list: an event desk with a queue is the worst place to discover a newly
 mandatory field.
 
-### The two fields nobody types
-
-`location` and `testRideAt` are still on every record, under the same keys and in
-the same shapes. They are no longer questions.
+### The field nobody types, and the one that came back
 
 | Field | Where the value comes from |
 | --- | --- |
-| `location` | `FLYING_FLEA_CAMPAIGN.lockedLocation`. One venue, fixed at build time |
 | `testRideAt` | `EVENT_CONFIG.eventDay` plus the venue clock at the moment of submit |
+| `location` | Chosen once per device from `EVENT_LOCATIONS`, then remembered |
 
-Both are attached by `src/features/campaign/flying-flea/eventStamp.ts`, on the
-new-registration path only. The venue and the event date are shown instead as
-static metadata under the hero banner, at Point A and at Point B, by `EventMeta`.
+`testRideAt` is attached by `src/features/campaign/flying-flea/eventStamp.ts`, on
+the new-registration path only. The event date is shown as static metadata under
+the hero banner, at Point A and at Point B, by `EventMeta`.
 
-Three properties of that are worth stating, because each one is a defect if it
-slips:
+#### Why `location` is a control again
+
+It was one, then it was not, and now it is. Each step was right at the time:
+
+- Originally a free-text field, because the form it was copied from had one.
+- Then a compiled `lockedLocation`, because the August event ran at exactly one
+  address, so asking was a control of typing per rider for a value the build
+  already knew.
+- Now a two-option selector, because the September event runs in Bengaluru and
+  Hyderabad **on the same day under one event ID**. No build-time constant can be
+  right on both, and nothing else on a record could be used to recover the city
+  afterwards.
+
+`eventStamp.ts` no longer writes `location` at all. That removal is the load
+bearing part: a helper that still overwrote the field on the way to the store
+would silently discard whichever city the operator had just chosen, and the only
+symptom would be a location column that never varied.
+
+The event ID dropped its venue segment for the same reason: `ff-rc-2026-08-23`
+became `ff-2026-09-20`. One event, two cities, one reconciliation run, one
+workbook. Splitting into two event IDs would have split every combined figure and
+forced it to be reassembled by hand in a spreadsheet.
+
+#### How the choice is remembered
+
+An event-scoped browser preference, `event-location:<eventId>` in `localStorage`
+(`src/lib/location/eventLocation.ts`). Four properties, each a failure somebody
+would otherwise live with at a venue:
+
+- **Nothing is chosen by default.** A fresh device shows an empty selector and
+  refuses to save. Bengaluru and Hyderabad are indistinguishable in the data
+  afterwards, so a plausible default would be undetectable and uncorrectable,
+  where an empty control gets noticed within a rider or two.
+- **The key carries the event ID**, so a tablet that ran August cannot inherit
+  August's venue in September.
+- **Every read is validated** against the current list. An unrecognised stored
+  value is treated as no choice at all.
+- **It is not in `deviceConfig`**, and therefore not in a backup. Restoring a
+  Bengaluru tablet's backup onto a replacement in Hyderabad must not silently set
+  that machine to Bengaluru.
+
+Point A refuses at submit; Point B refuses to *start*. The asymmetry is
+deliberate: Point A's operator is typing for a minute and can be told at the end,
+where a Point B rider would have to answer six questions again.
+
+Three properties of the time are worth stating, because each one is a defect if
+it slips:
 
 - **The time is read at submit.** Not at mount, not when the draft is created,
   not when "Next rider" clears the desk. A form opened at 14:10 and submitted at
@@ -133,7 +175,10 @@ slips:
   day.
 - **A correction never restamps.** Fixing a misspelt email at 16:10 leaves a
   15:42 ride at 15:42. Corrections go through their own path, which carries the
-  form's values through untouched.
+  form's values through untouched. A correction *may* change the location, and
+  because `eventStamp.ts` is not on that path, changing it cannot drag the ride
+  time along with it. Correcting one record also never re-points the device: that
+  would put the corrected city on every subsequent rider.
 
 The clock is read through `Asia/Kolkata` explicitly (`src/config/eventTime.ts`),
 not through the device's own timezone: a tablet restored from a backup taken

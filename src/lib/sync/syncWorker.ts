@@ -18,6 +18,7 @@ import {
   peekDeviceId,
   type OfflineEventDb,
 } from '../storage'
+import { partitionByEvent } from '../storage/eventScope'
 import { postBatch, type SyncTransportResult } from './syncClient'
 import type { SyncBatchResponse } from '../../../shared/sync/protocol'
 import { readSyncCredential, recordSyncActivity } from './syncCredentials'
@@ -44,6 +45,28 @@ export interface SyncOutcome {
   /** Set when the run stopped without a server answer. Records stay pending. */
   readonly transportFailure?: string
   readonly enrolled: boolean
+  /**
+   * Records on this device belonging to a different event.
+   *
+   * Never attempted, never marked, never counted as this event's work. Reported
+   * so the operator learns they exist rather than discovering it by wiping the
+   * device. Zero on any device that has only ever run one event.
+   */
+  readonly foreignEventRecords: number
+}
+
+/** An outcome that attempted nothing. Spelled once so no field is forgotten. */
+function nothingAttempted(
+  extra: Partial<SyncOutcome> & { enrolled: boolean },
+): SyncOutcome {
+  return {
+    attempted: 0,
+    synced: 0,
+    failed: 0,
+    batches: 0,
+    foreignEventRecords: 0,
+    ...extra,
+  }
 }
 
 /** Groups records into batches the server will accept. */
@@ -66,34 +89,66 @@ interface Eligible {
   readonly wire: SyncRecord
 }
 
-/** Everything waiting to be delivered, oldest first. */
+export interface EligibleRecords {
+  /** Pending records for the event being synced, oldest first. */
+  readonly eligible: Eligible[]
+  /**
+   * How many pending records belong to some other event.
+   *
+   * Counted, not collected: nothing downstream may act on them, and a count is
+   * all the operator needs to be told they are there.
+   */
+  readonly foreignEventRecords: number
+}
+
+/**
+ * Everything waiting to be delivered **for one event**, oldest first.
+ *
+ * The event is a required argument rather than a default, and that is the point
+ * of the signature. A caller that forgot it would collect every pending record
+ * on the device, which is exactly the bug this guards: August's records handed
+ * to a September batch, refused per record with `wrongEvent`, and parked in an
+ * error state a September build can never clear.
+ *
+ * Foreign records are filtered out here, at the single funnel every sync run
+ * passes through, rather than at each of the two store queries. One filter is
+ * one thing to keep correct, and the partition also yields the count Admin and
+ * the outcome both report.
+ */
 export async function collectEligible(
-  database: OfflineEventDb = db,
-): Promise<Eligible[]> {
-  const [registrations, feedback] = await Promise.all([
+  database: OfflineEventDb,
+  eventId: string,
+): Promise<EligibleRecords> {
+  const [allRegistrations, allFeedback] = await Promise.all([
     listRegistrationsBySyncStatus(database, 'pending'),
     listFeedbackBySyncStatus(database, 'pending'),
   ])
 
+  const registrations = partitionByEvent(allRegistrations, eventId)
+  const feedback = partitionByEvent(allFeedback, eventId)
+
   const byCreation = (left: { createdAt: string }, right: { createdAt: string }) =>
     left.createdAt.localeCompare(right.createdAt)
 
-  return [
-    ...[...registrations].sort(byCreation).map(
-      (record): Eligible => ({
-        kind: 'registration',
-        recordId: record.recordId,
-        wire: toRegistrationWire(record),
-      }),
-    ),
-    ...[...feedback].sort(byCreation).map(
-      (record): Eligible => ({
-        kind: 'feedback',
-        recordId: record.recordId,
-        wire: toFeedbackWire(record),
-      }),
-    ),
-  ]
+  return {
+    eligible: [
+      ...[...registrations.mine].sort(byCreation).map(
+        (record): Eligible => ({
+          kind: 'registration',
+          recordId: record.recordId,
+          wire: toRegistrationWire(record),
+        }),
+      ),
+      ...[...feedback.mine].sort(byCreation).map(
+        (record): Eligible => ({
+          kind: 'feedback',
+          recordId: record.recordId,
+          wire: toFeedbackWire(record),
+        }),
+      ),
+    ],
+    foreignEventRecords: registrations.foreign.length + feedback.foreign.length,
+  }
 }
 
 /** Statuses that mean the server holds this record and the device can stop. */
@@ -172,24 +227,54 @@ export async function runSync(options: RunSyncOptions = {}): Promise<SyncOutcome
 
   const credential = await readSyncCredential(database)
   if (credential === null) {
-    return { attempted: 0, synced: 0, failed: 0, batches: 0, enrolled: false }
+    return nothingAttempted({ enrolled: false })
+  }
+
+  /*
+   * The credential names the event this run may touch, and it must agree with
+   * the build's own event before anything is collected or sent.
+   *
+   * A credential for another event cannot upload anything: the server
+   * authenticates the token against the event in the batch. Attempting it would
+   * produce a guaranteed rejection, and the only thing the operator would see
+   * is a failure on a screen where nothing is actually broken yet. The Admin
+   * panel already withholds the button in this state; this is the same refusal
+   * one layer down, where it also covers any other caller.
+   *
+   * Nothing is marked and no activity error is recorded: the device has not
+   * failed to sync, it is not enrolled for this event.
+   */
+  if (credential.eventId !== EVENT_CONFIG.eventId) {
+    return nothingAttempted({
+      enrolled: false,
+      transportFailure: 'event_mismatch',
+    })
   }
 
   const uploaderDeviceId = await peekDeviceId(database)
   if (uploaderDeviceId === undefined) {
-    return { attempted: 0, synced: 0, failed: 0, batches: 0, enrolled: false }
+    return nothingAttempted({ enrolled: false })
   }
 
   const attemptAt = new Date().toISOString()
   await recordSyncActivity({ attemptAt }, database)
 
-  const eligible = await collectEligible(database)
+  /*
+   * Scoped to the credential's event, which the check above has established is
+   * this build's event. Records from any other event are counted and left
+   * alone: not sent, not marked, not touched.
+   */
+  const { eligible, foreignEventRecords } = await collectEligible(
+    database,
+    credential.eventId,
+  )
+
   if (eligible.length === 0) {
     await recordSyncActivity(
       { successAt: new Date().toISOString(), error: null },
       database,
     )
-    return { attempted: 0, synced: 0, failed: 0, batches: 0, enrolled: true }
+    return nothingAttempted({ enrolled: true, foreignEventRecords })
   }
 
   let synced = 0
@@ -222,6 +307,7 @@ export async function runSync(options: RunSyncOptions = {}): Promise<SyncOutcome
         batches,
         transportFailure: response.failure,
         enrolled: true,
+        foreignEventRecords,
       }
     }
 
@@ -235,5 +321,12 @@ export async function runSync(options: RunSyncOptions = {}): Promise<SyncOutcome
     database,
   )
 
-  return { attempted: eligible.length, synced, failed, batches, enrolled: true }
+  return {
+    attempted: eligible.length,
+    synced,
+    failed,
+    batches,
+    enrolled: true,
+    foreignEventRecords,
+  }
 }

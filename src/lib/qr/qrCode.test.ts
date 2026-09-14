@@ -256,13 +256,29 @@ describe('the identity contract survives rendering', () => {
       }),
     )
 
-    expect(payload.length).toBe(114)
+    /*
+     * 111 bytes for `ff-2026-09-20`, three fewer than the August event ID's
+     * 114. Dropping the venue segment from the event ID, because the event now
+     * runs in two cities, made the printed symbol smaller rather than larger.
+     */
+    expect(payload.length).toBe(111)
     // Under the 124-byte boundary where the symbol grows to 49 modules.
     expect(payload.length).toBeLessThan(124)
 
+    /*
+     * Version 6 for this payload, where the August event ID gave version 7.
+     *
+     * The three bytes saved by dropping the venue from the event ID are enough
+     * to tip this particular fixed participant ID into the smaller symbol. That
+     * is a size production already prints, and the test above pins that BOTH
+     * 41 and 45 occur across real participants, so this is a re-measurement
+     * rather than a behaviour change: the density moved the safe way.
+     */
     const symbol = createQrSymbol(payload)
-    expect(symbol.size).toBe(45)
-    expect(symbol.version).toBe(7)
+    expect(symbol.size).toBe(41)
+    expect(symbol.version).toBe(6)
+    // Both production sizes stay comfortably inside the 26 mm label.
+    expect([41, 45]).toContain(symbol.size)
     // Whatever the density, it must still be filled geometry, never strokes.
     expect(symbol.svg).not.toContain('stroke')
   })
